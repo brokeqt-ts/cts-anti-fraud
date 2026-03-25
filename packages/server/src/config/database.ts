@@ -6,7 +6,11 @@ let pool: pg.Pool | null = null;
 
 export function getPool(connectionString: string): pg.Pool {
   if (!pool) {
-    pool = new Pool({ connectionString });
+    const isProduction = process.env['NODE_ENV'] === 'production';
+    pool = new Pool({
+      connectionString,
+      ssl: isProduction ? { rejectUnauthorized: false } : false,
+    });
   }
   return pool;
 }
