@@ -1,7 +1,10 @@
 import dotenv from 'dotenv';
 import path from 'node:path';
 
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+// process.cwd() = project root when running via npm workspaces
+// __dirname fallback for compiled dist: src/config → ../../../../ = root
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../../../.env') }); // fallback
 
 export interface EnvConfig {
   DATABASE_URL: string;
