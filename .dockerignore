@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+.env
+*.log
+.DS_Store
+e2e
+docs
+.github
+packages/extension/dist
+packages/ml

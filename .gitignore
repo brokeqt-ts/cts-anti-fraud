@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+.pnp.*
+
+# Build outputs
+dist/
+build/
+*.js.map
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Testing
+coverage/
+
+# Database
+*.sql.bak
+
+# Python (ml package)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Extension build artifacts
+packages/extension/dist/

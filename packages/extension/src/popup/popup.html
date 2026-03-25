@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=360, initial-scale=1.0">
+  <title>CTS Anti-Fraud</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup">
+    <header class="header">
+      <div class="logo">CTS Anti-Fraud</div>
+      <div class="status" id="status">
+        <span class="status__dot" id="status-dot"></span>
+        <span id="status-text">Подключение...</span>
+      </div>
+    </header>
+
+    <div class="card">
+      <div class="card__header">Параметры профиля</div>
+
+      <div class="field">
+        <label for="profileName">Имя профиля</label>
+        <input type="text" id="profileName" placeholder="Например ATVanya333" />
+      </div>
+
+      <div class="field">
+        <label for="browser">Антидетект-браузер</label>
+        <select id="browser">
+          <option value="octo">Octo Browser</option>
+          <option value="dolphin">Dolphin Anty</option>
+          <option value="multilogin">Multilogin (Mimic)</option>
+          <option value="adspower">AdsPower</option>
+          <option value="gologin">GoLogin</option>
+          <option value="octium">Octium</option>
+          <option value="incogniton">Incogniton</option>
+          <option value="undetectable">Undetectable</option>
+          <option value="morelogin">MoreLogin</option>
+          <option value="vmlogin">VMLogin</option>
+          <option value="kameleo">Kameleo</option>
+          <option value="indigo">Indigo Browser</option>
+          <option value="ghost">Ghost Browser</option>
+          <option value="lalicat">Lalicat</option>
+          <option value="maskfog">MaskFog</option>
+          <option value="hubstudio">HubStudio</option>
+          <option value="ixbrowser">ixBrowser</option>
+          <option value="antbrowser">AntBrowser</option>
+          <option value="smartproxy">Smartproxy (X Browser)</option>
+          <option value="clonbrowser">ClonBrowser</option>
+          <option value="sessionbox">SessionBox</option>
+          <option value="vision">Vision</option>
+          <option value="identory">Identory</option>
+          <option value="other">Другой</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="proxyProvider">Прокси-провайдер</label>
+        <select id="proxyProvider">
+          <option value="" disabled selected>Например Nodemaven</option>
+          <option value="Astroproxy">Astroproxy</option>
+          <option value="Evomi">Evomi</option>
+          <option value="Froxy">Froxy</option>
+          <option value="Gonzoproxy">Gonzoproxy</option>
+          <option value="Hproxy">Hproxy</option>
+          <option value="Infatica">Infatica</option>
+          <option value="IPRoyal">IPRoyal</option>
+          <option value="Lightning Proxies">Lightning Proxies</option>
+          <option value="Mars Proxies">Mars Proxies</option>
+          <option value="Nodemaven">Nodemaven</option>
+          <option value="Proxy-Seller">Proxy-Seller</option>
+          <option value="Proxy6">Proxy6</option>
+          <option value="Proxypanda">Proxypanda</option>
+          <option value="Proxyline">Proxyline</option>
+          <option value="Proxyma">Proxyma</option>
+          <option value="Proxys.io">Proxys.io</option>
+          <option value="Soax">Soax</option>
+          <option value="Thordata">Thordata</option>
+          <option value="Travchisproxies">Travchisproxies</option>
+          <option value="__other">Другой...</option>
+        </select>
+        <input type="text" id="proxyProviderCustom" class="hidden" placeholder="Название провайдера" />
+      </div>
+
+      <div class="field">
+        <label for="accountType">Тип аккаунта</label>
+        <select id="accountType">
+          <option value="" disabled selected>Например Фарм</option>
+          <option value="farm">Фарм</option>
+          <option value="bought">Покупной</option>
+          <option value="rent">Аренда</option>
+          <option value="agency">Агентский</option>
+          <option value="restored">Восстановленный</option>
+          <option value="other">Другой</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="paymentService">Платёжка</label>
+        <select id="paymentService">
+          <option value="" disabled selected>Например AdsCard</option>
+          <option value="AdsCard">AdsCard</option>
+          <option value="AnyBill (ABCard)">AnyBill (ABCard)</option>
+          <option value="Brocard">Brocard</option>
+          <option value="Combo Cards">Combo Cards</option>
+          <option value="eCards">eCards</option>
+          <option value="Lamanche">Lamanche</option>
+          <option value="Multicards">Multicards</option>
+          <option value="Spendge">Spendge</option>
+          <option value="Vertex">Vertex</option>
+          <option value="Own+VCC">Own+VCC</option>
+          <option value="__other">Другой...</option>
+        </select>
+        <input type="text" id="paymentServiceCustom" class="hidden" placeholder="Название платёжки" />
+      </div>
+
+      <button class="btn-save" id="saveBtn" disabled>Сохранить</button>
+    </div>
+
+    <div id="error-container" class="error-container hidden"></div>
+
+    <div id="connection-error" class="connection-error hidden">
+      <span id="connection-error-text"></span>
+      <button id="retryBtn" class="btn-retry">&#x1f504; Повторить отправку</button>
+    </div>
+
+    <div id="error-instruction" class="error-instruction hidden">
+      <div class="error-instruction__icon">&#x26A0;</div>
+      <div class="error-instruction__text">Откройте диагностику и сделайте скриншот всего расширения, затем отправьте его администратору</div>
+    </div>
+
+    <div id="stale-warning" class="stale-warning hidden">
+      <div class="stale-warning__text" id="stale-warning-text">Данные не отправляются</div>
+      <button class="btn-send-now" id="sendNowBtn">Отправить сейчас</button>
+    </div>
+
+    <footer class="stats">
+      <div class="stat">
+        <span class="stat__label">Аккаунт</span>
+        <span class="stat__value mono" id="accountCid">—</span>
+      </div>
+      <div class="stat">
+        <span class="stat__label">Собрано событий</span>
+        <span class="stat__value" id="totalSent">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat__label">Последняя отправка</span>
+        <span class="stat__value" id="lastSend">—</span>
+      </div>
+      <div class="stat">
+        <span class="stat__label">Очередь</span>
+        <span class="stat__value" id="queueCount">0</span>
+      </div>
+    </footer>
+
+    <details class="debug-section" id="debugSection">
+      <summary class="debug-toggle">&#x2139;&#xfe0f; Диагностика</summary>
+      <div class="debug-content">
+        <div class="debug-row">
+          <span class="debug-label">Server URL</span>
+          <span class="debug-value mono" id="debugServerUrl">—</span>
+        </div>
+        <div class="debug-row">
+          <span class="debug-label">API Key</span>
+          <span class="debug-value mono" id="debugApiKey">—</span>
+        </div>
+        <div class="debug-row">
+          <span class="debug-label">Последний успех</span>
+          <span class="debug-value" id="debugLastSuccess">никогда</span>
+        </div>
+        <div class="debug-row">
+          <span class="debug-label">Последняя ошибка</span>
+          <span class="debug-value debug-value--error" id="debugLastError">—</span>
+        </div>
+        <div class="debug-row">
+          <span class="debug-label">Очередь</span>
+          <span class="debug-value" id="debugQueueSize">0</span>
+        </div>
+        <div class="debug-row">
+          <span class="debug-label">Браузер</span>
+          <span class="debug-value" id="debugBrowser">—</span>
+        </div>
+        <div class="debug-row">
+          <span class="debug-label">Профиль</span>
+          <span class="debug-value" id="debugProfile">—</span>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

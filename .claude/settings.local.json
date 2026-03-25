@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -h \"fastify\\\\.\\\\\\(get\\\\|post\\\\|put\\\\|delete\\\\|patch\\\\\\)\" routes/*.ts)",
+      "Bash(wc -l *.ts)",
+      "Bash(find c:UserskudriOneDriveДокументыGitHubmini-zapier -type f -name *telegram* -o -name *bot* -o -name *webhook*)",
+      "Bash(find c:UserskudriOneDriveДокументыGitHubmini-zapier -maxdepth 3 \\\\\\(-name .env* -o -name *.config.* -o -name config.* \\\\\\) -type f)",
+      "Bash(xargs grep:*)",
+      "Bash(./node_modules/.bin/tsc --noEmit -p packages/server/tsconfig.json)",
+      "Bash(docker compose:*)",
+      "Bash(docker compose exec postgres psql -U cts -d cts_antifraud -c \":*)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :5173)",
+      "Bash(npx -w packages/web vite --host)"
+    ]
+  }
+}

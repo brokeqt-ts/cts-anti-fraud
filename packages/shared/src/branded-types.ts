@@ -1,0 +1,12 @@
+export type DomainId = string & { __brand: 'DomainId' };
+export type AccountId = string & { __brand: 'AccountId' };
+export type CampaignId = string & { __brand: 'CampaignId' };
+export type BanLogId = string & { __brand: 'BanLogId' };
+export type CtsSiteId = string & { __brand: 'CtsSiteId' };
+export type ProxyId = string & { __brand: 'ProxyId' };
+export type AntidetectProfileId = string & { __brand: 'AntidetectProfileId' };
+export type PaymentMethodId = string & { __brand: 'PaymentMethodId' };
+export type PredictionId = string & { __brand: 'PredictionId' };
+export type LeaderboardId = string & { __brand: 'LeaderboardId' };
+export type AccountConsumableId = string & { __brand: 'AccountConsumableId' };
+export type GoogleAccountId = string & { __brand: 'GoogleAccountId' };

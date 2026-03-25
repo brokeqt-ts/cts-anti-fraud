@@ -1,0 +1,6 @@
+# ML service dependencies — Phase 5
+# xgboost
+# scikit-learn
+# pandas
+# fastapi
+# uvicorn

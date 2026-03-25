@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "CTS Anti-Fraud Collector",
+  "version": "0.1.1",
+  "description": "Collects Google Ads dashboard data for anti-fraud analytics",
+  "permissions": [
+    "storage",
+    "alarms",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://ads.google.com/*",
+    "https://pay.google.com/*",
+    "https://payments.google.com/*",
+    "https://myaccount.google.com/*",
+    "https://accounts.google.com/*"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://ads.google.com/*",
+        "https://pay.google.com/*",
+        "https://payments.google.com/*",
+        "https://myaccount.google.com/*",
+        "https://accounts.google.com/*"
+      ],
+      "js": ["interceptors/page-injector.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://ads.google.com/*",
+        "https://pay.google.com/*",
+        "https://payments.google.com/*",
+        "https://myaccount.google.com/*",
+        "https://accounts.google.com/*"
+      ],
+      "js": ["content/content-script.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html"
+  }
+}
