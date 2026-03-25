@@ -4,6 +4,8 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
+import bcrypt from 'bcrypt';
+import type pg from 'pg';
 import knexLib from 'knex';
 import { env } from './config/env.js';
 import { getPool } from './config/database.js';
@@ -39,6 +41,16 @@ import './types.js';
 
 const MAX_MIGRATION_RETRIES = 3;
 const MIGRATION_RETRY_DELAY_MS = 2000;
+
+async function syncAdminPassword(pool: pg.Pool): Promise<void> {
+  const password = env.ADMIN_PASSWORD;
+  const hash = await bcrypt.hash(password, 12);
+  await pool.query(
+    `UPDATE users SET password_hash = $1 WHERE email = 'admin@cts.local'`,
+    [hash],
+  );
+  console.log('[startup] Admin password synced from ADMIN_PASSWORD env var');
+}
 
 async function runMigrations(): Promise<void> {
   for (let attempt = 1; attempt <= MAX_MIGRATION_RETRIES; attempt++) {
@@ -161,6 +173,13 @@ async function start() {
   }
 
   const app = await buildApp();
+
+  try {
+    const pool = getPool(env.DATABASE_URL);
+    await syncAdminPassword(pool);
+  } catch (err) {
+    console.warn('[startup] Could not sync admin password:', err instanceof Error ? err.message : err);
+  }
 
   try {
     await app.listen({ port: env.PORT, host: '0.0.0.0' });
