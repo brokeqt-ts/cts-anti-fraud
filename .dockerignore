@@ -2,10 +2,14 @@ node_modules
 dist
 .git
 .env
+.env.*
+!.env.example
 *.log
 .DS_Store
 e2e
 docs
 .github
+.claude
+coverage
 packages/extension/dist
 packages/ml
