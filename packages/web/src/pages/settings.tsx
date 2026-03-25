@@ -389,6 +389,7 @@ export function SettingsPage() {
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [pwLoading, setPwLoading] = useState(false);
   const [pwError, setPwError] = useState<string | null>(null);
   const [pwSuccess, setPwSuccess] = useState(false);
@@ -419,6 +420,10 @@ export function SettingsPage() {
 
   async function handlePasswordChange(e: FormEvent) {
     e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      setPwError('Пароли не совпадают');
+      return;
+    }
     setPwLoading(true);
     setPwError(null);
     setPwSuccess(false);
@@ -427,6 +432,7 @@ export function SettingsPage() {
       setPwSuccess(true);
       setCurrentPassword('');
       setNewPassword('');
+      setConfirmPassword('');
       setTimeout(() => setShowPasswordForm(false), 1500);
     } catch (err) {
       setPwError(err instanceof Error ? err.message : 'Ошибка смены пароля');
@@ -692,6 +698,18 @@ export function SettingsPage() {
                       placeholder="Минимум 8 символов"
                     />
                   </div>
+                  <div>
+                    <label className="block label-xs mb-1.5">Подтверждение пароля</label>
+                    <input
+                      required
+                      type="password"
+                      minLength={8}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="input-field text-sm"
+                      placeholder="Повторите новый пароль"
+                    />
+                  </div>
 
                   {pwError && (
                     <div
@@ -727,6 +745,7 @@ export function SettingsPage() {
                         setPwSuccess(false);
                         setCurrentPassword('');
                         setNewPassword('');
+                        setConfirmPassword('');
                       }}
                       className="px-4 py-2 rounded-lg text-sm"
                       style={{
