@@ -43,14 +43,16 @@ const MAX_MIGRATION_RETRIES = 3;
 const MIGRATION_RETRY_DELAY_MS = 2000;
 
 async function syncAdminPassword(pool: pg.Pool): Promise<void> {
-  if (process.env['FORCE_ADMIN_PASSWORD_RESET'] !== 'true') return;
+  const isDev = env.NODE_ENV !== 'production';
+  const forceReset = process.env['FORCE_ADMIN_PASSWORD_RESET'] === 'true';
+  if (!isDev && !forceReset) return;
   const password = env.ADMIN_PASSWORD;
   const hash = await bcrypt.hash(password, 12);
   await pool.query(
     `UPDATE users SET password_hash = $1 WHERE email = 'admin@cts.local'`,
     [hash],
   );
-  console.log('[startup] Admin password reset from ADMIN_PASSWORD (FORCE_ADMIN_PASSWORD_RESET=true)');
+  console.log('[startup] Admin password synced from ADMIN_PASSWORD env var');
 }
 
 async function runMigrations(): Promise<void> {
