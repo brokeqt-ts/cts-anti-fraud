@@ -11,7 +11,18 @@
       "Bash(docker compose exec postgres psql -U cts -d cts_antifraud -c \":*)",
       "Bash(netstat -ano)",
       "Bash(findstr :5173)",
-      "Bash(npx -w packages/web vite --host)"
+      "Bash(npx -w packages/web vite --host)",
+      "WebFetch(domain:saturn.ac)",
+      "Bash(gh --version)",
+      "Bash(gh auth:*)",
+      "Bash(grep -n \"google_campaign_id\" /c/Users/kudri/OneDrive/Документы/GitHub/cts-anti-fraud/packages/server/src/migrations/*.ts)",
+      "Bash(grep -r \"creative\\\\|ad_group\" /c/Users/kudri/OneDrive/Документы/GitHub/cts-anti-fraud/packages/server/src/migrations/*.ts)",
+      "Bash(saturn --version)",
+      "Bash(saturn-cli --version)",
+      "Bash(npx saturn:*)",
+      "Bash(echo \"exit: $?\")",
+      "WebFetch(domain:docs.saturn.ac)",
+      "Bash(railway version:*)"
     ]
   }
 }
