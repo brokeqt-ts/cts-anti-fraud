@@ -8,6 +8,8 @@ import {
   banChainAllHandler,
   consumableScoringHandler,
   creativeDecayHandler,
+  creativeDecayScanHandler,
+  creativeDecayTrendsHandler,
   postMortemHandler,
   postMortemAllHandler,
   competitiveIntelligenceHandler,
@@ -62,6 +64,18 @@ export async function analyticsRoutes(fastify: FastifyInstance): Promise<void> {
     '/analytics/creative-decay',
     { preHandler: [fastify.authenticate] },
     creativeDecayHandler,
+  );
+
+  fastify.post(
+    '/analytics/creative-decay/scan',
+    { preHandler: [fastify.authenticate, fastify.requireRole('admin')] },
+    creativeDecayScanHandler,
+  );
+
+  fastify.get(
+    '/analytics/creative-decay/trends',
+    { preHandler: [fastify.authenticate] },
+    creativeDecayTrendsHandler,
   );
 
   fastify.post(

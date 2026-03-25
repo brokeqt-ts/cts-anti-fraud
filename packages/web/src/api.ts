@@ -645,6 +645,34 @@ export interface CampaignDecay {
 export const fetchCreativeDecay = (): Promise<{ campaigns: CampaignDecay[] }> =>
   apiFetch('/analytics/creative-decay');
 
+export interface DecayScanResult {
+  snapshotted: number;
+  scanned: number;
+  decayed: number;
+  critical: number;
+  results: Array<{
+    campaign_id: string;
+    campaign_name: string;
+    account_google_id: string;
+    ctr_previous: number;
+    ctr_current: number;
+    decline_percent: number;
+    severity: 'warning' | 'critical';
+  }>;
+}
+
+export const scanCreativeDecay = (): Promise<DecayScanResult> =>
+  apiFetch('/analytics/creative-decay/scan', { method: 'POST' });
+
+export interface DecayTrend {
+  campaign_id: string;
+  campaign_name: string;
+  data: Array<{ date: string; ctr: number | null; impressions: number }>;
+}
+
+export const fetchDecayTrends = (accountGoogleId: string, days?: number): Promise<{ trends: DecayTrend[] }> =>
+  apiFetch(`/analytics/creative-decay/trends?account_google_id=${accountGoogleId}${days ? `&days=${days}` : ''}`);
+
 // --- KF-8: Post-Mortem ---
 
 export interface PostMortemFactor {

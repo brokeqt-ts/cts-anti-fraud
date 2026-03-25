@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Clock, Link, AlertTriangle, Zap, Eye, RefreshCw, Users } from 'lucide-react';
+import { BarChart3, Clock, Link, AlertTriangle, Zap, Eye, RefreshCw, Users, Search } from 'lucide-react';
 import {
   fetchBanTiming,
   fetchSpendVelocityAll, fetchBanChainAll,
-  fetchConsumableScoring, fetchCreativeDecay,
+  fetchConsumableScoring, fetchCreativeDecay, scanCreativeDecay,
   fetchCompetitiveIntelligence,
   fetchMVFreshness, fetchAccountRiskSummary,
   ApiError,
@@ -13,8 +13,10 @@ import {
   type ConsumableScoring, type CampaignDecay,
   type CompetitiveIntelligence,
   type AccountRiskSummary,
+  type DecayScanResult,
   formatCid,
 } from '../api.js';
+import { useAuth } from '../contexts/auth-context.js';
 import { Skeleton } from '../components/skeleton.js';
 import { BlurFade, StaggerContainer, AnimatedRow } from '../components/ui/animations.js';
 
@@ -478,22 +480,63 @@ function BanChainSection({ domains }: { domains: BanChainDomain[] }) {
 // --- Section 6: Creative Decay ---
 
 function CreativeDecaySection({ campaigns }: { campaigns: CampaignDecay[] }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<DecayScanResult | null>(null);
+
   const decayed = campaigns.filter(c => c.decay_detected);
   if (campaigns.length === 0) return <EmptySection title="Creative Decay" message="Нет данных о кампаниях. Нужны 21+ дней daily stats." />;
+
+  const handleScan = async () => {
+    setScanning(true);
+    setScanResult(null);
+    try {
+      const result = await scanCreativeDecay();
+      setScanResult(result);
+    } catch {
+      // ignore — user sees no result
+    } finally {
+      setScanning(false);
+    }
+  };
 
   return (
     <BlurFade delay={0.35}>
       <div className="rounded-xl p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)' }}>
-        <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--text-secondary)' }}>
-          Creative Decay
-          {decayed.length > 0 && (
-            <span className="ml-2 text-xs font-normal" style={{ color: '#f87171' }}>
-              {decayed.length} кампаний с decay
-            </span>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+            Creative Decay
+            {decayed.length > 0 && (
+              <span className="ml-2 text-xs font-normal" style={{ color: '#f87171' }}>
+                {decayed.length} кампаний с decay
+              </span>
+            )}
+          </h3>
+          {isAdmin && (
+            <button
+              onClick={handleScan}
+              disabled={scanning}
+              className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg transition-colors hover:bg-white/5 disabled:opacity-50"
+              style={{ color: 'var(--text-muted)', border: '1px solid var(--border-subtle)' }}
+            >
+              <Search className="w-3 h-3" />
+              {scanning ? 'Сканирование...' : 'Сканировать'}
+            </button>
           )}
-        </h3>
+        </div>
 
-        {decayed.length === 0 && campaigns.length > 0 && (
+        {scanResult && (
+          <div className="rounded-lg p-3 mb-3 text-xs" style={{
+            background: scanResult.critical > 0 ? 'rgba(239,68,68,0.06)' : scanResult.decayed > 0 ? 'rgba(251,191,36,0.06)' : 'rgba(34,197,94,0.06)',
+            border: `1px solid ${scanResult.critical > 0 ? 'rgba(239,68,68,0.12)' : scanResult.decayed > 0 ? 'rgba(251,191,36,0.12)' : 'rgba(34,197,94,0.12)'}`,
+            color: scanResult.critical > 0 ? '#f87171' : scanResult.decayed > 0 ? '#fbbf24' : '#4ade80',
+          }}>
+            Скан завершён: {scanResult.snapshotted} снэпшотов, {scanResult.scanned} проверено, {scanResult.decayed} decay ({scanResult.critical} critical)
+          </div>
+        )}
+
+        {!scanResult && decayed.length === 0 && campaigns.length > 0 && (
           <div className="rounded-lg p-3 mb-3 text-xs" style={{ background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.12)', color: '#4ade80' }}>
             Decay не обнаружен. {campaigns.filter(c => c.baseline_ctr == null).length > 0
               ? `${campaigns.filter(c => c.baseline_ctr == null).length} кампаний без достаточных данных (нужно 21+ дней).`
@@ -501,6 +544,51 @@ function CreativeDecaySection({ campaigns }: { campaigns: CampaignDecay[] }) {
           </div>
         )}
 
+        {/* Scan results table (from new snapshot-based service) */}
+        {scanResult && scanResult.results.length > 0 && (
+          <table className="w-full text-sm mb-4">
+            <thead><tr style={{ borderBottom: '1px solid var(--bg-hover)' }}>
+              <th className="px-3 py-1.5 text-left label-xs font-medium">Кампания</th>
+              <th className="px-3 py-1.5 text-left label-xs font-medium">Аккаунт</th>
+              <th className="px-3 py-1.5 text-right label-xs font-medium">CTR (было)</th>
+              <th className="px-3 py-1.5 text-right label-xs font-medium">CTR (стало)</th>
+              <th className="px-3 py-1.5 text-right label-xs font-medium">Падение</th>
+              <th className="px-3 py-1.5 text-center label-xs font-medium">Severity</th>
+            </tr></thead>
+            <tbody>
+              {scanResult.results.map((r) => (
+                <tr key={`${r.campaign_id}-${r.account_google_id}`} style={{ borderBottom: '1px solid var(--bg-hover)' }}>
+                  <td className="px-3 py-1.5 text-xs max-w-[180px] truncate" style={{ color: 'var(--text-secondary)' }}>
+                    {r.campaign_name}
+                  </td>
+                  <td className="px-3 py-1.5 text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                    {formatCid(r.account_google_id)}
+                  </td>
+                  <td className="px-3 py-1.5 text-right text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                    {(r.ctr_previous * 100).toFixed(2)}%
+                  </td>
+                  <td className="px-3 py-1.5 text-right text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                    {(r.ctr_current * 100).toFixed(2)}%
+                  </td>
+                  <td className="px-3 py-1.5 text-right text-xs font-mono" style={{ color: '#f87171' }}>
+                    -{r.decline_percent}%
+                  </td>
+                  <td className="px-3 py-1.5 text-center">
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{
+                      fontSize: 10,
+                      color: r.severity === 'critical' ? '#f87171' : '#fbbf24',
+                      background: r.severity === 'critical' ? 'rgba(239,68,68,0.1)' : 'rgba(251,191,36,0.1)',
+                    }}>
+                      {r.severity === 'critical' ? 'Critical' : 'Warning'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        {/* Original daily-stats based table */}
         <table className="w-full text-sm">
           <thead><tr style={{ borderBottom: '1px solid var(--bg-hover)' }}>
             <th className="px-3 py-1.5 text-left label-xs font-medium">Кампания</th>

@@ -33,6 +33,7 @@ import { batchPredictAll } from './services/ai/auto-scoring.service.js';
 import { scoreSurvivedAccounts } from './services/ai/leaderboard.service.js';
 import { deleteOldNotifications } from './services/notification.service.js';
 import { startBotPolling, stopBotPolling, registerBotCommands } from './services/telegram-bot.service.js';
+import { snapshotCreativePerformance, runDecayScanWithAlerts } from './services/creative-decay.service.js';
 import { API_PREFIX, RATE_LIMIT_PER_MINUTE } from '@cts/shared';
 import './types.js';
 
@@ -278,6 +279,37 @@ async function start() {
       })
       .catch((err) => app.log.error('[cron] Survived scoring failed: %s', err instanceof Error ? err.message : err));
   }, 24 * 60 * 60 * 1000)); // Every 24 hours
+
+  // CREATIVE DECAY: Snapshot + scan — 2 min after start, then every 6 hours
+  timers.push(setTimeout(() => {
+    app.log.info('[cron] Initial creative snapshot starting...');
+    snapshotCreativePerformance(pool)
+      .then((r) => {
+        app.log.info(`[cron] Creative snapshot: ${r.snapshotted} campaigns`);
+        return runDecayScanWithAlerts(pool);
+      })
+      .then((r) => {
+        if (r.decayed > 0) {
+          app.log.info(`[cron] Creative decay scan: scanned=${r.scanned}, decayed=${r.decayed}, critical=${r.critical}`);
+        }
+      })
+      .catch((err) => app.log.error('[cron] Creative decay failed: %s', err instanceof Error ? err.message : err));
+  }, 120_000)); // 2 min after start
+
+  intervals.push(setInterval(() => {
+    app.log.info('[cron] Periodic creative decay scan starting...');
+    snapshotCreativePerformance(pool)
+      .then((r) => {
+        app.log.info(`[cron] Creative snapshot: ${r.snapshotted} campaigns`);
+        return runDecayScanWithAlerts(pool);
+      })
+      .then((r) => {
+        if (r.decayed > 0) {
+          app.log.info(`[cron] Creative decay scan: scanned=${r.scanned}, decayed=${r.decayed}, critical=${r.critical}`);
+        }
+      })
+      .catch((err) => app.log.error('[cron] Creative decay scan failed: %s', err instanceof Error ? err.message : err));
+  }, 6 * 60 * 60 * 1000)); // Every 6 hours
 
   // --- Graceful shutdown ---
   const shutdown = async (signal: string) => {

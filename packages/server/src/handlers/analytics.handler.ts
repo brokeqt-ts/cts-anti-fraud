@@ -5,6 +5,7 @@ import { generatePostMortem } from '../services/post-mortem.service.js';
 import * as analyticsRepo from '../repositories/analytics.repository.js';
 import * as accountsRepo from '../repositories/accounts.repository.js';
 import { getUserIdFilter } from '../utils/user-scope.js';
+import * as creativeDecayService from '../services/creative-decay.service.js';
 
 /** Timing helper — logs slow analytics queries for monitoring. */
 function timed<T>(label: string, fn: () => Promise<T>): Promise<T> {
@@ -681,4 +682,59 @@ export async function accountRiskSummaryHandler(
     request.log.warn({ err }, 'mv_account_risk_summary query failed, returning empty');
     await reply.status(200).send({ accounts: [] });
   }
+}
+
+/**
+ * POST /analytics/creative-decay/scan — Force a creative decay scan (admin only).
+ * Snapshots current metrics, detects decay, sends notifications.
+ */
+export async function creativeDecayScanHandler(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const pool = getPool(env.DATABASE_URL);
+
+  // Step 1: Take snapshots
+  const snapshot = await creativeDecayService.snapshotCreativePerformance(pool);
+  request.log.info(`[creative-decay] Snapshot: ${snapshot.snapshotted} campaigns`);
+
+  // Step 2: Detect decay and send alerts
+  const scan = await creativeDecayService.runDecayScanWithAlerts(pool);
+
+  await reply.status(200).send({
+    snapshotted: snapshot.snapshotted,
+    scanned: scan.scanned,
+    decayed: scan.decayed,
+    critical: scan.critical,
+    results: scan.results,
+  });
+}
+
+/**
+ * GET /analytics/creative-decay/trends?account_google_id=XXX — CTR trends for sparklines.
+ */
+export async function creativeDecayTrendsHandler(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const pool = getPool(env.DATABASE_URL);
+  const { account_google_id, days } = request.query as { account_google_id?: string; days?: string };
+
+  if (!account_google_id) {
+    await reply.status(400).send({ error: 'account_google_id is required', code: 'MISSING_PARAM' });
+    return;
+  }
+
+  // Verify buyer owns this account
+  const userId = getUserIdFilter(request);
+  if (userId) {
+    const owned = await accountsRepo.getAccountIdByGoogleId(pool, account_google_id, userId);
+    if (!owned) {
+      await reply.status(404).send({ error: 'Account not found', code: 'NOT_FOUND' });
+      return;
+    }
+  }
+
+  const trends = await creativeDecayService.getDecayTrends(pool, account_google_id, days ? parseInt(days, 10) : 30);
+  await reply.status(200).send({ trends });
 }
