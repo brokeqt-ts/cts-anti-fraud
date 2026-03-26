@@ -525,7 +525,8 @@ export function UsersPage() {
                   <select
                     value={formRole}
                     onChange={(e) => setFormRole(e.target.value as 'admin' | 'buyer')}
-                    className="input-field text-sm"
+                    className="w-full px-3 py-2.5 rounded-lg text-sm"
+                    style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', border: '1px solid var(--border-medium)' }}
                   >
                     <option value="buyer">Buyer</option>
                     <option value="admin">Admin</option>
@@ -570,7 +571,8 @@ export function UsersPage() {
                   <select
                     value={formRole}
                     onChange={(e) => setFormRole(e.target.value as 'admin' | 'buyer')}
-                    className="input-field text-sm"
+                    className="w-full px-3 py-2.5 rounded-lg text-sm"
+                    style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', border: '1px solid var(--border-medium)' }}
                     disabled={isSelf(selectedUser)}
                   >
                     <option value="buyer">Buyer</option>
