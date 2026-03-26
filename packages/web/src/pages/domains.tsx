@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
-import { Globe, ExternalLink, ShieldAlert, CheckCircle, XCircle, AlertTriangle, Cloud, ShieldCheck, EyeOff } from 'lucide-react';
-import { fetchDomains, ApiError, type DomainSummary } from '../api.js';
+import { Globe, ExternalLink, ShieldAlert, CheckCircle, XCircle, AlertTriangle, Cloud, ShieldCheck, EyeOff, Search, Loader2, FileSearch } from 'lucide-react';
+import { fetchDomains, fetchDomainDetail, scanDomainContent, ApiError, type DomainSummary, type DomainContentAnalysis } from '../api.js';
 import { TableSkeleton } from '../components/skeleton.js';
 import {
   BlurFade,
@@ -14,6 +14,38 @@ export function DomainsPage() {
   const [domains, setDomains] = useState<DomainSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  // Content analysis modal
+  const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<DomainContentAnalysis | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+
+  function openAnalysis(domain: string) {
+    setSelectedDomain(domain);
+    setAnalysis(null);
+    setAnalysisError(null);
+    setAnalysisLoading(true);
+    fetchDomainDetail(domain)
+      .then((res) => setAnalysis(res.content_analysis))
+      .catch((e) => setAnalysisError(e instanceof Error ? e.message : 'Ошибка'))
+      .finally(() => setAnalysisLoading(false));
+  }
+
+  async function runScan() {
+    if (!selectedDomain) return;
+    setScanning(true);
+    setAnalysisError(null);
+    try {
+      const result = await scanDomainContent(selectedDomain);
+      setAnalysis(result);
+    } catch (e) {
+      setAnalysisError(e instanceof Error ? e.message : 'Ошибка сканирования');
+    } finally {
+      setScanning(false);
+    }
+  }
 
   useEffect(() => {
     fetchDomains()
@@ -152,7 +184,10 @@ export function DomainsPage() {
                     <td className="px-3.5 py-[7px] text-right">
                       <ScoreBadge score={score} safeScore={d.safe_page_quality_score} contentScore={d.content_quality_score != null ? Number(d.content_quality_score) : null} pagespeed={d.pagespeed_score != null ? Number(d.pagespeed_score) : null} />
                     </td>
-                    <td className="px-3.5 py-[7px] text-right">
+                    <td className="px-3.5 py-[7px] text-right flex gap-1 justify-end">
+                      <button onClick={() => openAnalysis(d.domain)} className="p-1 rounded transition-colors hover:bg-white/5" style={{ color: 'var(--text-muted)' }} title="Content Analysis">
+                        <FileSearch className="w-3.5 h-3.5" />
+                      </button>
                       <Link to={`/assessment?domain=${d.domain}`} className="p-1 rounded transition-colors hover:bg-white/5" style={{ color: 'var(--text-muted)' }} title="Оценить риск">
                         <ShieldCheck className="w-3.5 h-3.5" />
                       </Link>
@@ -171,6 +206,157 @@ export function DomainsPage() {
           </div>
         )}
       </div>
+
+      {/* Content Analysis Modal */}
+      {selectedDomain && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => setSelectedDomain(null)}>
+          <div className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-xl p-5 space-y-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-medium)' }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                <FileSearch className="w-4 h-4" /> Content Analysis: {selectedDomain}
+              </h2>
+              <button onClick={() => setSelectedDomain(null)} className="text-xs px-2 py-1 rounded" style={{ color: 'var(--text-muted)' }}>✕</button>
+            </div>
+
+            {analysisLoading && <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin" style={{ color: 'var(--text-muted)' }} /></div>}
+
+            {analysisError && <div className="text-xs p-3 rounded-lg" style={{ color: '#f87171', background: 'rgba(239,68,68,0.08)' }}>{analysisError}</div>}
+
+            {!analysisLoading && !analysis && !analysisError && (
+              <div className="text-center py-6 space-y-3">
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Анализ контента ещё не проводился для этого домена.</p>
+                <button onClick={runScan} disabled={scanning} className="btn-ghost-green px-4 py-2 text-sm flex items-center gap-2 mx-auto">
+                  {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                  {scanning ? 'Сканирование...' : 'Запустить анализ'}
+                </button>
+              </div>
+            )}
+
+            {analysis && (
+              <div className="space-y-4">
+                {/* Scores */}
+                <div className="grid grid-cols-5 gap-2">
+                  {[
+                    { label: 'Risk', value: analysis.content_risk_score, invert: true },
+                    { label: 'Keywords', value: analysis.keyword_risk_score, invert: true },
+                    { label: 'Compliance', value: analysis.compliance_score, invert: false },
+                    { label: 'Structure', value: analysis.structure_risk_score, invert: true },
+                    { label: 'Redirects', value: analysis.redirect_risk_score, invert: true },
+                  ].map((s) => {
+                    const v = s.value ?? 0;
+                    const color = s.invert
+                      ? (v >= 70 ? '#f87171' : v >= 40 ? '#fbbf24' : '#4ade80')
+                      : (v >= 70 ? '#4ade80' : v >= 40 ? '#fbbf24' : '#f87171');
+                    return (
+                      <div key={s.label} className="text-center p-2 rounded-lg" style={{ background: 'var(--bg-base)' }}>
+                        <div className="text-lg font-bold font-mono" style={{ color }}>{v}</div>
+                        <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{s.label}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {analysis.detected_vertical && (
+                  <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    Вертикаль: <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{analysis.detected_vertical}</span>
+                  </div>
+                )}
+
+                {/* Compliance */}
+                <div>
+                  <div className="text-xs font-semibold mb-1.5" style={{ color: 'var(--text-secondary)' }}>Compliance</div>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: 'Privacy Policy', ok: analysis.has_privacy_policy },
+                      { label: 'Terms of Service', ok: analysis.has_terms_of_service },
+                      { label: 'Contact Info', ok: analysis.has_contact_info },
+                      { label: 'Disclaimer', ok: analysis.has_disclaimer },
+                      { label: 'About Page', ok: analysis.has_about_page },
+                      { label: 'Cookie Consent', ok: analysis.has_cookie_consent },
+                      { label: 'Age Verification', ok: analysis.has_age_verification },
+                    ].map(({ label, ok }) => (
+                      <span key={label} className="text-[11px] px-2 py-0.5 rounded-full" style={{
+                        background: ok ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)',
+                        color: ok ? '#4ade80' : '#f87171',
+                      }}>
+                        {ok ? '✓' : '✗'} {label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Keywords */}
+                {analysis.keyword_matches.length > 0 && (
+                  <div>
+                    <div className="text-xs font-semibold mb-1.5" style={{ color: 'var(--text-secondary)' }}>Grey Keywords ({analysis.keyword_matches.length})</div>
+                    <div className="space-y-1">
+                      {analysis.keyword_matches.slice(0, 15).map((m, i) => (
+                        <div key={i} className="text-xs flex items-start gap-2 p-1.5 rounded" style={{ background: 'var(--bg-base)' }}>
+                          <span className="shrink-0" style={{ color: m.severity === 'critical' ? '#f87171' : m.severity === 'warning' ? '#fbbf24' : '#60a5fa' }}>
+                            {m.severity === 'critical' ? '●' : m.severity === 'warning' ? '●' : '●'}
+                          </span>
+                          <span style={{ color: 'var(--text-primary)' }}>
+                            <b>{m.keyword}</b> <span style={{ color: 'var(--text-muted)' }}>({m.vertical})</span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Red Flags */}
+                {analysis.red_flags.length > 0 && (
+                  <div>
+                    <div className="text-xs font-semibold mb-1.5" style={{ color: 'var(--text-secondary)' }}>Red Flags ({analysis.red_flags.length})</div>
+                    <div className="space-y-1">
+                      {analysis.red_flags.map((f, i) => (
+                        <div key={i} className="text-xs p-1.5 rounded" style={{
+                          background: f.severity === 'critical' ? 'rgba(248,113,113,0.08)' : 'rgba(251,191,36,0.08)',
+                          color: f.severity === 'critical' ? '#f87171' : '#fbbf24',
+                        }}>
+                          {f.detail}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Redirects */}
+                {analysis.redirect_count > 1 && (
+                  <div>
+                    <div className="text-xs font-semibold mb-1.5" style={{ color: 'var(--text-secondary)' }}>Redirect Chain ({analysis.redirect_count})</div>
+                    <div className="text-xs space-y-0.5 font-mono" style={{ color: 'var(--text-muted)' }}>
+                      {analysis.redirect_chain.map((u, i) => <div key={i}>→ {u}</div>)}
+                    </div>
+                    {analysis.url_mismatch && <div className="text-xs mt-1" style={{ color: '#f87171' }}>⚠️ URL mismatch detected</div>}
+                  </div>
+                )}
+
+                {/* Page Metrics */}
+                <div className="text-xs flex flex-wrap gap-3" style={{ color: 'var(--text-muted)' }}>
+                  <span>{analysis.word_count} words</span>
+                  <span>{analysis.total_links} links ({analysis.external_links} ext)</span>
+                  <span>{analysis.form_count} forms</span>
+                  <span>{analysis.script_count} scripts</span>
+                  <span>{analysis.iframe_count} iframes</span>
+                  {analysis.page_language && <span>Lang: {analysis.page_language}</span>}
+                </div>
+
+                {analysis.analyzed_at && (
+                  <div className="text-[10px]" style={{ color: 'var(--text-ghost)' }}>
+                    Analyzed: {new Date(analysis.analyzed_at).toLocaleString()}
+                  </div>
+                )}
+
+                <button onClick={runScan} disabled={scanning} className="btn-ghost-green px-3 py-1.5 text-xs flex items-center gap-2">
+                  {scanning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                  {scanning ? 'Сканирование...' : 'Пересканировать'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

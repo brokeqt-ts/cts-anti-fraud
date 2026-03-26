@@ -503,6 +503,64 @@ export interface DomainSummary {
 export const fetchDomains = (): Promise<{ total: number; domains: DomainSummary[] }> =>
   apiFetch('/domains');
 
+export interface DomainContentAnalysis {
+  id: string;
+  domain_id: string;
+  url: string;
+  content_risk_score: number;
+  keyword_risk_score: number;
+  compliance_score: number;
+  structure_risk_score: number;
+  redirect_risk_score: number;
+  keyword_matches: Array<{ keyword: string; vertical: string; severity: string; context: string }>;
+  detected_vertical: string | null;
+  has_privacy_policy: boolean;
+  has_terms_of_service: boolean;
+  has_contact_info: boolean;
+  has_disclaimer: boolean;
+  has_about_page: boolean;
+  has_cookie_consent: boolean;
+  has_age_verification: boolean;
+  red_flags: Array<{ type: string; severity: string; detail: string }>;
+  has_countdown_timer: boolean;
+  has_fake_reviews: boolean;
+  has_before_after: boolean;
+  has_hidden_text: boolean;
+  has_aggressive_cta: boolean;
+  has_popup_overlay: boolean;
+  has_auto_play_video: boolean;
+  has_external_redirect: boolean;
+  redirect_count: number;
+  redirect_chain: string[];
+  final_url: string;
+  url_mismatch: boolean;
+  page_language: string | null;
+  word_count: number;
+  total_links: number;
+  external_links: number;
+  form_count: number;
+  script_count: number;
+  iframe_count: number;
+  analysis_summary: string;
+  analyzed_at: string | null;
+}
+
+export interface DomainDetail {
+  domain: DomainSummary & { id?: string };
+  accounts: Array<Record<string, unknown>>;
+  bans: Array<Record<string, unknown>>;
+  content_analysis: DomainContentAnalysis | null;
+}
+
+export const fetchDomainDetail = (domain: string): Promise<DomainDetail> =>
+  apiFetch(`/domains/${encodeURIComponent(domain)}`);
+
+export const scanDomainContent = (domain: string): Promise<DomainContentAnalysis> =>
+  apiFetch(`/domains/${encodeURIComponent(domain)}/content-analysis`, { method: 'POST' });
+
+export const scanAllDomainsContent = (): Promise<{ analyzed: number; errors: number }> =>
+  apiFetch('/domains/content-analysis/scan', { method: 'POST' });
+
 // --- CTS Sites ---
 
 export interface CtsSite {

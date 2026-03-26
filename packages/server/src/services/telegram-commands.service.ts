@@ -229,7 +229,10 @@ async function sendSubMenu(chatId: string, section: string, pool: Pool): Promise
             { text: '🌐 Домены', callback_data: 'cmd:domains' },
           ],
           [
+            { text: '🔍 Скан домена /scan', callback_data: 'hint:scan' },
             { text: '💸 Расход /velocity CID', callback_data: 'hint:velocity' },
+          ],
+          [
             { text: '📊 Quality /quality CID', callback_data: 'hint:quality' },
           ],
           [BACK_TO_MENU_ROW[0]!],
@@ -641,6 +644,89 @@ commands['domains'] = async (chatId, _args, pool) => {
   await sendMessageWithKeyboard(chatId, text, {
     inline_keyboard: navRow('analytics', 'Аналитика'),
   });
+};
+
+// /scan <domain> — Domain content analysis
+commands['scan'] = async (chatId, args, pool) => {
+  const user = await requireAuth(chatId, pool);
+  if (!user) return;
+
+  const domain = args.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  if (!domain) {
+    await sendMessage(chatId, '⚠️ Укажите домен: <code>/scan example.com</code>');
+    return;
+  }
+
+  await sendMessage(chatId, `🔍 Анализирую <code>${escapeHtml(domain)}</code>...`);
+
+  try {
+    const { analyzeContent } = await import('./domain-content-analyzer.js');
+    const result = await analyzeContent(`https://${domain}`);
+
+    const riskEmoji = result.contentRiskScore >= 70 ? '🔴' : result.contentRiskScore >= 40 ? '🟡' : '🟢';
+    const compEmoji = result.complianceScore >= 70 ? '🟢' : result.complianceScore >= 40 ? '🟡' : '🔴';
+
+    const kwLines: string[] = [];
+    const critical = result.keywordMatches.filter(m => m.severity === 'critical');
+    const warning = result.keywordMatches.filter(m => m.severity === 'warning');
+    if (critical.length > 0) kwLines.push(`  🔴 Critical: ${critical.map(m => m.keyword).join(', ')}`);
+    if (warning.length > 0) kwLines.push(`  ⚠️ Warning: ${warning.map(m => m.keyword).join(', ')}`);
+
+    const flagLines = result.redFlags.map(f => {
+      const e = f.severity === 'critical' ? '🔴' : f.severity === 'warning' ? '⚠️' : 'ℹ️';
+      return `  ${e} ${escapeHtml(f.detail)}`;
+    });
+
+    const lines = [
+      `🔍 <b>Content Analysis: ${escapeHtml(domain)}</b>`,
+      '',
+      `${riskEmoji} Content Risk: <b>${result.contentRiskScore}/100</b>`,
+      `🎯 Keywords: <b>${result.keywordRiskScore}/100</b>`,
+      `${compEmoji} Compliance: <b>${result.complianceScore}/100</b>`,
+      `🏗 Structure: <b>${result.structureRiskScore}/100</b>`,
+      `🔀 Redirects: <b>${result.redirectRiskScore}/100</b>`,
+    ];
+
+    if (result.detectedVertical) {
+      lines.push(`\n📂 Вертикаль: <b>${escapeHtml(result.detectedVertical)}</b>`);
+    }
+
+    if (kwLines.length > 0) {
+      lines.push(`\n🔑 <b>Grey Keywords (${result.keywordMatches.length}):</b>`);
+      lines.push(...kwLines);
+    }
+
+    lines.push('');
+    lines.push(`📄 Compliance:`);
+    lines.push(`  Privacy Policy: ${result.hasPrivacyPolicy ? '✅' : '❌'}`);
+    lines.push(`  Terms of Service: ${result.hasTermsOfService ? '✅' : '❌'}`);
+    lines.push(`  Contact Info: ${result.hasContactInfo ? '✅' : '❌'}`);
+    lines.push(`  Disclaimer: ${result.hasDisclaimer ? '✅' : '❌'}`);
+
+    if (flagLines.length > 0) {
+      lines.push(`\n🚩 <b>Red Flags (${result.redFlags.length}):</b>`);
+      lines.push(...flagLines);
+    }
+
+    if (result.redirectCount > 1) {
+      lines.push(`\n🔀 Redirect Chain (${result.redirectCount}):`);
+      for (const u of result.redirectChain.slice(0, 5)) lines.push(`  → ${escapeHtml(u)}`);
+      if (result.urlMismatch) lines.push('  ⚠️ URL mismatch!');
+    }
+
+    lines.push(`\n📊 ${result.wordCount} words · ${result.totalLinks} links · ${result.scriptCount} scripts · ${result.iframeCount} iframes`);
+    if (result.pageLanguage) lines.push(`🌐 Language: ${result.pageLanguage}`);
+
+    await sendMessageWithKeyboard(chatId, lines.join('\n'), {
+      inline_keyboard: [
+        [{ text: '🔗 Открыть в Dashboard', callback_data: `hint:scan_dash` }],
+        ...navRow('analytics', 'Аналитика'),
+      ],
+    });
+  } catch (err) {
+    console.error('[telegram-cmd] scan error:', err instanceof Error ? err.message : err);
+    await sendMessage(chatId, `❌ Не удалось проанализировать <code>${escapeHtml(domain)}</code>: ${escapeHtml(err instanceof Error ? err.message : 'ошибка')}`);
+  }
 };
 
 // /ai <CID> — AI analysis
@@ -1292,6 +1378,8 @@ const HINT_MESSAGES: Record<string, string> = {
   velocity: '💸 Отправьте: /velocity &lt;CID&gt;\nПример: <code>/velocity 7973813934</code>',
   quality: '📊 Отправьте: /quality &lt;CID&gt;\nПример: <code>/quality 7973813934</code>',
   postmortem: '📝 Отправьте: /postmortem &lt;CID&gt;\nПример: <code>/postmortem 7973813934</code>',
+  scan: '🔍 Отправьте: /scan &lt;домен&gt;\nПример: <code>/scan example.com</code>\n\nАнализ контента: серые ключи, compliance, редиректы, red flags.',
+  scan_dash: '🔗 Откройте страницу доменов в Dashboard для полного отчёта.',
 };
 
 export async function handleCallbackQuery(chatId: string, data: string, pool: Pool): Promise<void> {
@@ -1508,5 +1596,6 @@ export const BOT_COMMANDS = [
   { command: 'ai', description: 'AI-анализ аккаунта (+ CID)' },
   { command: 'predict', description: 'ML-прогноз бана (+ CID)' },
   { command: 'assess', description: 'Оценка риска (домен/CID)' },
+  { command: 'scan', description: 'Анализ контента домена (+ домен)' },
   { command: 'help', description: 'Все команды' },
 ];
