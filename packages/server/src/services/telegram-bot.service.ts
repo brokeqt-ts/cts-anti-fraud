@@ -152,11 +152,41 @@ async function sendWithRetry(url: string, body: string, chatId: string): Promise
   return false;
 }
 
+// ─── Alert chat ID resolution ─────────────────────────────────────────────────
+
+/**
+ * Get chat IDs for system alerts. Uses TELEGRAM_CHAT_ID env if set,
+ * otherwise falls back to all admin users with linked Telegram.
+ */
+async function getAlertChatIds(): Promise<string[]> {
+  const envChatId = env.TELEGRAM_CHAT_ID;
+  if (envChatId && !envChatId.startsWith('#')) {
+    return [envChatId];
+  }
+
+  // Fallback: send to all admins with telegram_chat_id
+  try {
+    const { getPool } = await import('../config/database.js');
+    const pool = getPool(env.DATABASE_URL);
+    const result = await pool.query(
+      `SELECT telegram_chat_id FROM users WHERE role = 'admin' AND telegram_chat_id IS NOT NULL AND is_active = true`,
+    );
+    return result.rows.map((r) => (r as { telegram_chat_id: string }).telegram_chat_id);
+  } catch {
+    return [];
+  }
+}
+
+async function sendAlertToAll(text: string): Promise<void> {
+  const chatIds = await getAlertChatIds();
+  for (const chatId of chatIds) {
+    await sendMessage(chatId, text);
+  }
+}
+
 // ─── Alert formatters ─────────────────────────────────────────────────────────
 
 export async function sendBanAlert(data: BanAlertData): Promise<void> {
-  const chatId = env.TELEGRAM_CHAT_ID;
-  if (!chatId) return;
 
   const cid = formatCid(data.accountGoogleId);
   const reason = data.banReason ?? 'неизвестна';
@@ -181,13 +211,10 @@ export async function sendBanAlert(data: BanAlertData): Promise<void> {
     `🔗 <a href="${dashUrl}">Открыть в Dashboard</a>`,
   ].join('\n');
 
-  await sendMessage(chatId, text);
+  await sendAlertToAll(text);
 }
 
 export async function sendRiskAlert(data: RiskAlertData): Promise<void> {
-  const chatId = env.TELEGRAM_CHAT_ID;
-  if (!chatId) return;
-
   const cid = formatCid(data.accountGoogleId);
   const factorsList = data.factors.map((f) => `  • ${escapeHtml(f)}`).join('\n');
   const dashUrl = `${env.DASHBOARD_URL}/accounts/${data.accountGoogleId}`;
@@ -204,13 +231,10 @@ export async function sendRiskAlert(data: RiskAlertData): Promise<void> {
     `🔗 <a href="${dashUrl}">Открыть в Dashboard</a>`,
   ].join('\n');
 
-  await sendMessage(chatId, text);
+  await sendAlertToAll(text);
 }
 
 export async function sendStatusChangeAlert(data: StatusChangeAlertData): Promise<void> {
-  const chatId = env.TELEGRAM_CHAT_ID;
-  if (!chatId) return;
-
   const cid = formatCid(data.accountGoogleId);
   const emoji = data.newStatus === 'active' ? '✅' : data.newStatus === 'suspended' ? '🚨' : 'ℹ️';
   const dashUrl = `${env.DASHBOARD_URL}/accounts/${data.accountGoogleId}`;
@@ -224,12 +248,10 @@ export async function sendStatusChangeAlert(data: StatusChangeAlertData): Promis
     `🔗 <a href="${dashUrl}">Открыть в Dashboard</a>`,
   ].join('\n');
 
-  await sendMessage(chatId, text);
+  await sendAlertToAll(text);
 }
 
 export async function sendCreativeDecayAlert(data: CreativeDecayAlertData): Promise<void> {
-  const chatId = env.TELEGRAM_CHAT_ID;
-  if (!chatId) return;
 
   const cid = formatCid(data.accountGoogleId);
   const emoji = data.declinePercent >= 30 ? '🔴' : '⚠️';
@@ -250,7 +272,7 @@ export async function sendCreativeDecayAlert(data: CreativeDecayAlertData): Prom
     `🔗 <a href="${dashUrl}">Открыть в Dashboard</a>`,
   ].join('\n');
 
-  await sendMessage(chatId, text);
+  await sendAlertToAll(text);
 }
 
 export async function sendTestMessage(chatId: string): Promise<boolean> {
