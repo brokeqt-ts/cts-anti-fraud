@@ -16,17 +16,20 @@ import crypto from 'node:crypto';
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
-const DATABASE_URL = process.env['DATABASE_URL'];
-if (!DATABASE_URL) {
-  console.error('DATABASE_URL not set');
-  process.exit(1);
-}
+let pool: pg.Pool;
 
-const isProduction = process.env['NODE_ENV'] === 'production';
-const pool = new pg.Pool({
-  connectionString: DATABASE_URL,
-  ssl: isProduction ? { rejectUnauthorized: false } : false,
-});
+function initPool(): pg.Pool {
+  const DATABASE_URL = process.env['DATABASE_URL'];
+  if (!DATABASE_URL) {
+    console.error('DATABASE_URL not set');
+    process.exit(1);
+  }
+  const isProduction = process.env['NODE_ENV'] === 'production';
+  return new pg.Pool({
+    connectionString: DATABASE_URL,
+    ssl: isProduction ? { rejectUnauthorized: false } : false,
+  });
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -625,7 +628,9 @@ async function seedCtsSites(): Promise<void> {
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
-async function main() {
+export async function runSeed(externalPool?: pg.Pool): Promise<void> {
+  pool = externalPool ?? initPool();
+
   console.log('=== CTS Anti-Fraud Synthetic Data Seed ===\n');
 
   try {
@@ -633,7 +638,7 @@ async function main() {
     console.log('[seed] Connected to database\n');
   } catch (err) {
     console.error('Cannot connect to database:', err instanceof Error ? err.message : err);
-    process.exit(1);
+    throw err;
   }
 
   const domainIds = await seedDomains();
@@ -649,10 +654,17 @@ async function main() {
   await seedCtsSites();
 
   console.log('\n=== Seed complete! ===');
-  await pool.end();
+
+  if (!externalPool) {
+    await pool!.end();
+  }
 }
 
-main().catch((err) => {
-  console.error('Seed failed:', err);
-  process.exit(1);
-});
+// Direct execution
+const isDirectRun = process.argv[1]?.includes('seed-synthetic');
+if (isDirectRun) {
+  runSeed().catch((err) => {
+    console.error('Seed failed:', err);
+    process.exit(1);
+  });
+}

@@ -184,6 +184,18 @@ async function start() {
     console.warn('[startup] Could not sync admin password:', err instanceof Error ? err.message : err);
   }
 
+  if (process.env['RUN_SEED'] === 'true') {
+    try {
+      console.log('[startup] RUN_SEED=true — running synthetic data seed...');
+      const { runSeed } = await import('./scripts/seed-synthetic.js');
+      const seedPool = getPool(env.DATABASE_URL);
+      await runSeed(seedPool);
+      console.log('[startup] Seed complete. Remove RUN_SEED to skip on next deploy.');
+    } catch (err) {
+      console.warn('[startup] Seed failed:', err instanceof Error ? err.message : err);
+    }
+  }
+
   try {
     await app.listen({ port: env.PORT, host: '0.0.0.0' });
     app.log.info(`Server running on port ${env.PORT}`);
