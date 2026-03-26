@@ -474,7 +474,6 @@ export function DomainsPage() {
                   const bl = ext.blocklists as { checked: boolean; lists: string[] } | undefined;
                   const crt = ext.crtSh as { checked: boolean; totalCerts: number; subdomains: string[] } | undefined;
                   const shd = ext.shodan as { checked: boolean; ports: number[]; vulns: string[] } | undefined;
-                  const ipq = ext.ipqs as { checked: boolean; riskScore: number; malware: boolean; phishing: boolean; parking: boolean; category: string | null } | undefined;
                   const abuse = ext.abuseIpdb as { checked: boolean; abuseScore: number; totalReports: number } | undefined;
                   const uh = ext.urlhaus as { checked: boolean; isMalware: boolean } | undefined;
                   const pt = ext.phishTank as { checked: boolean; isPhishing: boolean } | undefined;
@@ -506,11 +505,6 @@ export function DomainsPage() {
                         {shd?.checked && shd.ports.length > 0 && (
                           <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: shd.vulns.length > 0 ? 'rgba(248,113,113,0.1)' : 'rgba(96,165,250,0.1)', color: shd.vulns.length > 0 ? '#f87171' : '#60a5fa' }}>
                             Ports: {shd.ports.slice(0, 6).join(', ')}{shd.vulns.length > 0 ? ` · ${shd.vulns.length} vulns` : ''}
-                          </span>
-                        )}
-                        {ipq?.checked && (
-                          <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: ipq.riskScore >= 75 ? 'rgba(248,113,113,0.1)' : ipq.riskScore >= 50 ? 'rgba(251,191,36,0.1)' : 'rgba(74,222,128,0.1)', color: ipq.riskScore >= 75 ? '#f87171' : ipq.riskScore >= 50 ? '#fbbf24' : '#4ade80' }}>
-                            IPQS: {ipq.riskScore}/100{ipq.malware ? ' 🦠' : ''}{ipq.phishing ? ' 🎣' : ''}{ipq.parking ? ' 🅿️' : ''}
                           </span>
                         )}
                         {abuse?.checked && (

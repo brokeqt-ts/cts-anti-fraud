@@ -1267,7 +1267,6 @@ function buildLlmContext(result: ContentAnalysisResult): { summary: string; cont
       blocklists: result.externalApis.blocklists.checked ? { listed: result.externalApis.blocklists.lists } : null,
       crt_sh: result.externalApis.crtSh.checked ? { certs: result.externalApis.crtSh.totalCerts, subdomains: result.externalApis.crtSh.subdomains.length } : null,
       shodan: result.externalApis.shodan.checked ? { ports: result.externalApis.shodan.ports, vulns: result.externalApis.shodan.vulns } : null,
-      ipqs: result.externalApis.ipqs.checked ? { risk: result.externalApis.ipqs.riskScore, malware: result.externalApis.ipqs.malware, phishing: result.externalApis.ipqs.phishing } : null,
       abuse_ipdb: result.externalApis.abuseIpdb.checked ? { score: result.externalApis.abuseIpdb.abuseScore, reports: result.externalApis.abuseIpdb.totalReports } : null,
       urlhaus: result.externalApis.urlhaus.checked ? { malware: result.externalApis.urlhaus.isMalware } : null,
       phishtank: result.externalApis.phishTank.checked ? { phishing: result.externalApis.phishTank.isPhishing } : null,

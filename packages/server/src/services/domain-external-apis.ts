@@ -286,58 +286,7 @@ export async function checkOpenPhish(domain: string): Promise<PhishCheckResult> 
   }
 }
 
-// ─── 7. IPQualityScore ───────────────────────────────────────────────────────
-
-export interface IpqsResult {
-  checked: boolean;
-  riskScore: number; // 0-100
-  malware: boolean;
-  phishing: boolean;
-  suspicious: boolean;
-  parking: boolean;
-  spamming: boolean;
-  adult: boolean;
-  category: string | null;
-  domainAge: Record<string, unknown> | null;
-}
-
-export async function checkIpqs(url: string): Promise<IpqsResult> {
-  const key = process.env['IPQS_API_KEY'];
-  const empty: IpqsResult = { checked: false, riskScore: 0, malware: false, phishing: false, suspicious: false, parking: false, spamming: false, adult: false, category: null, domainAge: null };
-  if (!key) return empty;
-
-  try {
-    const res = await safeFetch(
-      `https://ipqualityscore.com/api/json/url/${key}/${encodeURIComponent(url)}`,
-      { timeout: 8000 },
-    );
-    if (!res?.ok) return empty;
-    const data = await res.json() as {
-      success?: boolean; risk_score?: number; malware?: boolean; phishing?: boolean;
-      suspicious?: boolean; parking?: boolean; spamming?: boolean; adult?: boolean;
-      category?: string; domain_age?: Record<string, unknown>;
-    };
-    if (!data.success) return empty;
-
-    return {
-      checked: true,
-      riskScore: data.risk_score ?? 0,
-      malware: data.malware ?? false,
-      phishing: data.phishing ?? false,
-      suspicious: data.suspicious ?? false,
-      parking: data.parking ?? false,
-      spamming: data.spamming ?? false,
-      adult: data.adult ?? false,
-      category: data.category ?? null,
-      domainAge: data.domain_age ?? null,
-    };
-  } catch (err) {
-    console.error('[ext-api] IPQS error:', err instanceof Error ? err.message : err);
-    return empty;
-  }
-}
-
-// ─── 9. AbuseIPDB ───────────────────────────────────────────────────────────
+// ─── 7. AbuseIPDB ───────────────────────────────────────────────────────────
 
 export interface AbuseIpdbResult {
   checked: boolean;
@@ -535,7 +484,6 @@ export interface AllExternalResults {
   blocklists: BlocklistResult;
   commonCrawl: CommonCrawlResult;
   openPhish: PhishCheckResult;
-  ipqs: IpqsResult;
   abuseIpdb: AbuseIpdbResult;
   urlhaus: UrlhausResult;
   phishTank: PhishTankResult;
@@ -544,12 +492,11 @@ export interface AllExternalResults {
 }
 
 export async function runAllExternalChecks(domain: string, url: string, ip?: string): Promise<AllExternalResults> {
-  const [crtSh, dnsAnalysis, commonCrawl, openPhish, ipqs, urlhaus, phishTank, wot, serpApi] = await Promise.all([
+  const [crtSh, dnsAnalysis, commonCrawl, openPhish, urlhaus, phishTank, wot, serpApi] = await Promise.all([
     checkCrtSh(domain),
     analyzeDns(domain),
     checkCommonCrawl(domain),
     checkOpenPhish(domain),
-    checkIpqs(url),
     checkUrlhaus(url),
     checkPhishTank(url),
     checkWot(domain),
@@ -564,5 +511,5 @@ export async function runAllExternalChecks(domain: string, url: string, ip?: str
     resolvedIp ? checkAbuseIpdb(resolvedIp) : Promise.resolve({ checked: false, abuseScore: 0, totalReports: 0, countryCode: null, isp: null, usageType: null, isTor: false, isWhitelisted: false } as AbuseIpdbResult),
   ]);
 
-  return { crtSh, shodan, dnsAnalysis, blocklists, commonCrawl, openPhish, ipqs, abuseIpdb, urlhaus, phishTank, wot, serpApi };
+  return { crtSh, shodan, dnsAnalysis, blocklists, commonCrawl, openPhish, abuseIpdb, urlhaus, phishTank, wot, serpApi };
 }
