@@ -1270,7 +1270,6 @@ function buildLlmContext(result: ContentAnalysisResult): { summary: string; cont
       abuse_ipdb: result.externalApis.abuseIpdb.checked ? { score: result.externalApis.abuseIpdb.abuseScore, reports: result.externalApis.abuseIpdb.totalReports } : null,
       urlhaus: result.externalApis.urlhaus.checked ? { malware: result.externalApis.urlhaus.isMalware } : null,
       phishtank: result.externalApis.phishTank.checked ? { phishing: result.externalApis.phishTank.isPhishing } : null,
-      wot: result.externalApis.wot.checked ? { trust: result.externalApis.wot.trustworthiness } : null,
       serp: result.externalApis.serpApi.checked ? { indexed: result.externalApis.serpApi.indexed, pages: result.externalApis.serpApi.totalResults } : null,
     } : null,
   };

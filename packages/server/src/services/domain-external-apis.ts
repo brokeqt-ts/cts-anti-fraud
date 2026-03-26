@@ -404,43 +404,7 @@ export async function checkPhishTank(url: string): Promise<PhishTankResult> {
   }
 }
 
-// ─── 12. Web of Trust (WOT) ─────────────────────────────────────────────────
-
-export interface WotResult {
-  checked: boolean;
-  trustworthiness: number; // 0-100
-  childSafety: number;
-  categories: string[];
-}
-
-export async function checkWot(domain: string): Promise<WotResult> {
-  const key = process.env['WOT_API_KEY'];
-  const empty: WotResult = { checked: false, trustworthiness: 0, childSafety: 0, categories: [] };
-  if (!key) return empty;
-
-  try {
-    const res = await safeFetch(`https://scorecard.api.mywot.com/v3/targets?t=${encodeURIComponent(domain)}`, {
-      headers: { 'x-user-id': key },
-      timeout: 5000,
-    });
-    if (!res?.ok) return empty;
-    const data = await res.json() as Array<{ safety?: { status?: string; reputations?: number }; childSafety?: { status?: string; reputations?: number }; categories?: Array<{ name?: string }> }>;
-    const entry = data[0];
-    if (!entry) return empty;
-
-    return {
-      checked: true,
-      trustworthiness: entry.safety?.reputations ?? 0,
-      childSafety: entry.childSafety?.reputations ?? 0,
-      categories: (entry.categories ?? []).map(c => c.name ?? '').filter(Boolean),
-    };
-  } catch (err) {
-    console.error('[ext-api] WOT error:', err instanceof Error ? err.message : err);
-    return empty;
-  }
-}
-
-// ─── 13. SerpAPI (Google index check) ────────────────────────────────────────
+// ─── 12. SerpAPI (Google index check) ────────────────────────────────────────
 
 export interface SerpApiResult {
   checked: boolean;
@@ -487,19 +451,17 @@ export interface AllExternalResults {
   abuseIpdb: AbuseIpdbResult;
   urlhaus: UrlhausResult;
   phishTank: PhishTankResult;
-  wot: WotResult;
   serpApi: SerpApiResult;
 }
 
 export async function runAllExternalChecks(domain: string, url: string, ip?: string): Promise<AllExternalResults> {
-  const [crtSh, dnsAnalysis, commonCrawl, openPhish, urlhaus, phishTank, wot, serpApi] = await Promise.all([
+  const [crtSh, dnsAnalysis, commonCrawl, openPhish, urlhaus, phishTank, serpApi] = await Promise.all([
     checkCrtSh(domain),
     analyzeDns(domain),
     checkCommonCrawl(domain),
     checkOpenPhish(domain),
     checkUrlhaus(url),
     checkPhishTank(url),
-    checkWot(domain),
     checkSerpApi(domain),
   ]);
 
@@ -511,5 +473,5 @@ export async function runAllExternalChecks(domain: string, url: string, ip?: str
     resolvedIp ? checkAbuseIpdb(resolvedIp) : Promise.resolve({ checked: false, abuseScore: 0, totalReports: 0, countryCode: null, isp: null, usageType: null, isTor: false, isWhitelisted: false } as AbuseIpdbResult),
   ]);
 
-  return { crtSh, shodan, dnsAnalysis, blocklists, commonCrawl, openPhish, abuseIpdb, urlhaus, phishTank, wot, serpApi };
+  return { crtSh, shodan, dnsAnalysis, blocklists, commonCrawl, openPhish, abuseIpdb, urlhaus, phishTank, serpApi };
 }
