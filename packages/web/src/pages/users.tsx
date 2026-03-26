@@ -587,7 +587,8 @@ export function UsersPage() {
                   <select
                     value={formScope}
                     onChange={(e) => setFormScope(e.target.value as 'full' | 'collect_only')}
-                    className="input-field text-sm"
+                    className="w-full px-3 py-2.5 rounded-lg text-sm"
+                    style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', border: '1px solid var(--border-medium)' }}
                   >
                     <option value="full">full</option>
                     <option value="collect_only">collect_only</option>
