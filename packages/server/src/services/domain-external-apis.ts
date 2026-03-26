@@ -286,43 +286,7 @@ export async function checkOpenPhish(domain: string): Promise<PhishCheckResult> 
   }
 }
 
-// ─── 7. Google Custom Search (site: index check) ────────────────────────────
-
-export interface GoogleIndexResult {
-  checked: boolean;
-  indexed: boolean;
-  totalResults: number;
-  topResults: Array<{ title: string; link: string }>;
-}
-
-export async function checkGoogleIndex(domain: string): Promise<GoogleIndexResult> {
-  const key = process.env['GOOGLE_CUSTOM_SEARCH_KEY'];
-  const cx = process.env['GOOGLE_CUSTOM_SEARCH_CX'];
-  const empty: GoogleIndexResult = { checked: false, indexed: false, totalResults: 0, topResults: [] };
-  if (!key || !cx) return empty;
-
-  try {
-    const res = await safeFetch(
-      `https://www.googleapis.com/customsearch/v1?q=site:${encodeURIComponent(domain)}&key=${key}&cx=${cx}&num=5`,
-      { timeout: 8000 },
-    );
-    if (!res?.ok) return empty;
-    const data = await res.json() as {
-      searchInformation?: { totalResults?: string };
-      items?: Array<{ title?: string; link?: string }>;
-    };
-
-    const total = parseInt(data.searchInformation?.totalResults ?? '0', 10);
-    const topResults = (data.items ?? []).slice(0, 5).map(i => ({ title: i.title ?? '', link: i.link ?? '' }));
-
-    return { checked: true, indexed: total > 0, totalResults: total, topResults };
-  } catch (err) {
-    console.error('[ext-api] Google CSE error:', err instanceof Error ? err.message : err);
-    return empty;
-  }
-}
-
-// ─── 8. IPQualityScore ───────────────────────────────────────────────────────
+// ─── 7. IPQualityScore ───────────────────────────────────────────────────────
 
 export interface IpqsResult {
   checked: boolean;
@@ -571,7 +535,6 @@ export interface AllExternalResults {
   blocklists: BlocklistResult;
   commonCrawl: CommonCrawlResult;
   openPhish: PhishCheckResult;
-  googleIndex: GoogleIndexResult;
   ipqs: IpqsResult;
   abuseIpdb: AbuseIpdbResult;
   urlhaus: UrlhausResult;
@@ -581,12 +544,11 @@ export interface AllExternalResults {
 }
 
 export async function runAllExternalChecks(domain: string, url: string, ip?: string): Promise<AllExternalResults> {
-  const [crtSh, dnsAnalysis, commonCrawl, openPhish, googleIndex, ipqs, urlhaus, phishTank, wot, serpApi] = await Promise.all([
+  const [crtSh, dnsAnalysis, commonCrawl, openPhish, ipqs, urlhaus, phishTank, wot, serpApi] = await Promise.all([
     checkCrtSh(domain),
     analyzeDns(domain),
     checkCommonCrawl(domain),
     checkOpenPhish(domain),
-    checkGoogleIndex(domain),
     checkIpqs(url),
     checkUrlhaus(url),
     checkPhishTank(url),
@@ -602,5 +564,5 @@ export async function runAllExternalChecks(domain: string, url: string, ip?: str
     resolvedIp ? checkAbuseIpdb(resolvedIp) : Promise.resolve({ checked: false, abuseScore: 0, totalReports: 0, countryCode: null, isp: null, usageType: null, isTor: false, isWhitelisted: false } as AbuseIpdbResult),
   ]);
 
-  return { crtSh, shodan, dnsAnalysis, blocklists, commonCrawl, openPhish, googleIndex, ipqs, abuseIpdb, urlhaus, phishTank, wot, serpApi };
+  return { crtSh, shodan, dnsAnalysis, blocklists, commonCrawl, openPhish, ipqs, abuseIpdb, urlhaus, phishTank, wot, serpApi };
 }

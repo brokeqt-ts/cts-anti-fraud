@@ -1272,7 +1272,6 @@ function buildLlmContext(result: ContentAnalysisResult): { summary: string; cont
       urlhaus: result.externalApis.urlhaus.checked ? { malware: result.externalApis.urlhaus.isMalware } : null,
       phishtank: result.externalApis.phishTank.checked ? { phishing: result.externalApis.phishTank.isPhishing } : null,
       wot: result.externalApis.wot.checked ? { trust: result.externalApis.wot.trustworthiness } : null,
-      google_indexed: result.externalApis.googleIndex.checked ? { indexed: result.externalApis.googleIndex.indexed, pages: result.externalApis.googleIndex.totalResults } : null,
       serp: result.externalApis.serpApi.checked ? { indexed: result.externalApis.serpApi.indexed, pages: result.externalApis.serpApi.totalResults } : null,
     } : null,
   };

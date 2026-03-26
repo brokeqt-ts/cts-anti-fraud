@@ -479,7 +479,6 @@ export function DomainsPage() {
                   const uh = ext.urlhaus as { checked: boolean; isMalware: boolean } | undefined;
                   const pt = ext.phishTank as { checked: boolean; isPhishing: boolean } | undefined;
                   const wot = ext.wot as { checked: boolean; trustworthiness: number } | undefined;
-                  const gidx = ext.googleIndex as { checked: boolean; indexed: boolean; totalResults: number } | undefined;
                   const serp = ext.serpApi as { checked: boolean; indexed: boolean; totalResults: number } | undefined;
                   const oph = ext.openPhish as { checked: boolean; isPhishing: boolean } | undefined;
                   const cc = ext.commonCrawl as { checked: boolean; found: boolean; pages: number } | undefined;
@@ -533,14 +532,11 @@ export function DomainsPage() {
                             WOT: {wot.trustworthiness}/100
                           </span>
                         )}
-                        {(gidx?.checked || serp?.checked) && (() => {
-                          const idx = gidx?.checked ? gidx : serp;
-                          return idx ? (
-                            <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: idx.indexed ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)', color: idx.indexed ? '#4ade80' : '#f87171' }}>
-                              Google: {idx.indexed ? `✓ ${idx.totalResults} pages` : '✗ Not indexed'}
-                            </span>
-                          ) : null;
-                        })()}
+                        {serp?.checked && (
+                          <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: serp.indexed ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)', color: serp.indexed ? '#4ade80' : '#f87171' }}>
+                            Google: {serp.indexed ? `✓ ${serp.totalResults} pages` : '✗ Not indexed'}
+                          </span>
+                        )}
                         {cc?.checked && (
                           <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: cc.found ? 'rgba(74,222,128,0.1)' : 'rgba(251,191,36,0.1)', color: cc.found ? '#4ade80' : '#fbbf24' }}>
                             CommonCrawl: {cc.found ? `${cc.pages} pages` : 'not found'}
