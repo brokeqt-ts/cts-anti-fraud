@@ -1319,17 +1319,114 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
     if (val) ogTags[prop.replace('og:', '')] = val;
   }
 
-  // Weighted composite risk score (enhanced with Level 2 data)
+  // ─── Composite risk score ─────────────────────────────────────────────────
+  // Combines all 27 checks into a single 0-100 score.
+  // Risk points are ADDED for bad signals, SUBTRACTED for good signals.
+
   const complianceAdjusted = Math.min(100, compliance.score + structuredData.legitimacyBonus);
-  const contentRiskScore = Math.min(100, Math.round(
-    kwScore * 0.25 +
-    (100 - complianceAdjusted) * 0.20 +
-    structure.score * 0.20 +
-    redirects.score * 0.10 +
-    tldRisk.score * 0.10 +
-    linkReputation.score * 0.10 +
-    (100 - securityHeaders.securityScore) * 0.05
-  ));
+  let riskPoints = 0;
+
+  // 1. Grey keywords (0-100, biggest risk signal)
+  riskPoints += kwScore * 0.20;
+
+  // 2. Compliance gaps (0-100 inverted)
+  riskPoints += (100 - complianceAdjusted) * 0.10;
+
+  // 3. Structural red flags (0-100)
+  riskPoints += structure.score * 0.15;
+
+  // 4. Redirect risk (0-100)
+  riskPoints += redirects.score * 0.05;
+
+  // 5. TLD risk (0-80)
+  riskPoints += tldRisk.score * 0.05;
+
+  // 6. Link reputation (0-100)
+  riskPoints += linkReputation.score * 0.05;
+
+  // 7. Security headers missing (0-100 inverted)
+  riskPoints += (100 - securityHeaders.securityScore) * 0.03;
+
+  // 8. robots.txt signals
+  if (robotsTxt.blocksGooglebot) riskPoints += 15;
+  if (!robotsTxt.exists) riskPoints += 3;
+
+  // 9. Form risks
+  if (formAnalysis.collectsPaymentData) riskPoints += 8;
+  if (formAnalysis.externalFormTargets.length > 0) riskPoints += 5;
+
+  // 10. Suspicious third-party scripts
+  riskPoints += thirdPartyScripts.suspicious.length * 10;
+
+  // 11. Safe Browsing threats
+  if (safeBrowsing.checked && !safeBrowsing.safe) riskPoints += 30;
+
+  // 12. VirusTotal detections
+  if (virusTotal.checked) {
+    riskPoints += virusTotal.malicious * 5;
+    riskPoints += virusTotal.suspicious * 2;
+  }
+
+  // 13. PageSpeed (very slow = suspicious)
+  if (pageSpeed.checked && pageSpeed.performanceScore != null && pageSpeed.performanceScore < 20) {
+    riskPoints += 5;
+  }
+
+  // 14. Wayback age (no history = suspicious)
+  if (wayback.checked && !wayback.hasHistory) riskPoints += 8;
+  if (wayback.checked && wayback.domainAgeFromArchive != null && wayback.domainAgeFromArchive < 30) riskPoints += 10;
+
+  // 15. External API signals
+  if (externalApis) {
+    // Blocklists
+    if (externalApis.blocklists.checked && externalApis.blocklists.lists.length > 0) {
+      riskPoints += externalApis.blocklists.lists.length * 15;
+    }
+
+    // Shodan vulnerabilities
+    if (externalApis.shodan.checked && externalApis.shodan.vulns.length > 0) {
+      riskPoints += Math.min(15, externalApis.shodan.vulns.length * 3);
+    }
+
+    // AbuseIPDB
+    if (externalApis.abuseIpdb.checked && externalApis.abuseIpdb.abuseScore > 0) {
+      riskPoints += Math.min(20, externalApis.abuseIpdb.abuseScore * 0.2);
+    }
+
+    // URLhaus malware
+    if (externalApis.urlhaus.checked && externalApis.urlhaus.isMalware) riskPoints += 25;
+
+    // PhishTank
+    if (externalApis.phishTank.checked && externalApis.phishTank.isPhishing) riskPoints += 25;
+
+    // OpenPhish
+    if (externalApis.openPhish.checked && externalApis.openPhish.isPhishing) riskPoints += 25;
+
+    // DNS legitimacy signals (reduce risk)
+    if (externalApis.dnsAnalysis.checked) {
+      if (externalApis.dnsAnalysis.hasSpf) riskPoints -= 3;
+      if (externalApis.dnsAnalysis.hasDmarc) riskPoints -= 3;
+      if (externalApis.dnsAnalysis.hasMx) riskPoints -= 2;
+    }
+
+    // SerpAPI — not indexed = suspicious
+    if (externalApis.serpApi.checked && !externalApis.serpApi.indexed) riskPoints += 10;
+
+    // CommonCrawl — not found = suspicious
+    if (externalApis.commonCrawl.checked && !externalApis.commonCrawl.found) riskPoints += 5;
+
+    // crt.sh — many certs = established domain (reduce risk)
+    if (externalApis.crtSh.checked && externalApis.crtSh.totalCerts > 10) riskPoints -= 3;
+  }
+
+  // Legitimacy bonuses (reduce risk for established sites)
+  if (wayback.checked && wayback.domainAgeFromArchive != null && wayback.domainAgeFromArchive > 365) riskPoints -= 5;
+  if (wayback.checked && wayback.domainAgeFromArchive != null && wayback.domainAgeFromArchive > 1825) riskPoints -= 5; // 5+ years
+  if (thirdPartyScripts.analytics.length > 0) riskPoints -= 2;
+  if (pageSpeed.checked && pageSpeed.performanceScore != null && pageSpeed.performanceScore >= 80) riskPoints -= 3;
+  if (virusTotal.checked && virusTotal.malicious === 0 && virusTotal.harmless > 50) riskPoints -= 3;
+
+  const contentRiskScore = Math.min(100, Math.max(0, Math.round(riskPoints)));
 
   const result: ContentAnalysisResult = {
     url: fullUrl,
