@@ -9,7 +9,6 @@ import {
   Check,
   Eye,
   EyeOff,
-  Lock,
   Download,
   MessageCircle,
   Unlink,
@@ -22,7 +21,6 @@ import {
   setApiKey,
   checkHealth,
   downloadExtension,
-  changeMyPassword,
   fetchTelegramBotInfo,
   startTelegramConnect,
   fetchTelegramConnectStatus,
@@ -385,14 +383,6 @@ export function SettingsPage() {
   const [extState, setExtState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [extError, setExtError] = useState<string | null>(null);
 
-  // Password change form
-  const [showPasswordForm, setShowPasswordForm] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [pwLoading, setPwLoading] = useState(false);
-  const [pwError, setPwError] = useState<string | null>(null);
-  const [pwSuccess, setPwSuccess] = useState(false);
 
   const handleDownloadExtension = useCallback(async () => {
     if (extState === 'loading') return;
@@ -418,28 +408,6 @@ export function SettingsPage() {
     });
   }
 
-  async function handlePasswordChange(e: FormEvent) {
-    e.preventDefault();
-    if (newPassword !== confirmPassword) {
-      setPwError('Пароли не совпадают');
-      return;
-    }
-    setPwLoading(true);
-    setPwError(null);
-    setPwSuccess(false);
-    try {
-      await changeMyPassword(currentPassword, newPassword);
-      setPwSuccess(true);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setTimeout(() => setShowPasswordForm(false), 1500);
-    } catch (err) {
-      setPwError(err instanceof Error ? err.message : 'Ошибка смены пароля');
-    } finally {
-      setPwLoading(false);
-    }
-  }
 
   return (
     <StaggerContainer className="py-5 px-6 max-w-xl space-y-1.5" staggerDelay={0.06}>
@@ -647,120 +615,6 @@ export function SettingsPage() {
           {/* Telegram Connect */}
           <TelegramConnectCard />
 
-          {/* Security */}
-          <StaggerItem>
-            <div className="card-static p-[12px_14px] space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Lock
-                    className="w-4 h-4"
-                    style={{ color: 'var(--text-muted)' }}
-                    strokeWidth={1.5}
-                  />
-                  <span className="label-xs">Безопасность</span>
-                </div>
-                {!showPasswordForm && (
-                  <button
-                    onClick={() => setShowPasswordForm(true)}
-                    className="text-xs px-3 py-1.5 rounded-lg transition-colors"
-                    style={{
-                      background: 'var(--bg-hover)',
-                      color: 'var(--text-secondary)',
-                      border: '1px solid var(--border-medium)',
-                    }}
-                  >
-                    Сменить пароль
-                  </button>
-                )}
-              </div>
-
-              {showPasswordForm && (
-                <form onSubmit={handlePasswordChange} className="space-y-3 pt-1">
-                  <div>
-                    <label className="block label-xs mb-1.5">Текущий пароль</label>
-                    <input
-                      required
-                      type="password"
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      className="input-field text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block label-xs mb-1.5">Новый пароль</label>
-                    <input
-                      required
-                      type="password"
-                      minLength={8}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className="input-field text-sm"
-                      placeholder="Минимум 8 символов"
-                    />
-                  </div>
-                  <div>
-                    <label className="block label-xs mb-1.5">Подтверждение пароля</label>
-                    <input
-                      required
-                      type="password"
-                      minLength={8}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="input-field text-sm"
-                      placeholder="Повторите новый пароль"
-                    />
-                  </div>
-
-                  {pwError && (
-                    <div
-                      className="flex items-center gap-2 text-xs"
-                      style={{ color: '#f87171' }}
-                    >
-                      <XCircle className="w-3.5 h-3.5" /> {pwError}
-                    </div>
-                  )}
-                  {pwSuccess && (
-                    <div
-                      className="flex items-center gap-2 text-xs"
-                      style={{ color: '#4ade80' }}
-                    >
-                      <CheckCircle className="w-3.5 h-3.5" /> Пароль изменён
-                    </div>
-                  )}
-
-                  <div className="flex gap-3">
-                    <button
-                      type="submit"
-                      disabled={pwLoading}
-                      className="btn-ghost-green flex-1 py-2 flex items-center justify-center gap-2 text-sm"
-                    >
-                      {pwLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                      Сменить
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowPasswordForm(false);
-                        setPwError(null);
-                        setPwSuccess(false);
-                        setCurrentPassword('');
-                        setNewPassword('');
-                        setConfirmPassword('');
-                      }}
-                      className="px-4 py-2 rounded-lg text-sm"
-                      style={{
-                        background: 'var(--bg-hover)',
-                        color: 'var(--text-secondary)',
-                        border: '1px solid var(--border-medium)',
-                      }}
-                    >
-                      Отмена
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
-          </StaggerItem>
         </>
       ) : (
         <LegacySettingsForm />
