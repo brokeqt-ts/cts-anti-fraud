@@ -15,6 +15,9 @@ export function DomainsPage() {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  // Manual domain scan input
+  const [manualDomain, setManualDomain] = useState('');
+
   // Content analysis modal
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<DomainContentAnalysis | null>(null);
@@ -22,15 +25,27 @@ export function DomainsPage() {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
 
-  function openAnalysis(domain: string) {
+  function openAnalysis(domain: string, scanImmediately = false) {
     setSelectedDomain(domain);
     setAnalysis(null);
     setAnalysisError(null);
-    setAnalysisLoading(true);
-    fetchDomainDetail(domain)
-      .then((res) => setAnalysis(res.content_analysis))
-      .catch((e) => setAnalysisError(e instanceof Error ? e.message : 'Ошибка'))
-      .finally(() => setAnalysisLoading(false));
+
+    if (scanImmediately) {
+      // For manual domain input — scan directly
+      setAnalysisLoading(false);
+      setScanning(true);
+      scanDomainContent(domain)
+        .then((res) => setAnalysis(res))
+        .catch((e) => setAnalysisError(e instanceof Error ? e.message : 'Ошибка сканирования'))
+        .finally(() => setScanning(false));
+    } else {
+      // For existing domains — try to load existing analysis first
+      setAnalysisLoading(true);
+      fetchDomainDetail(domain)
+        .then((res) => setAnalysis(res.content_analysis))
+        .catch((e) => setAnalysisError(e instanceof Error ? e.message : 'Ошибка'))
+        .finally(() => setAnalysisLoading(false));
+    }
   }
 
   async function runScan() {
@@ -86,6 +101,31 @@ export function DomainsPage() {
               {enriched > 0 && <> · {enriched} обогащено</>}
             </p>
           </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const d = manualDomain.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+              if (d) openAnalysis(d, true);
+            }}
+            className="flex items-center gap-2"
+          >
+            <input
+              type="text"
+              placeholder="example.com"
+              value={manualDomain}
+              onChange={(e) => setManualDomain(e.target.value)}
+              className="px-3 py-1.5 rounded-lg text-sm w-48"
+              style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', border: '1px solid var(--border-medium)' }}
+            />
+            <button
+              type="submit"
+              className="px-3 py-1.5 rounded-lg text-sm flex items-center gap-1.5"
+              style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-medium)' }}
+            >
+              <Search className="w-3.5 h-3.5" />
+              Анализ
+            </button>
+          </form>
         </div>
       </BlurFade>
 
