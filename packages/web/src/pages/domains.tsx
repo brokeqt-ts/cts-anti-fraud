@@ -250,7 +250,7 @@ export function DomainsPage() {
       {/* Content Analysis Modal */}
       {selectedDomain && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => setSelectedDomain(null)}>
-          <div className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-xl p-5 space-y-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-medium)' }} onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-xl p-5 space-y-4" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-medium)' }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
                 <FileSearch className="w-4 h-4" /> Content Analysis: {selectedDomain}
