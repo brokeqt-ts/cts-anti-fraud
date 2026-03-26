@@ -469,54 +469,6 @@ export function DomainsPage() {
 
                 {/* Extended External APIs */}
                 <ExtendedChecks analysis={analysis} />
-                      <div className="flex flex-wrap gap-1.5">
-                        {dns?.checked && (
-                          <>
-                            <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: dns.hasSpf ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)', color: dns.hasSpf ? '#4ade80' : '#f87171' }}>{dns.hasSpf ? '✓' : '✗'} SPF</span>
-                            <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: dns.hasDmarc ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)', color: dns.hasDmarc ? '#4ade80' : '#f87171' }}>{dns.hasDmarc ? '✓' : '✗'} DMARC</span>
-                            <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: dns.hasMx ? 'rgba(74,222,128,0.1)' : 'rgba(251,191,36,0.1)', color: dns.hasMx ? '#4ade80' : '#fbbf24' }}>{dns.hasMx ? '✓' : '✗'} MX</span>
-                          </>
-                        )}
-                        {bl?.checked && bl.lists.length > 0 && (
-                          <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>🚫 Blocklist: {bl.lists.join(', ')}</span>
-                        )}
-                        {bl?.checked && bl.lists.length === 0 && (
-                          <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(74,222,128,0.1)', color: '#4ade80' }}>✓ Not blocklisted</span>
-                        )}
-                        {crt?.checked && (
-                          <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(96,165,250,0.1)', color: '#60a5fa' }}>🔐 {crt.totalCerts} certs · {crt.subdomains.length} subdomains</span>
-                        )}
-                        {shd?.checked && shd.ports.length > 0 && (
-                          <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: shd.vulns.length > 0 ? 'rgba(248,113,113,0.1)' : 'rgba(96,165,250,0.1)', color: shd.vulns.length > 0 ? '#f87171' : '#60a5fa' }}>
-                            Ports: {shd.ports.slice(0, 6).join(', ')}{shd.vulns.length > 0 ? ` · ${shd.vulns.length} vulns` : ''}
-                          </span>
-                        )}
-                        {abuse?.checked && (
-                          <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: abuse.abuseScore > 0 ? 'rgba(248,113,113,0.1)' : 'rgba(74,222,128,0.1)', color: abuse.abuseScore > 0 ? '#f87171' : '#4ade80' }}>
-                            AbuseIPDB: {abuse.abuseScore}% ({abuse.totalReports} reports)
-                          </span>
-                        )}
-                        {uh?.checked && uh.isMalware && (
-                          <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>🦠 URLhaus: malware</span>
-                        )}
-                        {pt?.checked && pt.isPhishing && (
-                          <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>🎣 PhishTank: phishing</span>
-                        )}
-                        {oph?.checked && oph.isPhishing && (
-                          <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>🎣 OpenPhish: phishing</span>
-                        )}
-                        {serp?.checked && (
-                          <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: serp.indexed ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)', color: serp.indexed ? '#4ade80' : '#f87171' }}>
-                            Google: {serp.indexed ? `✓ ${serp.totalResults} pages` : '✗ Not indexed'}
-                          </span>
-                        )}
-                        {cc?.checked && (
-                          <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: cc.found ? 'rgba(74,222,128,0.1)' : 'rgba(251,191,36,0.1)', color: cc.found ? '#4ade80' : '#fbbf24' }}>
-                            CommonCrawl: {cc.found ? `${cc.pages} pages` : 'not found'}
-                          </span>
-                        )}
-                      </div>
-                    </div>
                 {/* Built-in External APIs */}
                 <div className="grid grid-cols-2 gap-3">
                   {/* Safe Browsing */}
