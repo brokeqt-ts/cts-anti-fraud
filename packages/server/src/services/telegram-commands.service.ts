@@ -519,23 +519,44 @@ commands['analytics'] = async (chatId, _args, pool) => {
   await sendMessageWithKeyboard(chatId, text, keyboard);
 };
 
-// /decay — Creative decay
+// /decay — Creative decay (compares recent 3 days vs baseline 7 days from creative_snapshots)
 commands['decay'] = async (chatId, _args, pool) => {
   const user = await requireAuth(chatId, pool);
   if (!user) return;
 
   try {
     const result = await pool.query(
-      `SELECT cd.campaign_id, cd.campaign_name, cd.account_google_id,
-              cd.baseline_ctr, cd.current_ctr, cd.ctr_change_pct
-       FROM mv_creative_decay cd
-       WHERE cd.decay_detected = true
-       ORDER BY cd.ctr_change_pct ASC
-       LIMIT 10`,
+      `WITH baseline AS (
+        SELECT campaign_id, account_google_id, campaign_name,
+               AVG(ctr) AS baseline_ctr
+        FROM creative_snapshots
+        WHERE snapshot_date BETWEEN CURRENT_DATE - 14 AND CURRENT_DATE - 4
+          AND impressions >= 100
+        GROUP BY campaign_id, account_google_id, campaign_name
+      ),
+      recent AS (
+        SELECT campaign_id, account_google_id,
+               AVG(ctr) AS current_ctr
+        FROM creative_snapshots
+        WHERE snapshot_date >= CURRENT_DATE - 3
+          AND impressions >= 100
+        GROUP BY campaign_id, account_google_id
+      )
+      SELECT b.campaign_id, b.campaign_name, b.account_google_id,
+             b.baseline_ctr, r.current_ctr,
+             ROUND(((r.current_ctr - b.baseline_ctr) / NULLIF(b.baseline_ctr, 0)) * 100, 1) AS ctr_change_pct
+      FROM baseline b
+      JOIN recent r ON b.campaign_id = r.campaign_id AND b.account_google_id = r.account_google_id
+      WHERE b.baseline_ctr > 0
+        AND ((r.current_ctr - b.baseline_ctr) / b.baseline_ctr) < -0.15
+      ORDER BY ctr_change_pct ASC
+      LIMIT 10`,
     );
 
     if (result.rows.length === 0) {
-      await sendMessage(chatId, '✅ Активных creative decay не обнаружено. CTR всех кампаний в норме.');
+      await sendMessageWithKeyboard(chatId, '✅ Активных creative decay не обнаружено. CTR всех кампаний в норме.', {
+        inline_keyboard: navRow('analytics', 'Аналитика'),
+      });
       return;
     }
 
@@ -544,9 +565,11 @@ commands['decay'] = async (chatId, _args, pool) => {
         campaign_id: string; campaign_name: string; account_google_id: string;
         baseline_ctr: number | null; current_ctr: number | null; ctr_change_pct: number | null;
       };
-      const change = r.ctr_change_pct != null ? r.ctr_change_pct.toFixed(1) : '?';
-      const emoji = (r.ctr_change_pct ?? 0) < -30 ? '🔴' : '⚠️';
-      return `${emoji} <code>${formatCid(r.account_google_id)}</code>\n   ${escapeHtml(r.campaign_name)} · CTR ${change}%`;
+      const change = r.ctr_change_pct != null ? Number(r.ctr_change_pct).toFixed(1) : '?';
+      const emoji = (Number(r.ctr_change_pct) ?? 0) < -30 ? '🔴' : '⚠️';
+      const basePct = r.baseline_ctr != null ? (Number(r.baseline_ctr) * 100).toFixed(2) : '?';
+      const currPct = r.current_ctr != null ? (Number(r.current_ctr) * 100).toFixed(2) : '?';
+      return `${emoji} <code>${formatCid(r.account_google_id)}</code>\n   ${escapeHtml(r.campaign_name ?? 'N/A')}\n   CTR: ${basePct}% → ${currPct}% (${change}%)`;
     });
 
     const text = [
@@ -560,8 +583,9 @@ commands['decay'] = async (chatId, _args, pool) => {
     await sendMessageWithKeyboard(chatId, text, {
       inline_keyboard: navRow('analytics', 'Аналитика'),
     });
-  } catch {
-    await sendMessageWithKeyboard(chatId, '📉 Creative Decay пока недоступен. Данных для анализа ещё недостаточно.', {
+  } catch (err) {
+    console.error('[telegram-cmd] decay error:', err instanceof Error ? err.message : err);
+    await sendMessageWithKeyboard(chatId, '📉 Creative Decay: ошибка при загрузке данных. Попробуйте позже.', {
       inline_keyboard: navRow('analytics', 'Аналитика'),
     });
   }
