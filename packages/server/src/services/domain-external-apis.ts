@@ -146,7 +146,7 @@ export async function analyzeDns(domain: string): Promise<DnsAnalysisResult> {
     const mxRecords = mxRes.status === 'fulfilled' ? mxRes.value.sort((a, b) => a.priority - b.priority).map(r => r.exchange) : [];
 
     // CAA
-    const caaRecords = caaRes.status === 'fulfilled' ? caaRes.value.map(r => `${r.tag} ${r.value}`) : [];
+    const caaRecords = caaRes.status === 'fulfilled' ? caaRes.value.map(r => `${(r as unknown as Record<string, string>).tag ?? ''} ${(r as unknown as Record<string, string>).value ?? ''}`.trim()) : [];
 
     return {
       checked: true,
