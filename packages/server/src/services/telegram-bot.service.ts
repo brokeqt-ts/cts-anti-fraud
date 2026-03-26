@@ -419,8 +419,9 @@ export async function startBotPolling(): Promise<void> {
   }
   if (pollingActive) return;
 
-  // Delete any existing webhook to avoid 409 conflict with getUpdates
   const token = env.TELEGRAM_BOT_TOKEN!;
+
+  // Delete any existing webhook to avoid 409 conflict with getUpdates
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/deleteWebhook?drop_pending_updates=false`);
     const data = await res.json() as { ok: boolean };
@@ -428,6 +429,10 @@ export async function startBotPolling(): Promise<void> {
   } catch (err) {
     console.warn('[telegram] deleteWebhook failed:', err instanceof Error ? err.message : err);
   }
+
+  // Wait for old container to stop polling (rolling update overlap)
+  console.log('[telegram] Waiting 10s for old instance to stop...');
+  await new Promise((r) => setTimeout(r, 10_000));
 
   pollingActive = true;
   console.log('[telegram] Starting bot polling...');
@@ -453,8 +458,15 @@ async function pollLoop(): Promise<void> {
       const res = await fetch(url);
 
       if (!res.ok) {
-        console.error(`[telegram] getUpdates failed: ${res.status}`);
-        await new Promise((r) => setTimeout(r, 5000));
+        if (res.status === 409) {
+          // Another instance is polling — delete webhook and retry
+          console.warn('[telegram] 409 conflict — deleting webhook and retrying...');
+          await fetch(`https://api.telegram.org/bot${token}/deleteWebhook?drop_pending_updates=false`);
+          await new Promise((r) => setTimeout(r, 3000));
+        } else {
+          console.error(`[telegram] getUpdates failed: ${res.status}`);
+          await new Promise((r) => setTimeout(r, 5000));
+        }
         continue;
       }
 
