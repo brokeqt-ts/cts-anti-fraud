@@ -372,6 +372,14 @@ export function DomainsPage() {
                   </div>
                 )}
 
+                {/* SPA warning */}
+                {analysis.word_count < 50 && (
+                  <div className="text-xs p-2.5 rounded-lg flex items-start gap-2" style={{ background: 'rgba(96,165,250,0.08)', color: '#60a5fa' }}>
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <span>Сайт использует JavaScript-рендеринг (SPA). Контент загружается динамически — результаты анализа статического HTML могут быть неполными.</span>
+                  </div>
+                )}
+
                 {/* Page Metrics */}
                 <div className="text-xs flex flex-wrap gap-3" style={{ color: 'var(--text-muted)' }}>
                   <span>{analysis.word_count} words</span>
