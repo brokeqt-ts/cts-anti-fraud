@@ -2,7 +2,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { getPool } from '../config/database.js';
 import { env } from '../config/env.js';
 import * as domainsRepo from '../repositories/domains.repository.js';
-import { analyzeAndSave, analyzeAllDomains } from '../services/domain-content-analyzer.js';
+import { analyzeAndSave, analyzeAllDomains, analyzeContent } from '../services/domain-content-analyzer.js';
 
 /**
  * GET /domains — list all unique domains from ads.final_urls,
@@ -79,13 +79,16 @@ export async function analyzeDomainContentHandler(
 
   try {
     const domainRow = await domainsRepo.getDomainByName(pool, domain);
-    if (!domainRow) {
-      await reply.status(404).send({ error: 'Domain not found', code: 'NOT_FOUND' });
-      return;
-    }
 
-    const result = await analyzeAndSave(pool, (domainRow as { id: string }).id, `https://${domain}`);
-    await reply.status(200).send(result);
+    if (domainRow) {
+      // Domain exists in DB — analyze and save
+      const result = await analyzeAndSave(pool, (domainRow as { id: string }).id, `https://${domain}`);
+      await reply.status(200).send(result);
+    } else {
+      // Domain not in DB — analyze without saving (ad-hoc scan)
+      const result = await analyzeContent(`https://${domain}`);
+      await reply.status(200).send(result);
+    }
   } catch (err: unknown) {
     request.log.error({ err, handler: 'analyzeDomainContentHandler', domain }, 'Content analysis failed');
     await reply.status(500).send({
