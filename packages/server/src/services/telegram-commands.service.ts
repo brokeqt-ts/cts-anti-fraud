@@ -714,8 +714,86 @@ commands['scan'] = async (chatId, args, pool) => {
       if (result.urlMismatch) lines.push('  ⚠️ URL mismatch!');
     }
 
-    lines.push(`\n📊 ${result.wordCount} words · ${result.totalLinks} links · ${result.scriptCount} scripts · ${result.iframeCount} iframes`);
-    if (result.pageLanguage) lines.push(`🌐 Language: ${result.pageLanguage}`);
+    // TLD & Security Headers
+    const tldEmoji = result.tldRisk.risk === 'high' ? '🔴' : result.tldRisk.risk === 'medium' ? '🟡' : '🟢';
+    lines.push(`\n${tldEmoji} TLD: <b>${escapeHtml(result.tldRisk.tld)}</b> (${result.tldRisk.risk})`);
+    lines.push(`🔒 Security Headers: <b>${result.securityHeaders.securityScore}/100</b>`);
+    if (result.securityHeaders.serverHeader) lines.push(`  Server: ${escapeHtml(result.securityHeaders.serverHeader)}`);
+
+    // robots.txt
+    if (result.robotsTxt.exists) {
+      if (result.robotsTxt.blocksGooglebot) {
+        lines.push(`\n🤖 robots.txt: 🔴 <b>Блокирует Googlebot!</b>`);
+      } else {
+        lines.push(`\n🤖 robots.txt: ✅ Googlebot разрешён${result.robotsTxt.hasSitemap ? ' · Sitemap есть' : ''}`);
+      }
+    }
+
+    // Third-party scripts
+    const scripts = [...result.thirdPartyScripts.analytics, ...result.thirdPartyScripts.advertising];
+    const suspiciousScripts = result.thirdPartyScripts.suspicious;
+    if (scripts.length > 0 || suspiciousScripts.length > 0) {
+      lines.push(`\n📜 <b>Скрипты:</b>`);
+      if (scripts.length > 0) lines.push(`  ${scripts.join(', ')}`);
+      if (suspiciousScripts.length > 0) lines.push(`  🔴 Подозрительные: ${suspiciousScripts.join(', ')}`);
+    }
+
+    // Forms
+    if (result.formAnalysis.forms.length > 0) {
+      const formParts: string[] = [`${result.formAnalysis.forms.length} форм`];
+      if (result.formAnalysis.collectsPersonalData) formParts.push('📋 персональные данные');
+      if (result.formAnalysis.collectsPaymentData) formParts.push('💳 платёжные данные');
+      if (result.formAnalysis.externalFormTargets.length > 0) formParts.push(`🔗 внешние: ${result.formAnalysis.externalFormTargets.join(', ')}`);
+      lines.push(`\n📝 Формы: ${formParts.join(' · ')}`);
+    }
+
+    // Link reputation
+    const linkIssues = [...result.linkReputation.affiliateLinks, ...result.linkReputation.trackerLinks, ...result.linkReputation.shortenerLinks];
+    if (linkIssues.length > 0) {
+      lines.push(`\n🔗 <b>Подозрительные ссылки:</b>`);
+      if (result.linkReputation.affiliateLinks.length > 0) lines.push(`  Affiliate: ${result.linkReputation.affiliateLinks.join(', ')}`);
+      if (result.linkReputation.trackerLinks.length > 0) lines.push(`  Trackers: ${result.linkReputation.trackerLinks.join(', ')}`);
+      if (result.linkReputation.shortenerLinks.length > 0) lines.push(`  Shorteners: ${result.linkReputation.shortenerLinks.join(', ')}`);
+    }
+
+    // Structured data
+    if (result.structuredData.hasJsonLd) {
+      lines.push(`\n🏷 Schema.org: ${result.structuredData.schemaTypes.join(', ')}`);
+    }
+
+    // External APIs
+    if (result.safeBrowsing.checked) {
+      lines.push(result.safeBrowsing.safe
+        ? `\n🛡 Safe Browsing: ✅ Безопасен`
+        : `\n🛡 Safe Browsing: 🔴 <b>УГРОЗЫ: ${result.safeBrowsing.threats.map(t => t.type).join(', ')}</b>`);
+    }
+    if (result.pageSpeed.checked && result.pageSpeed.performanceScore != null) {
+      const psEmoji = result.pageSpeed.performanceScore >= 90 ? '🟢' : result.pageSpeed.performanceScore >= 50 ? '🟡' : '🔴';
+      const lcp = result.pageSpeed.largestContentfulPaint != null ? ` · LCP: ${(result.pageSpeed.largestContentfulPaint / 1000).toFixed(1)}s` : '';
+      lines.push(`${psEmoji} PageSpeed: <b>${result.pageSpeed.performanceScore}/100</b>${lcp}`);
+    }
+    if (result.virusTotal.checked) {
+      if (result.virusTotal.malicious > 0) {
+        lines.push(`🦠 VirusTotal: 🔴 <b>${result.virusTotal.malicious} malicious</b>, ${result.virusTotal.suspicious} suspicious`);
+      } else if (result.virusTotal.suspicious > 0) {
+        lines.push(`🦠 VirusTotal: ⚠️ ${result.virusTotal.suspicious} suspicious`);
+      } else {
+        lines.push(`🦠 VirusTotal: ✅ Чисто`);
+      }
+      if (result.virusTotal.categories.length > 0) lines.push(`  Категории: ${result.virusTotal.categories.slice(0, 3).join(', ')}`);
+    }
+    if (result.wayback.checked && result.wayback.hasHistory) {
+      const age = result.wayback.domainAgeFromArchive != null ? `${Math.round(result.wayback.domainAgeFromArchive / 365 * 10) / 10} лет` : '?';
+      lines.push(`📚 Wayback: ${age} в архиве (с ${result.wayback.firstSnapshot})`);
+    }
+
+    // Page metrics
+    lines.push(`\n📊 ${result.wordCount} слов · ${result.totalLinks} ссылок (${result.externalLinks} внешних) · ${result.scriptCount} скриптов · ${result.iframeCount} iframe`);
+    if (result.pageLanguage) lines.push(`🌐 Язык: ${result.pageLanguage}`);
+
+    if (result.wordCount < 50) {
+      lines.push(`\n⚠️ <i>Мало контента — сайт может использовать JS-рендеринг (SPA). Результаты могут быть неполными.</i>`);
+    }
 
     await sendMessageWithKeyboard(chatId, lines.join('\n'), {
       inline_keyboard: [
