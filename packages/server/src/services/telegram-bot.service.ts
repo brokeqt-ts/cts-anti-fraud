@@ -322,9 +322,6 @@ export async function startConnect(userId: string): Promise<{ code: string; bot_
     expiresAt: Date.now() + CODE_TTL_MS,
   });
 
-  // Ensure polling is running
-  ensurePollingStarted();
-
   const botUsername = await getBotUsername();
   return { code, bot_username: botUsername };
 }
@@ -398,120 +395,78 @@ export async function registerBotCommands(): Promise<void> {
   }
 }
 
-// ─── Always-on polling ───────────────────────────────────────────────────────
+// ─── Webhook mode ─────────────────────────────────────────────────────────────
 
-let pollingActive = false;
-let lastUpdateId = 0;
+/**
+ * Register webhook with Telegram. Call once at server startup.
+ * Telegram will POST updates to DASHBOARD_URL/api/v1/telegram/webhook.
+ */
+export async function setupWebhook(): Promise<void> {
+  if (!isBotConfigured()) {
+    console.log('[telegram] Bot not configured, webhook disabled');
+    return;
+  }
 
-function ensurePollingStarted(): void {
-  if (pollingActive) return;
-  void startBotPolling();
+  const token = env.TELEGRAM_BOT_TOKEN!;
+  const webhookUrl = `${env.DASHBOARD_URL}/api/v1/telegram/webhook`;
+
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: webhookUrl,
+        allowed_updates: ['message', 'callback_query'],
+      }),
+    });
+    const data = await res.json() as { ok: boolean; description?: string };
+    console.log(`[telegram] setWebhook: ok=${data.ok} url=${webhookUrl} ${data.description ?? ''}`);
+  } catch (err) {
+    console.error('[telegram] setWebhook failed:', err instanceof Error ? err.message : err);
+  }
 }
 
 /**
- * Start the always-on polling loop. Call once at server startup.
- * Handles: commands, callback queries, connect codes.
+ * Process an incoming webhook update from Telegram.
+ * Called by the POST /telegram/webhook route handler.
  */
-export async function startBotPolling(): Promise<void> {
-  if (!isBotConfigured()) {
-    console.log('[telegram] Bot not configured, polling disabled');
-    return;
-  }
-  if (pollingActive) return;
+export async function handleWebhookUpdate(update: {
+  update_id: number;
+  message?: {
+    chat: { id: number };
+    text?: string;
+    from?: { first_name?: string; username?: string };
+  };
+  callback_query?: {
+    id: string;
+    from: { id: number; first_name?: string; username?: string };
+    message?: { chat: { id: number } };
+    data?: string;
+  };
+}): Promise<void> {
+  cleanExpiredCodes();
 
-  const token = env.TELEGRAM_BOT_TOKEN!;
-
-  // Delete any existing webhook to avoid 409 conflict with getUpdates
   try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/deleteWebhook?drop_pending_updates=false`);
-    const data = await res.json() as { ok: boolean };
-    console.log(`[telegram] deleteWebhook: ok=${data.ok}`);
-  } catch (err) {
-    console.warn('[telegram] deleteWebhook failed:', err instanceof Error ? err.message : err);
-  }
-
-  // Wait for old container to stop polling (rolling update overlap)
-  console.log('[telegram] Waiting 10s for old instance to stop...');
-  await new Promise((r) => setTimeout(r, 10_000));
-
-  pollingActive = true;
-  console.log('[telegram] Starting bot polling...');
-
-  pollLoop().catch((err) => {
-    console.error('[telegram] Polling loop crashed:', err);
-    pollingActive = false;
-  });
-}
-
-export function stopBotPolling(): void {
-  pollingActive = false;
-}
-
-async function pollLoop(): Promise<void> {
-  const token = env.TELEGRAM_BOT_TOKEN!;
-
-  while (pollingActive) {
-    cleanExpiredCodes();
-
-    try {
-      const url = `https://api.telegram.org/bot${token}/getUpdates?offset=${lastUpdateId + 1}&timeout=30&allowed_updates=["message","callback_query"]`;
-      const res = await fetch(url);
-
-      if (!res.ok) {
-        if (res.status === 409) {
-          // Another instance is polling — delete webhook and retry
-          console.warn('[telegram] 409 conflict — deleting webhook and retrying...');
-          await fetch(`https://api.telegram.org/bot${token}/deleteWebhook?drop_pending_updates=false`);
-          await new Promise((r) => setTimeout(r, 3000));
-        } else {
-          console.error(`[telegram] getUpdates failed: ${res.status}`);
-          await new Promise((r) => setTimeout(r, 5000));
-        }
-        continue;
-      }
-
-      const data = await res.json() as {
-        ok: boolean;
-        result?: Array<{
-          update_id: number;
-          message?: {
-            chat: { id: number };
-            text?: string;
-            from?: { first_name?: string; username?: string };
-          };
-          callback_query?: {
-            id: string;
-            from: { id: number; first_name?: string; username?: string };
-            message?: { chat: { id: number } };
-            data?: string;
-          };
-        }>;
-      };
-
-      if (data.ok && data.result) {
-        for (const update of data.result) {
-          lastUpdateId = update.update_id;
-
-          try {
-            if (update.callback_query) {
-              await handleCallbackQueryUpdate(update.callback_query);
-            } else if (update.message?.text) {
-              await processUpdate(
-                update.message.text.trim(),
-                update.message.chat.id,
-                update.message.from,
-              );
-            }
-          } catch (err) {
-            console.error('[telegram] Error processing update:', err);
-          }
-        }
-      }
-    } catch (err) {
-      console.error('[telegram] Polling error:', err);
-      await new Promise((r) => setTimeout(r, 5000));
+    if (update.callback_query) {
+      await handleCallbackQueryUpdate(update.callback_query);
+    } else if (update.message?.text) {
+      await processUpdate(
+        update.message.text.trim(),
+        update.message.chat.id,
+        update.message.from,
+      );
     }
+  } catch (err) {
+    console.error('[telegram] Error processing webhook update:', err);
   }
+}
+
+// Keep backward-compat exports (no-ops now)
+export async function startBotPolling(): Promise<void> {
+  await setupWebhook();
+}
+export function stopBotPolling(): void {
+  // no-op in webhook mode
 }
 
 async function handleCallbackQueryUpdate(cq: {
