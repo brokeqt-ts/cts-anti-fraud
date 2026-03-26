@@ -84,7 +84,7 @@ export async function analyzeDomainContentHandler(
       return;
     }
 
-    const result = await analyzeAndSave(pool, domainRow.id, `https://${domain}`);
+    const result = await analyzeAndSave(pool, (domainRow as { id: string }).id, `https://${domain}`);
     await reply.status(200).send(result);
   } catch (err: unknown) {
     request.log.error({ err, handler: 'analyzeDomainContentHandler', domain }, 'Content analysis failed');
