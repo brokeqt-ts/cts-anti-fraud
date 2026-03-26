@@ -80,15 +80,52 @@ export async function analyzeDomainContentHandler(
   try {
     const domainRow = await domainsRepo.getDomainByName(pool, domain);
 
-    if (domainRow) {
-      // Domain exists in DB — analyze and save
-      const result = await analyzeAndSave(pool, (domainRow as { id: string }).id, `https://${domain}`);
-      await reply.status(200).send(result);
-    } else {
-      // Domain not in DB — analyze without saving (ad-hoc scan)
-      const result = await analyzeContent(`https://${domain}`);
-      await reply.status(200).send(result);
-    }
+    const r = domainRow
+      ? await analyzeAndSave(pool, (domainRow as { id: string }).id, `https://${domain}`)
+      : await analyzeContent(`https://${domain}`);
+
+    // Normalize camelCase → snake_case for frontend compatibility
+    await reply.status(200).send({
+      url: r.url,
+      content_risk_score: r.contentRiskScore,
+      keyword_risk_score: r.keywordRiskScore,
+      compliance_score: r.complianceScore,
+      structure_risk_score: r.structureRiskScore,
+      redirect_risk_score: r.redirectRiskScore,
+      keyword_matches: r.keywordMatches,
+      detected_vertical: r.detectedVertical,
+      has_privacy_policy: r.hasPrivacyPolicy,
+      has_terms_of_service: r.hasTermsOfService,
+      has_contact_info: r.hasContactInfo,
+      has_disclaimer: r.hasDisclaimer,
+      has_about_page: r.hasAboutPage,
+      has_cookie_consent: r.hasCookieConsent,
+      has_age_verification: r.hasAgeVerification,
+      red_flags: r.redFlags,
+      has_countdown_timer: r.hasCountdownTimer,
+      has_fake_reviews: r.hasFakeReviews,
+      has_before_after: r.hasBeforeAfter,
+      has_hidden_text: r.hasHiddenText,
+      has_aggressive_cta: r.hasAggressiveCta,
+      has_popup_overlay: r.hasPopupOverlay,
+      has_auto_play_video: r.hasAutoPlayVideo,
+      has_external_redirect: r.hasExternalRedirect,
+      redirect_count: r.redirectCount,
+      redirect_chain: r.redirectChain,
+      final_url: r.finalUrl,
+      url_mismatch: r.urlMismatch,
+      page_language: r.pageLanguage,
+      word_count: r.wordCount,
+      total_links: r.totalLinks,
+      external_links: r.externalLinks,
+      form_count: r.formCount,
+      image_count: r.imageCount,
+      script_count: r.scriptCount,
+      iframe_count: r.iframeCount,
+      analysis_summary: r.analysisSummary,
+      llm_context: r.llmContext,
+      analyzed_at: new Date().toISOString(),
+    });
   } catch (err: unknown) {
     request.log.error({ err, handler: 'analyzeDomainContentHandler', domain }, 'Content analysis failed');
     await reply.status(500).send({
