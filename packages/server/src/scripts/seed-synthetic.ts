@@ -74,11 +74,13 @@ const CAMPAIGN_NAMES = [
   'Search — Dating ID',
 ];
 const DOMAIN_NAMES = [
+  // Fake domains (for account linking)
   'slim-health-now.com', 'lucky-wins-today.com', 'crypto-profit-hub.io',
   'meet-singles-fast.com', 'prize-zone-24.com', 'best-deals-shop.store',
   'vita-boost-pro.com', 'spin-fortune-777.com', 'token-gains-daily.io',
   'love-match-app.com', 'mega-sweep-win.com', 'gadget-deals-hq.store',
-  'diet-drop-fast.com', 'jackpot-rush-live.com', 'defi-yield-max.io',
+  // Real domains for content analysis testing
+  'example.com', 'wikipedia.org', 'github.com',
 ];
 const HEADLINES = [
   'Get Results Fast', 'Limited Time Offer', 'Try It Free Today',
