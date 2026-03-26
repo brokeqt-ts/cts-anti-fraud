@@ -383,19 +383,29 @@ let lastUpdateId = 0;
 
 function ensurePollingStarted(): void {
   if (pollingActive) return;
-  startBotPolling();
+  void startBotPolling();
 }
 
 /**
  * Start the always-on polling loop. Call once at server startup.
  * Handles: commands, callback queries, connect codes.
  */
-export function startBotPolling(): void {
+export async function startBotPolling(): Promise<void> {
   if (!isBotConfigured()) {
     console.log('[telegram] Bot not configured, polling disabled');
     return;
   }
   if (pollingActive) return;
+
+  // Delete any existing webhook to avoid 409 conflict with getUpdates
+  const token = env.TELEGRAM_BOT_TOKEN!;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/deleteWebhook?drop_pending_updates=false`);
+    const data = await res.json() as { ok: boolean };
+    console.log(`[telegram] deleteWebhook: ok=${data.ok}`);
+  } catch (err) {
+    console.warn('[telegram] deleteWebhook failed:', err instanceof Error ? err.message : err);
+  }
 
   pollingActive = true;
   console.log('[telegram] Starting bot polling...');
