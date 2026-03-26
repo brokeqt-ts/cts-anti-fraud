@@ -229,6 +229,12 @@ export interface ContentAnalysisResult {
   // Level 2: Structured data
   structuredData: StructuredDataResult;
 
+  // Level 3: External APIs
+  safeBrowsing: SafeBrowsingResult;
+  pageSpeed: PageSpeedResult;
+  virusTotal: VirusTotalResult;
+  wayback: WaybackResult;
+
   // LLM context
   analysisSummary: string;
   llmContext: Record<string, unknown>;
@@ -903,6 +909,209 @@ function analyzeStructuredData(html: string): StructuredDataResult {
   return { hasJsonLd, hasSchemaOrg, schemaTypes, hasBreadcrumbs, hasProductSchema, hasOrganizationSchema, hasFaqSchema, legitimacyBonus };
 }
 
+// ─── Level 2: External API analyzers ──────────────────────────────────────────
+
+// Google Safe Browsing (requires GOOGLE_SAFE_BROWSING_KEY env var)
+export interface SafeBrowsingResult {
+  safe: boolean;
+  threats: Array<{ type: string; platform: string }>;
+  checked: boolean; // false if API key not set
+}
+
+async function checkSafeBrowsing(url: string): Promise<SafeBrowsingResult> {
+  const apiKey = process.env['GOOGLE_SAFE_BROWSING_KEY'];
+  if (!apiKey) return { safe: true, threats: [], checked: false };
+
+  try {
+    const res = await fetch(`https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client: { clientId: 'cts-antifraud', clientVersion: '1.0' },
+        threatInfo: {
+          threatTypes: ['MALWARE', 'SOCIAL_ENGINEERING', 'UNWANTED_SOFTWARE', 'POTENTIALLY_HARMFUL_APPLICATION'],
+          platformTypes: ['ANY_PLATFORM'],
+          threatEntryTypes: ['URL'],
+          threatEntries: [{ url }],
+        },
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+    const data = await res.json() as { matches?: Array<{ threatType: string; platformType: string }> };
+    const threats = (data.matches ?? []).map(m => ({ type: m.threatType, platform: m.platformType }));
+    return { safe: threats.length === 0, threats, checked: true };
+  } catch (err) {
+    console.error('[domain-content] Safe Browsing API error:', err instanceof Error ? err.message : err);
+    return { safe: true, threats: [], checked: false };
+  }
+}
+
+// Google PageSpeed Insights (free, no key required — but key increases quota)
+export interface PageSpeedResult {
+  performanceScore: number | null; // 0-100
+  firstContentfulPaint: number | null; // ms
+  largestContentfulPaint: number | null; // ms
+  cumulativeLayoutShift: number | null;
+  speedIndex: number | null; // ms
+  totalBlockingTime: number | null; // ms
+  mobile: boolean;
+  checked: boolean;
+}
+
+async function checkPageSpeed(url: string): Promise<PageSpeedResult> {
+  const empty: PageSpeedResult = { performanceScore: null, firstContentfulPaint: null, largestContentfulPaint: null, cumulativeLayoutShift: null, speedIndex: null, totalBlockingTime: null, mobile: true, checked: false };
+  try {
+    const apiUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}&strategy=mobile&category=performance`;
+    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(30_000) });
+    if (!res.ok) return empty;
+
+    const data = await res.json() as {
+      lighthouseResult?: {
+        categories?: { performance?: { score?: number } };
+        audits?: Record<string, { numericValue?: number }>;
+      };
+    };
+
+    const lh = data.lighthouseResult;
+    if (!lh) return empty;
+
+    return {
+      performanceScore: lh.categories?.performance?.score != null ? Math.round(lh.categories.performance.score * 100) : null,
+      firstContentfulPaint: lh.audits?.['first-contentful-paint']?.numericValue ?? null,
+      largestContentfulPaint: lh.audits?.['largest-contentful-paint']?.numericValue ?? null,
+      cumulativeLayoutShift: lh.audits?.['cumulative-layout-shift']?.numericValue ?? null,
+      speedIndex: lh.audits?.['speed-index']?.numericValue ?? null,
+      totalBlockingTime: lh.audits?.['total-blocking-time']?.numericValue ?? null,
+      mobile: true,
+      checked: true,
+    };
+  } catch (err) {
+    console.error('[domain-content] PageSpeed API error:', err instanceof Error ? err.message : err);
+    return empty;
+  }
+}
+
+// VirusTotal (requires VIRUSTOTAL_API_KEY env var, free: 4 req/min)
+export interface VirusTotalResult {
+  malicious: number;
+  suspicious: number;
+  harmless: number;
+  undetected: number;
+  reputation: number;
+  categories: string[];
+  checked: boolean;
+}
+
+async function checkVirusTotal(domain: string): Promise<VirusTotalResult> {
+  const apiKey = process.env['VIRUSTOTAL_API_KEY'];
+  const empty: VirusTotalResult = { malicious: 0, suspicious: 0, harmless: 0, undetected: 0, reputation: 0, categories: [], checked: false };
+  if (!apiKey) return empty;
+
+  try {
+    const res = await fetch(`https://www.virustotal.com/api/v3/domains/${domain}`, {
+      headers: { 'x-apikey': apiKey },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return empty;
+
+    const data = await res.json() as {
+      data?: {
+        attributes?: {
+          last_analysis_stats?: { malicious?: number; suspicious?: number; harmless?: number; undetected?: number };
+          reputation?: number;
+          categories?: Record<string, string>;
+        };
+      };
+    };
+
+    const attrs = data.data?.attributes;
+    if (!attrs) return empty;
+
+    const stats = attrs.last_analysis_stats;
+    return {
+      malicious: stats?.malicious ?? 0,
+      suspicious: stats?.suspicious ?? 0,
+      harmless: stats?.harmless ?? 0,
+      undetected: stats?.undetected ?? 0,
+      reputation: attrs.reputation ?? 0,
+      categories: Object.values(attrs.categories ?? {}),
+      checked: true,
+    };
+  } catch (err) {
+    console.error('[domain-content] VirusTotal API error:', err instanceof Error ? err.message : err);
+    return empty;
+  }
+}
+
+// Wayback Machine (free, no key)
+export interface WaybackResult {
+  hasHistory: boolean;
+  firstSnapshot: string | null; // ISO date
+  lastSnapshot: string | null;
+  totalSnapshots: number;
+  domainAgeFromArchive: number | null; // days
+  checked: boolean;
+}
+
+async function checkWayback(domain: string): Promise<WaybackResult> {
+  const empty: WaybackResult = { hasHistory: false, firstSnapshot: null, lastSnapshot: null, totalSnapshots: 0, domainAgeFromArchive: null, checked: false };
+  try {
+    // CDX API for snapshot count and dates
+    const res = await fetch(
+      `https://web.archive.org/cdx/search/cdx?url=${encodeURIComponent(domain)}&output=json&limit=1&fl=timestamp&sort=asc`,
+      { signal: AbortSignal.timeout(10_000) },
+    );
+    if (!res.ok) return empty;
+
+    const first = await res.json() as string[][];
+    if (!first || first.length < 2) return empty;
+
+    const firstTs = first[1]?.[0];
+
+    // Get last snapshot
+    const resLast = await fetch(
+      `https://web.archive.org/cdx/search/cdx?url=${encodeURIComponent(domain)}&output=json&limit=1&fl=timestamp&sort=desc`,
+      { signal: AbortSignal.timeout(10_000) },
+    );
+    const last = resLast.ok ? await resLast.json() as string[][] : [];
+    const lastTs = last[1]?.[0];
+
+    // Get total count (limit 0 with showNumPages)
+    let totalSnapshots = 0;
+    try {
+      const countRes = await fetch(
+        `https://web.archive.org/cdx/search/cdx?url=${encodeURIComponent(domain)}&output=json&limit=0&showNumPages=true`,
+        { signal: AbortSignal.timeout(5000) },
+      );
+      if (countRes.ok) {
+        const countText = await countRes.text();
+        totalSnapshots = parseInt(countText.trim(), 10) || 0;
+      }
+    } catch { /* ignore */ }
+
+    function parseWaybackTs(ts: string): Date | null {
+      if (!ts || ts.length < 8) return null;
+      return new Date(`${ts.slice(0, 4)}-${ts.slice(4, 6)}-${ts.slice(6, 8)}`);
+    }
+
+    const firstDate = firstTs ? parseWaybackTs(firstTs) : null;
+    const lastDate = lastTs ? parseWaybackTs(lastTs) : null;
+    const ageDays = firstDate ? Math.floor((Date.now() - firstDate.getTime()) / 86400000) : null;
+
+    return {
+      hasHistory: true,
+      firstSnapshot: firstDate?.toISOString().slice(0, 10) ?? null,
+      lastSnapshot: lastDate?.toISOString().slice(0, 10) ?? null,
+      totalSnapshots,
+      domainAgeFromArchive: ageDays,
+      checked: true,
+    };
+  } catch (err) {
+    console.error('[domain-content] Wayback API error:', err instanceof Error ? err.message : err);
+    return empty;
+  }
+}
+
 // ─── LLM context builder ─────────────────────────────────────────────────────
 
 function buildLlmContext(result: ContentAnalysisResult): { summary: string; context: Record<string, unknown> } {
@@ -974,6 +1183,21 @@ function buildLlmContext(result: ContentAnalysisResult): { summary: string; cont
 
   if (result.structuredData.hasJsonLd) {
     lines.push(`\nStructured data: ${result.structuredData.schemaTypes.join(', ')}`);
+  }
+
+  // External APIs
+  if (result.safeBrowsing.checked) {
+    lines.push(`\nGoogle Safe Browsing: ${result.safeBrowsing.safe ? 'SAFE' : '⚠️ THREATS DETECTED: ' + result.safeBrowsing.threats.map(t => t.type).join(', ')}`);
+  }
+  if (result.pageSpeed.checked && result.pageSpeed.performanceScore != null) {
+    lines.push(`PageSpeed (mobile): ${result.pageSpeed.performanceScore}/100, LCP: ${result.pageSpeed.largestContentfulPaint != null ? Math.round(result.pageSpeed.largestContentfulPaint) + 'ms' : 'N/A'}`);
+  }
+  if (result.virusTotal.checked) {
+    lines.push(`VirusTotal: ${result.virusTotal.malicious} malicious, ${result.virusTotal.suspicious} suspicious (reputation: ${result.virusTotal.reputation})`);
+    if (result.virusTotal.categories.length > 0) lines.push(`  Categories: ${result.virusTotal.categories.join(', ')}`);
+  }
+  if (result.wayback.checked && result.wayback.hasHistory) {
+    lines.push(`Wayback Machine: first snapshot ${result.wayback.firstSnapshot}, ~${result.wayback.totalSnapshots} snapshots, archive age ${result.wayback.domainAgeFromArchive ?? '?'} days`);
   }
 
   const summary = lines.join('\n');
@@ -1049,6 +1273,10 @@ function buildLlmContext(result: ContentAnalysisResult): { summary: string; cont
       types: result.structuredData.schemaTypes,
       legitimacy_bonus: result.structuredData.legitimacyBonus,
     },
+    safe_browsing: result.safeBrowsing.checked ? { safe: result.safeBrowsing.safe, threats: result.safeBrowsing.threats } : null,
+    page_speed: result.pageSpeed.checked ? { score: result.pageSpeed.performanceScore, lcp: result.pageSpeed.largestContentfulPaint, cls: result.pageSpeed.cumulativeLayoutShift } : null,
+    virus_total: result.virusTotal.checked ? { malicious: result.virusTotal.malicious, suspicious: result.virusTotal.suspicious, reputation: result.virusTotal.reputation, categories: result.virusTotal.categories } : null,
+    wayback: result.wayback.checked ? { first: result.wayback.firstSnapshot, last: result.wayback.lastSnapshot, snapshots: result.wayback.totalSnapshots, age_days: result.wayback.domainAgeFromArchive } : null,
   };
 
   return { summary, context };
@@ -1068,15 +1296,23 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
   const structure = analyzeStructure(html, text);
   const redirects = analyzeRedirects(redirectChain, declaredUrl);
 
-  // Level 2 analyzers
+  // Level 1 analyzers (local)
   const securityHeaders = analyzeSecurityHeaders(headers);
   const domain = new URL(finalUrl).hostname.replace(/^www\./, '');
   const tldRisk = scoreTld(domain);
-  const robotsTxt = await analyzeRobotsTxt(finalUrl);
   const formAnalysis = analyzeForms(html, finalUrl);
   const thirdPartyScripts = catalogScripts(html, finalUrl);
   const linkReputation = checkLinkReputation(links.outboundDomains);
   const structuredData = analyzeStructuredData(html);
+
+  // Level 1 + Level 2 analyzers (async, run in parallel)
+  const [robotsTxt, safeBrowsing, pageSpeed, virusTotal, wayback] = await Promise.all([
+    analyzeRobotsTxt(finalUrl),
+    checkSafeBrowsing(fullUrl),
+    checkPageSpeed(fullUrl),
+    checkVirusTotal(domain),
+    checkWayback(domain),
+  ]);
 
   const ogTags: Record<string, string> = {};
   for (const prop of ['og:title', 'og:description', 'og:image', 'og:type']) {
@@ -1135,6 +1371,11 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
     thirdPartyScripts,
     linkReputation,
     structuredData,
+
+    safeBrowsing,
+    pageSpeed,
+    virusTotal,
+    wayback,
 
     analysisSummary: '',
     llmContext: {},

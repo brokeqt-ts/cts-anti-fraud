@@ -467,6 +467,59 @@ export function DomainsPage() {
                   </div>
                 )}
 
+                {/* External APIs */}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Safe Browsing */}
+                  {analysis.safe_browsing?.checked && (
+                    <div className="p-2 rounded-lg" style={{ background: 'var(--bg-base)' }}>
+                      <div className="text-[10px] mb-1" style={{ color: 'var(--text-muted)' }}>Safe Browsing</div>
+                      {analysis.safe_browsing.safe
+                        ? <span className="text-xs font-semibold" style={{ color: '#4ade80' }}>✓ Safe</span>
+                        : <span className="text-xs font-semibold" style={{ color: '#f87171' }}>⚠ {analysis.safe_browsing.threats.map(t => t.type).join(', ')}</span>
+                      }
+                    </div>
+                  )}
+                  {/* PageSpeed */}
+                  {analysis.page_speed?.checked && analysis.page_speed.performanceScore != null && (
+                    <div className="p-2 rounded-lg" style={{ background: 'var(--bg-base)' }}>
+                      <div className="text-[10px] mb-1" style={{ color: 'var(--text-muted)' }}>PageSpeed (mobile)</div>
+                      <span className="text-xs font-mono font-semibold" style={{ color: analysis.page_speed.performanceScore >= 90 ? '#4ade80' : analysis.page_speed.performanceScore >= 50 ? '#fbbf24' : '#f87171' }}>
+                        {analysis.page_speed.performanceScore}/100
+                      </span>
+                      {analysis.page_speed.largestContentfulPaint != null && (
+                        <span className="text-[10px] ml-2" style={{ color: 'var(--text-muted)' }}>LCP: {(analysis.page_speed.largestContentfulPaint / 1000).toFixed(1)}s</span>
+                      )}
+                    </div>
+                  )}
+                  {/* VirusTotal */}
+                  {analysis.virus_total?.checked && (
+                    <div className="p-2 rounded-lg" style={{ background: 'var(--bg-base)' }}>
+                      <div className="text-[10px] mb-1" style={{ color: 'var(--text-muted)' }}>VirusTotal</div>
+                      {analysis.virus_total.malicious > 0
+                        ? <span className="text-xs font-semibold" style={{ color: '#f87171' }}>{analysis.virus_total.malicious} malicious</span>
+                        : analysis.virus_total.suspicious > 0
+                          ? <span className="text-xs font-semibold" style={{ color: '#fbbf24' }}>{analysis.virus_total.suspicious} suspicious</span>
+                          : <span className="text-xs font-semibold" style={{ color: '#4ade80' }}>✓ Clean</span>
+                      }
+                      {analysis.virus_total.categories.length > 0 && (
+                        <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{analysis.virus_total.categories.slice(0, 3).join(', ')}</div>
+                      )}
+                    </div>
+                  )}
+                  {/* Wayback */}
+                  {analysis.wayback?.checked && analysis.wayback.hasHistory && (
+                    <div className="p-2 rounded-lg" style={{ background: 'var(--bg-base)' }}>
+                      <div className="text-[10px] mb-1" style={{ color: 'var(--text-muted)' }}>Wayback Machine</div>
+                      <span className="text-xs" style={{ color: 'var(--text-primary)' }}>
+                        {analysis.wayback.domainAgeFromArchive != null ? `${Math.round(analysis.wayback.domainAgeFromArchive / 365 * 10) / 10}y` : '?'}
+                      </span>
+                      <span className="text-[10px] ml-1" style={{ color: 'var(--text-muted)' }}>
+                        since {analysis.wayback.firstSnapshot} · {analysis.wayback.totalSnapshots} snapshots
+                      </span>
+                    </div>
+                  )}
+                </div>
+
                 {/* SPA warning */}
                 {analysis.word_count < 50 && (
                   <div className="text-xs p-2.5 rounded-lg flex items-start gap-2" style={{ background: 'rgba(96,165,250,0.08)', color: '#60a5fa' }}>

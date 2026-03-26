@@ -583,6 +583,35 @@ export interface DomainContentAnalysis {
     schemaTypes: string[];
     legitimacyBonus: number;
   };
+  safe_browsing?: {
+    safe: boolean;
+    threats: Array<{ type: string; platform: string }>;
+    checked: boolean;
+  };
+  page_speed?: {
+    performanceScore: number | null;
+    firstContentfulPaint: number | null;
+    largestContentfulPaint: number | null;
+    cumulativeLayoutShift: number | null;
+    totalBlockingTime: number | null;
+    checked: boolean;
+  };
+  virus_total?: {
+    malicious: number;
+    suspicious: number;
+    harmless: number;
+    reputation: number;
+    categories: string[];
+    checked: boolean;
+  };
+  wayback?: {
+    hasHistory: boolean;
+    firstSnapshot: string | null;
+    lastSnapshot: string | null;
+    totalSnapshots: number;
+    domainAgeFromArchive: number | null;
+    checked: boolean;
+  };
   analysis_summary: string;
   analyzed_at: string | null;
 }
