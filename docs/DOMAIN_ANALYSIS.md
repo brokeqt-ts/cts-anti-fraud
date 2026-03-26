@@ -1,213 +1,90 @@
 # Domain Content Analyzer — Полный список проверок
 
 > Обновлено: 2026-03-26
-> Сервис: `packages/server/src/services/domain-content-analyzer.ts`
+> Сервис: `packages/server/src/services/domain-content-analyzer.ts` + `domain-external-apis.ts`
+> Всего проверок: **27**
 
 ---
 
-## Level 1: Локальный анализ HTML (без внешних API)
+## Локальный анализ HTML (12 проверок, без API)
 
-### 1. Сканер серых ключевых слов (150+ ключей, 7 вертикалей)
-
-| Вертикаль | Примеры ключей |
-|---|---|
-| Gambling | casino, slots, betting, ставки, рулетка, jackpot, free spins, 1xbet, pin-up, покер |
-| Nutra | похудение, weight loss, clinically proven, FDA approved, до и после, -30 кг, fat burner |
-| Crypto | guaranteed returns, passive income, auto-trading, bitcoin investment, 100% profit |
-| Finance | instant loan, guaranteed approval, no credit check, займ без отказа, микрозайм |
-| Sweepstakes | you have won, claim your prize, free iphone, spin the wheel, вы выиграли |
-| Dating | hookup, adult dating, hot singles, знакомства без обязательств |
-| Pharma | buy without prescription, online pharmacy, cheap viagra, без рецепта |
-| Generic | limited time only, осталось мест, последний шанс, exclusive offer |
-
-Уровни серьёзности: `critical` (20 очков), `warning` (10 очков), `info` (3 очка).
-
-### 2. Проверка compliance (соответствие требованиям)
-
-| Проверка | Очки |
-|---|---|
-| Privacy Policy (Политика конфиденциальности) | +25 |
-| Terms of Service (Пользовательское соглашение) | +20 |
-| Контактная информация (email, телефон, адрес) | +20 |
-| Disclaimer (Отказ от ответственности) | +15 |
-| About Page (О компании) | +10 |
-| Cookie Consent (GDPR баннер) | +5 |
-| Подтверждение возраста (18+/21+) | +5 |
-
-Скор: 0-100, чем выше — тем лучше соответствие.
-
-### 3. Структурные красные флаги
-
-| Флаг | Серьёзность | Описание |
+| # | Модуль | Что проверяет |
 |---|---|---|
-| Таймер обратного отсчёта | warning | Тактика давления срочностью |
-| Фейковые отзывы | warning | 3+ одинаковых паттерна ★★★★★ |
-| До/После | warning | Требует дисклеймеров для Google Ads |
-| Скрытый текст | critical | CSS: color=transparent, font-size:0, text-indent:-9999 |
-| Агрессивные CTA | info | 3+ кнопок "Купить сейчас" |
-| Попап/оверлей | warning | position:fixed + высокий z-index |
-| Автовоспроизведение видео | info | `<video autoplay>` |
-| JS-редирект | critical | `window.location` на внешний URL |
-| Обфусцированный JS | critical | `eval(atob(...))` / `eval(unescape(...))` |
-| Много iframe | warning | 3+ iframe на странице |
-
-### 4. Анализ цепочки редиректов
-
-- Количество хопов (>2 хопов = +15 за каждый)
-- Смена домена в цепочке (+20)
-- Несовпадение с URL объявления (+30)
-- >5 хопов = 60+ скор
-
-### 5. HTTP заголовки безопасности
-
-| Заголовок | Очки |
-|---|---|
-| Strict-Transport-Security (HSTS) | +25 |
-| Content-Security-Policy (CSP) | +25 |
-| X-Frame-Options | +15 |
-| X-Content-Type-Options | +10 |
-| Referrer-Policy | +15 |
-| Permissions-Policy | +10 |
-
-Также фиксируются: заголовок `Server`, `X-Powered-By`.
-
-### 6. Оценка риска TLD (домена верхнего уровня)
-
-| Риск | Скор | TLD |
-|---|---|---|
-| Высокий | 80 | .xyz, .top, .click, .club, .icu, .buzz, .gq, .cf, .tk, .ml, .ga, .monster, .sbs |
-| Средний | 40 | .io, .co, .me, .cc, .biz, .info, .site, .online, .store, .shop, .live, .space |
-| Низкий | 5 | .com, .org, .net, .edu, .gov, .mil |
-| Страновой | 15 | Двухбуквенные национальные TLD (.de, .uk, .ru и т.д.) |
-
-### 7. Анализ robots.txt
-
-- Существует ли файл
-- Блокирует ли Googlebot (Disallow: / для Googlebot)
-- Блокирует ли всех ботов (Disallow: / для *)
-- Наличие Sitemap и URL-ы
-- Список заблокированных путей
-
-### 8. Анализ форм
-
-- Количество форм и их методы (GET/POST)
-- Сбор персональных данных (поля email, phone, name, address)
-- Сбор платёжных данных (поля card, cvv, billing)
-- Внешние targets форм (action на другой домен)
-
-### 9. Каталог сторонних скриптов
-
-| Категория | Обнаруживаемые скрипты |
-|---|---|
-| Аналитика | Google Analytics, GTM, Яндекс Метрика (src + inline паттерны) |
-| Реклама | Facebook Pixel, TikTok Pixel, Google Ads, AdSense, LinkedIn Insight |
-| Подозрительные | Keitaro TDS, Binom TDS, PropellerAds, ExoClick, Clickadu, TrafficJunky |
-| CDN | Cloudflare CDN, jsDelivr, UNPKG, Google CDN |
-
-Inline-детекция: `gtag()`, `fbq()`, `ym()`, паттерны TDS-редиректов.
-
-### 10. Репутация внешних ссылок
-
-| Тип | Проверяемые домены |
-|---|---|
-| URL-сокращатели | bit.ly, tinyurl.com, cutt.ly, rb.gy, is.gd, v.gd, shorturl.at |
-| Партнёрские сети | ClickBank, Digistore24, WarriorPlus, BuyGoods, JVZoo |
-| TDS/Трекеры | Keitaro, Binom, BeMob, Voluum, clktrk, trk.as |
-
-### 11. Schema.org / Структурированные данные
-
-- Наличие JSON-LD
-- Типы Schema: Organization, Product, WebSite, FAQ, LocalBusiness, BreadcrumbList
-- Бонус легитимности: +10 за JSON-LD, +10 за Organization, +5 за Breadcrumbs, +5 за FAQ
-
-### 12. Метрики страницы
-
-- Количество слов
-- Всего ссылок / внешние ссылки / домены исходящих ссылок
-- Количество форм, изображений, скриптов, iframe
-- Заголовок страницы, мета-описание
-- OpenGraph теги (og:title, og:description, og:image, og:type)
-- Определение языка (ru/en по распределению символов)
+| 1 | **Серые ключевые слова** | 150+ ключей по 7 вертикалям (gambling, nutra, crypto, finance, sweepstakes, dating, pharma). Severity: critical/warning/info |
+| 2 | **Compliance** | Privacy Policy, Terms of Service, контакты, дисклеймер, About, Cookie Consent, 18+ |
+| 3 | **Структурные красные флаги** | Таймеры, фейковые отзывы, до/после, скрытый текст, агрессивные CTA, попапы, автовидео, JS-редиректы, обфусцированный eval, iframe |
+| 4 | **Цепочка редиректов** | Количество хопов, смена домена, несовпадение с URL объявления |
+| 5 | **HTTP заголовки безопасности** | HSTS, CSP, X-Frame-Options, X-Content-Type, Referrer-Policy, Permissions-Policy, Server |
+| 6 | **Риск TLD** | .xyz/.top/.click = high, .io/.co/.me = medium, .com/.org = low |
+| 7 | **robots.txt** | Блокировка Googlebot, наличие Sitemap, запрещённые пути |
+| 8 | **Анализ форм** | Сбор персональных/платёжных данных, внешние form targets |
+| 9 | **Сторонние скрипты** | GA, GTM, Яндекс Метрика, FB Pixel, TikTok, Google Ads, Keitaro, Binom, PropellerAds |
+| 10 | **Репутация ссылок** | URL-сокращатели, affiliate сети (ClickBank, Digistore24), TDS-трекеры (Keitaro, Binom, Voluum) |
+| 11 | **Schema.org** | JSON-LD, типы (Organization, Product, FAQ, Breadcrumbs), бонус легитимности |
+| 12 | **Метрики страницы** | Слова, ссылки, формы, скрипты, iframe, язык, OpenGraph |
 
 ---
 
-## Level 2: Внешние API
+## Внешние API — без ключа (7 проверок)
 
-### 13. Google PageSpeed Insights
-
-- **API**: `googleapis.com/pagespeedonline/v5`
-- **Ключ**: Не требуется (опционально для увеличения квоты)
-- **Таймаут**: 15 сек
-- **Метрики**: Performance Score (0-100), FCP, LCP, CLS, Speed Index, TBT
-- **Стратегия**: Mobile
-
-### 14. Wayback Machine
-
-- **API**: `web.archive.org/cdx/search/cdx`
-- **Ключ**: Не требуется
-- **Таймаут**: 3 сек на запрос, 2 запроса параллельно
-- **Метрики**: Даты первого/последнего снэпшота, возраст домена по архиву (дни)
-
-### 15. Google Safe Browsing
-
-- **API**: `safebrowsing.googleapis.com/v4/threatMatches:find`
-- **Ключ**: `GOOGLE_SAFE_BROWSING_KEY` (бесплатно, 10K запросов/день)
-- **Таймаут**: 5 сек
-- **Проверяемые угрозы**: Malware, Social Engineering, Unwanted Software, Potentially Harmful Application
-- **Пропускается если ключ не задан**
-
-### 16. VirusTotal
-
-- **API**: `virustotal.com/api/v3/domains`
-- **Ключ**: `VIRUSTOTAL_API_KEY` (бесплатно, 4 запроса/мин)
-- **Таймаут**: 10 сек
-- **Метрики**: Malicious/suspicious/harmless детекции, репутация, категории домена
-- **Пропускается если ключ не задан**
+| # | API | Что проверяет | Таймаут |
+|---|---|---|---|
+| 13 | **Google PageSpeed** | Performance Score (mobile), LCP, CLS, TBT | 15с |
+| 14 | **Wayback Machine** | Первый/последний снэпшот, возраст домена в архиве | 3с |
+| 15 | **crt.sh** | Сертификаты, поддомены, история SSL, издатели | 8с |
+| 16 | **Shodan InternetDB** | Открытые порты, уязвимости, хостнеймы | 5с |
+| 17 | **Spamhaus/SURBL/URIBL** | Домен/IP в спам-блоклистах (DNS lookup) | 5с |
+| 18 | **CommonCrawl** | Присутствие в веб-краулах, количество страниц | 5с |
+| 19 | **OpenPhish** | Проверка по фиду фишинговых URL (кеш 1ч) | 10с |
 
 ---
 
-## Формула итогового скора риска
+## Внешние API — с ключом (8 проверок)
+
+| # | API | Переменная | Лимит | Что проверяет |
+|---|---|---|---|---|
+| 20 | **Google Safe Browsing** | `GOOGLE_SAFE_BROWSING_KEY` | 10K/день | Malware, фишинг, unwanted software |
+| 21 | **VirusTotal** | `VIRUSTOTAL_API_KEY` | 500/день | 70+ антивирусов, репутация, категории |
+| 22 | **AbuseIPDB** | `ABUSEIPDB_API_KEY` | 1K/день | Жалобы на IP, abuse score, ISP, Tor |
+| 23 | **URLhaus** | — (бесплатный) | fair use | Malware URL база |
+| 24 | **PhishTank** | `PHISHTANK_API_KEY` | fair use | Фишинг URL база |
+| 25 | **SerpAPI** | `SERPAPI_KEY` | 100/мес | Google индексация (`site:domain.com`) |
+| 26 | **Node.js DNS** | — | локально | SPF, DKIM, DMARC, MX, CAA записи |
+| 27 | **RDAP** | — | бесплатно | WHOIS данные (уже в domain-enrichment) |
+
+---
+
+## Формула риска
 
 ```
-Content Risk Score = min(100,
-    keyword_risk       * 0.25    (серые ключевые слова)
-  + (100 - compliance) * 0.20    (отсутствие обязательных страниц)
-  + structure_risk     * 0.20    (красные флаги в структуре)
-  + redirect_risk      * 0.10    (цепочка редиректов)
-  + tld_risk           * 0.10    (рискованный TLD)
-  + link_reputation    * 0.10    (подозрительные ссылки)
-  + (100 - security)   * 0.05    (отсутствие заголовков безопасности)
+Content Risk = min(100,
+    keywords    * 0.25
+  + compliance  * 0.20   (инвертировано: 100 - score)
+  + structure   * 0.20
+  + redirects   * 0.10
+  + tld_risk    * 0.10
+  + links       * 0.10
+  + security    * 0.05   (инвертировано: 100 - score)
 )
 ```
 
-Compliance скор получает бонус за структурированные данные Schema.org (до +30).
+Compliance получает бонус за Schema.org (до +30).
 
 ---
 
-## API эндпоинты
+## Доступ
 
-| Метод | Эндпоинт | Доступ | Описание |
-|---|---|---|---|
-| POST | `/domains/:domain/content-analysis` | Админ | Сканирование одного домена (работает для любого, не только из БД) |
-| POST | `/domains/content-analysis/scan` | Админ | Пакетное сканирование до 20 доменов из БД |
-| GET | `/domains/:domain` | Авторизация | Детали домена (включает `content_analysis` если есть) |
+| Метод | Эндпоинт | Кто |
+|---|---|---|
+| `POST` | `/domains/:domain/content-analysis` | Админ |
+| `POST` | `/domains/content-analysis/scan` | Админ (батч до 20) |
+| `GET` | `/domains/:domain` | Авторизованный (включает `content_analysis`) |
+| TG | `/scan domain.com` | Привязанный пользователь |
 
-## Telegram бот
-
-```
-/scan example.com
-```
-
-Возвращает полный анализ со скорами риска, ключевыми словами, compliance, красными флагами, редиректами.
-
-## Интеграция с LLM
-
-Каждый анализ генерирует:
-- `analysis_summary` — текстовый отчёт для вставки в AI промпт
-- `llm_context` — структурированный JSON со всеми метриками для программного AI-анализа
+---
 
 ## Автоматизация
 
-- Запускается после обогащения доменов каждые 6 часов
-- Анализирует до 10 доменов за цикл
-- Переанализирует домены, не сканированные более 7 дней
+- Cron каждые 6ч → до 10 доменов за цикл
+- Повторный анализ через 7 дней
+- LLM: `analysis_summary` (текст) + `llm_context` (JSON)
