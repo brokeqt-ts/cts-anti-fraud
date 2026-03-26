@@ -29,6 +29,7 @@ import { notificationsRoutes } from './routes/notifications.js';
 import { telegramRoutes } from './routes/telegram.js';
 import { CollectService } from './services/collect.service.js';
 import { runDomainEnrichmentCycle } from './services/domain-enrichment.service.js';
+import { analyzeAllDomains } from './services/domain-content-analyzer.js';
 import { scanAllSuspendedAccounts } from './services/auto-ban-detector.js';
 import { MaterializedViewService } from './services/materialized-view.service.js';
 import { batchPredictAll } from './services/ai/auto-scoring.service.js';
@@ -226,7 +227,12 @@ async function start() {
   intervals.push(setInterval(() => {
     app.log.info('[cron] Periodic domain enrichment cycle starting...');
     runDomainEnrichmentCycle(pool)
-      .then((r) => app.log.info(`[cron] Enrichment: collected=${r.collected}, enriched=${r.enriched}, errors=${r.errors}`))
+      .then((r) => {
+        app.log.info(`[cron] Enrichment: collected=${r.collected}, enriched=${r.enriched}, errors=${r.errors}`);
+        // Run content analysis after enrichment
+        return analyzeAllDomains(pool, 10);
+      })
+      .then((r) => app.log.info(`[cron] Domain content analysis: analyzed=${r.analyzed}, errors=${r.errors}`))
       .catch((err) => app.log.error('[cron] Enrichment failed: %s', err instanceof Error ? err.message : err));
   }, 6 * 60 * 60 * 1000)); // Every 6 hours
 
