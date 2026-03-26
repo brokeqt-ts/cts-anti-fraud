@@ -21,12 +21,19 @@ async function getUserByChatId(pool: Pool, chatId: string): Promise<{ id: string
 }
 
 async function requireAuth(chatId: string, pool: Pool): Promise<{ id: string; name: string; role: string } | null> {
-  const user = await getUserByChatId(pool, chatId);
-  if (!user) {
-    await sendMessage(chatId, '🔒 Telegram не привязан. Привяжите аккаунт в настройках Dashboard.');
+  try {
+    const user = await getUserByChatId(pool, chatId);
+    if (!user) {
+      console.warn(`[telegram-cmd] requireAuth: no user found for chatId=${chatId}`);
+      await sendMessage(chatId, '🔒 Telegram не привязан. Привяжите аккаунт в настройках Dashboard.');
+      return null;
+    }
+    return user;
+  } catch (err) {
+    console.error(`[telegram-cmd] requireAuth DB error for chatId=${chatId}:`, err instanceof Error ? err.message : err);
+    await sendMessage(chatId, '⚠️ Ошибка подключения к базе данных. Попробуйте ещё раз.');
     return null;
   }
-  return user;
 }
 
 // ─── Pending feedback comments (chatId → predictionId) ──────────────────────
