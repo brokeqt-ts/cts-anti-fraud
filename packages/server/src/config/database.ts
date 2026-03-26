@@ -10,6 +10,16 @@ export function getPool(connectionString: string): pg.Pool {
     pool = new Pool({
       connectionString,
       ssl: isProduction ? { rejectUnauthorized: false } : false,
+      // Prevent stale connections on cloud platforms (Saturn, Railway)
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 5_000,
+      max: 20,
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10_000,
+    });
+
+    pool.on('error', (err) => {
+      console.error('[pg-pool] Unexpected idle client error:', err.message);
     });
   }
   return pool;

@@ -13,11 +13,23 @@ interface InlineKeyboard {
 // ─── Auth helper ─────────────────────────────────────────────────────────────
 
 async function getUserByChatId(pool: Pool, chatId: string): Promise<{ id: string; name: string; role: string } | null> {
-  const result = await pool.query(
-    `SELECT id, name, role FROM users WHERE telegram_chat_id = $1 AND is_active = true`,
-    [chatId],
-  );
-  return (result.rows[0] as { id: string; name: string; role: string } | undefined) ?? null;
+  // Retry once on failure (handles stale connections after idle timeout)
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const result = await pool.query(
+        `SELECT id, name, role FROM users WHERE telegram_chat_id = $1 AND is_active = true`,
+        [chatId],
+      );
+      return (result.rows[0] as { id: string; name: string; role: string } | undefined) ?? null;
+    } catch (err) {
+      if (attempt === 0) {
+        console.warn(`[telegram-cmd] getUserByChatId retry after error:`, err instanceof Error ? err.message : err);
+        continue;
+      }
+      throw err;
+    }
+  }
+  return null;
 }
 
 async function requireAuth(chatId: string, pool: Pool): Promise<{ id: string; name: string; role: string } | null> {
