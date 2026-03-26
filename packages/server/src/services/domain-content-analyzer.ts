@@ -962,7 +962,7 @@ async function checkPageSpeed(url: string): Promise<PageSpeedResult> {
   const empty: PageSpeedResult = { performanceScore: null, firstContentfulPaint: null, largestContentfulPaint: null, cumulativeLayoutShift: null, speedIndex: null, totalBlockingTime: null, mobile: true, checked: false };
   try {
     const apiUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}&strategy=mobile&category=performance`;
-    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(30_000) });
+    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(15_000) });
     if (!res.ok) return empty;
 
     const data = await res.json() as {
@@ -1056,38 +1056,19 @@ export interface WaybackResult {
 async function checkWayback(domain: string): Promise<WaybackResult> {
   const empty: WaybackResult = { hasHistory: false, firstSnapshot: null, lastSnapshot: null, totalSnapshots: 0, domainAgeFromArchive: null, checked: false };
   try {
-    // CDX API for snapshot count and dates
-    const res = await fetch(
-      `https://web.archive.org/cdx/search/cdx?url=${encodeURIComponent(domain)}&output=json&limit=1&fl=timestamp&sort=asc`,
-      { signal: AbortSignal.timeout(10_000) },
-    );
-    if (!res.ok) return empty;
+    // Single request: get first and last snapshot in parallel with 3s timeout
+    const [firstRes, lastRes] = await Promise.all([
+      fetch(`https://web.archive.org/cdx/search/cdx?url=${encodeURIComponent(domain)}&output=json&limit=1&fl=timestamp&sort=asc`, { signal: AbortSignal.timeout(3000) }),
+      fetch(`https://web.archive.org/cdx/search/cdx?url=${encodeURIComponent(domain)}&output=json&limit=1&fl=timestamp&sort=desc`, { signal: AbortSignal.timeout(3000) }),
+    ]);
 
-    const first = await res.json() as string[][];
+    if (!firstRes.ok) return empty;
+    const first = await firstRes.json() as string[][];
     if (!first || first.length < 2) return empty;
-
     const firstTs = first[1]?.[0];
 
-    // Get last snapshot
-    const resLast = await fetch(
-      `https://web.archive.org/cdx/search/cdx?url=${encodeURIComponent(domain)}&output=json&limit=1&fl=timestamp&sort=desc`,
-      { signal: AbortSignal.timeout(10_000) },
-    );
-    const last = resLast.ok ? await resLast.json() as string[][] : [];
+    const last = lastRes.ok ? await lastRes.json() as string[][] : [];
     const lastTs = last[1]?.[0];
-
-    // Get total count (limit 0 with showNumPages)
-    let totalSnapshots = 0;
-    try {
-      const countRes = await fetch(
-        `https://web.archive.org/cdx/search/cdx?url=${encodeURIComponent(domain)}&output=json&limit=0&showNumPages=true`,
-        { signal: AbortSignal.timeout(5000) },
-      );
-      if (countRes.ok) {
-        const countText = await countRes.text();
-        totalSnapshots = parseInt(countText.trim(), 10) || 0;
-      }
-    } catch { /* ignore */ }
 
     function parseWaybackTs(ts: string): Date | null {
       if (!ts || ts.length < 8) return null;
@@ -1102,7 +1083,7 @@ async function checkWayback(domain: string): Promise<WaybackResult> {
       hasHistory: true,
       firstSnapshot: firstDate?.toISOString().slice(0, 10) ?? null,
       lastSnapshot: lastDate?.toISOString().slice(0, 10) ?? null,
-      totalSnapshots,
+      totalSnapshots: 0,
       domainAgeFromArchive: ageDays,
       checked: true,
     };
