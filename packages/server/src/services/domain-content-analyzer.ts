@@ -208,6 +208,27 @@ export interface ContentAnalysisResult {
   ogTags: Record<string, string> | null;
   outboundDomains: string[];
 
+  // Level 2: Security headers
+  securityHeaders: SecurityHeadersResult;
+
+  // Level 2: TLD risk
+  tldRisk: { tld: string; risk: string; score: number };
+
+  // Level 2: robots.txt
+  robotsTxt: RobotsTxtResult;
+
+  // Level 2: Form analysis
+  formAnalysis: FormAnalysis;
+
+  // Level 2: Third-party scripts
+  thirdPartyScripts: ThirdPartyScripts;
+
+  // Level 2: Link reputation
+  linkReputation: LinkReputation;
+
+  // Level 2: Structured data
+  structuredData: StructuredDataResult;
+
   // LLM context
   analysisSummary: string;
   llmContext: Record<string, unknown>;
@@ -220,6 +241,7 @@ interface FetchResult {
   finalUrl: string;
   redirectChain: string[];
   statusCode: number;
+  headers: Record<string, string>;
 }
 
 async function fetchWithRedirects(url: string): Promise<FetchResult> {
@@ -246,8 +268,10 @@ async function fetchWithRedirects(url: string): Promise<FetchResult> {
       continue;
     }
 
+    const headers: Record<string, string> = {};
+    res.headers.forEach((v, k) => { headers[k.toLowerCase()] = v; });
     const html = await res.text();
-    return { html, finalUrl: currentUrl, redirectChain: chain, statusCode: res.status };
+    return { html, finalUrl: currentUrl, redirectChain: chain, statusCode: res.status, headers };
   }
 
   // If we exhausted redirects, try final fetch
@@ -255,8 +279,10 @@ async function fetchWithRedirects(url: string): Promise<FetchResult> {
     headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
     signal: AbortSignal.timeout(15_000),
   });
+  const headers: Record<string, string> = {};
+  res.headers.forEach((v, k) => { headers[k.toLowerCase()] = v; });
   const html = await res.text();
-  return { html, finalUrl: currentUrl, redirectChain: chain, statusCode: res.status };
+  return { html, finalUrl: currentUrl, redirectChain: chain, statusCode: res.status, headers };
 }
 
 // ─── HTML parsers (regex-based, no external deps) ─────────────────────────────
@@ -517,6 +543,366 @@ function analyzeRedirects(chain: string[], declaredUrl?: string): { score: numbe
   return { score: Math.min(100, score), mismatch };
 }
 
+// ─── HTTP Security Headers analyzer ──────────────────────────────────────────
+
+interface SecurityHeadersResult {
+  hasHsts: boolean;
+  hasCsp: boolean;
+  hasXFrameOptions: boolean;
+  hasXContentType: boolean;
+  hasReferrerPolicy: boolean;
+  hasPermissionsPolicy: boolean;
+  serverHeader: string | null;
+  poweredBy: string | null;
+  securityScore: number; // 0-100
+  details: Array<{ header: string; status: 'present' | 'missing'; value?: string }>;
+}
+
+function analyzeSecurityHeaders(headers: Record<string, string>): SecurityHeadersResult {
+  const h = (name: string) => headers[name.toLowerCase()] ?? null;
+
+  const hasHsts = h('strict-transport-security') != null;
+  const hasCsp = h('content-security-policy') != null;
+  const hasXFrameOptions = h('x-frame-options') != null;
+  const hasXContentType = h('x-content-type-options') != null;
+  const hasReferrerPolicy = h('referrer-policy') != null;
+  const hasPermissionsPolicy = h('permissions-policy') != null;
+  const serverHeader = h('server');
+  const poweredBy = h('x-powered-by');
+
+  const details: SecurityHeadersResult['details'] = [
+    { header: 'Strict-Transport-Security', status: hasHsts ? 'present' : 'missing', value: h('strict-transport-security') ?? undefined },
+    { header: 'Content-Security-Policy', status: hasCsp ? 'present' : 'missing' },
+    { header: 'X-Frame-Options', status: hasXFrameOptions ? 'present' : 'missing', value: h('x-frame-options') ?? undefined },
+    { header: 'X-Content-Type-Options', status: hasXContentType ? 'present' : 'missing' },
+    { header: 'Referrer-Policy', status: hasReferrerPolicy ? 'present' : 'missing', value: h('referrer-policy') ?? undefined },
+    { header: 'Permissions-Policy', status: hasPermissionsPolicy ? 'present' : 'missing' },
+  ];
+
+  let securityScore = 0;
+  if (hasHsts) securityScore += 25;
+  if (hasCsp) securityScore += 25;
+  if (hasXFrameOptions) securityScore += 15;
+  if (hasXContentType) securityScore += 10;
+  if (hasReferrerPolicy) securityScore += 15;
+  if (hasPermissionsPolicy) securityScore += 10;
+
+  return { hasHsts, hasCsp, hasXFrameOptions, hasXContentType, hasReferrerPolicy, hasPermissionsPolicy, serverHeader, poweredBy, securityScore, details };
+}
+
+// ─── TLD Risk scoring ────────────────────────────────────────────────────────
+
+const HIGH_RISK_TLDS = new Set(['.xyz', '.top', '.click', '.club', '.icu', '.buzz', '.gq', '.cf', '.tk', '.ml', '.ga', '.work', '.fun', '.monster', '.sbs', '.rest', '.cam']);
+const MEDIUM_RISK_TLDS = new Set(['.io', '.co', '.me', '.cc', '.pw', '.ws', '.biz', '.info', '.link', '.site', '.online', '.store', '.shop', '.live', '.space']);
+const LOW_RISK_TLDS = new Set(['.com', '.org', '.net', '.edu', '.gov', '.mil']);
+
+function scoreTld(domain: string): { tld: string; risk: 'high' | 'medium' | 'low'; score: number } {
+  const parts = domain.split('.');
+  const tld = '.' + parts[parts.length - 1];
+  if (HIGH_RISK_TLDS.has(tld)) return { tld, risk: 'high', score: 80 };
+  if (MEDIUM_RISK_TLDS.has(tld)) return { tld, risk: 'medium', score: 40 };
+  if (LOW_RISK_TLDS.has(tld)) return { tld, risk: 'low', score: 5 };
+  // Country TLDs
+  if (tld.length === 3) return { tld, risk: 'low', score: 15 };
+  return { tld, risk: 'medium', score: 30 };
+}
+
+// ─── robots.txt analyzer ─────────────────────────────────────────────────────
+
+interface RobotsTxtResult {
+  exists: boolean;
+  blocksGooglebot: boolean;
+  blocksAll: boolean;
+  hasSitemap: boolean;
+  sitemapUrls: string[];
+  disallowedPaths: string[];
+  rawContent: string | null;
+}
+
+async function analyzeRobotsTxt(baseUrl: string): Promise<RobotsTxtResult> {
+  try {
+    const origin = new URL(baseUrl).origin;
+    const res = await fetch(`${origin}/robots.txt`, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return { exists: false, blocksGooglebot: false, blocksAll: false, hasSitemap: false, sitemapUrls: [], disallowedPaths: [], rawContent: null };
+
+    const text = await res.text();
+    if (text.length > 50000 || !text.includes('User-agent') && !text.includes('user-agent')) {
+      return { exists: false, blocksGooglebot: false, blocksAll: false, hasSitemap: false, sitemapUrls: [], disallowedPaths: [], rawContent: null };
+    }
+
+    const lines = text.split('\n').map(l => l.trim());
+    const sitemapUrls: string[] = [];
+    const disallowedPaths: string[] = [];
+    let inGooglebotBlock = false;
+    let inAllBlock = false;
+    let blocksGooglebot = false;
+    let blocksAll = false;
+
+    for (const line of lines) {
+      const lower = line.toLowerCase();
+      if (lower.startsWith('sitemap:')) {
+        sitemapUrls.push(line.slice(8).trim());
+      }
+      if (lower.startsWith('user-agent:')) {
+        const agent = lower.slice(11).trim();
+        inGooglebotBlock = agent === 'googlebot' || agent === 'googlebot-image';
+        inAllBlock = agent === '*';
+      }
+      if (lower.startsWith('disallow:')) {
+        const path = line.slice(9).trim();
+        if (path) disallowedPaths.push(path);
+        if (path === '/' && inGooglebotBlock) blocksGooglebot = true;
+        if (path === '/' && inAllBlock) blocksAll = true;
+      }
+    }
+
+    return {
+      exists: true,
+      blocksGooglebot,
+      blocksAll,
+      hasSitemap: sitemapUrls.length > 0,
+      sitemapUrls,
+      disallowedPaths,
+      rawContent: text.slice(0, 2000),
+    };
+  } catch {
+    return { exists: false, blocksGooglebot: false, blocksAll: false, hasSitemap: false, sitemapUrls: [], disallowedPaths: [], rawContent: null };
+  }
+}
+
+// ─── Form target analyzer ────────────────────────────────────────────────────
+
+interface FormAnalysis {
+  forms: Array<{ action: string; method: string; isExternal: boolean; inputNames: string[] }>;
+  collectsPersonalData: boolean;
+  collectsPaymentData: boolean;
+  externalFormTargets: string[];
+}
+
+function analyzeForms(html: string, baseUrl: string): FormAnalysis {
+  const baseDomain = new URL(baseUrl).hostname.replace(/^www\./, '');
+  const formRe = /<form[^>]*>([\s\S]*?)<\/form>/gi;
+  const actionRe = /action=["']([^"']*?)["']/i;
+  const methodRe = /method=["']([^"']*?)["']/i;
+  const inputNameRe = /name=["']([^"']*?)["']/gi;
+  const forms: FormAnalysis['forms'] = [];
+  const externalTargets = new Set<string>();
+  let collectsPersonal = false;
+  let collectsPayment = false;
+
+  const personalFields = /email|phone|tel|name|address|город|телефон|имя|фамилия|адрес/i;
+  const paymentFields = /card|cvv|cvc|ccnum|expir|billing|payment|карта|оплата/i;
+
+  let m: RegExpExecArray | null;
+  while ((m = formRe.exec(html)) !== null) {
+    const formHtml = m[0];
+    const action = actionRe.exec(formHtml)?.[1] ?? '';
+    const method = (methodRe.exec(formHtml)?.[1] ?? 'get').toUpperCase();
+
+    let isExternal = false;
+    if (action && action.startsWith('http')) {
+      try {
+        const targetDomain = new URL(action).hostname.replace(/^www\./, '');
+        if (targetDomain !== baseDomain) {
+          isExternal = true;
+          externalTargets.add(targetDomain);
+        }
+      } catch { /* invalid url */ }
+    }
+
+    const inputNames: string[] = [];
+    let im: RegExpExecArray | null;
+    while ((im = inputNameRe.exec(formHtml)) !== null) {
+      inputNames.push(im[1]);
+      if (personalFields.test(im[1])) collectsPersonal = true;
+      if (paymentFields.test(im[1])) collectsPayment = true;
+    }
+
+    forms.push({ action, method, isExternal, inputNames });
+  }
+
+  return {
+    forms,
+    collectsPersonalData: collectsPersonal,
+    collectsPaymentData: collectsPayment,
+    externalFormTargets: Array.from(externalTargets),
+  };
+}
+
+// ─── Third-party script cataloger ────────────────────────────────────────────
+
+interface ThirdPartyScripts {
+  analytics: string[];    // GA, GTM, Yandex Metrica
+  advertising: string[];  // FB Pixel, TikTok, Google Ads
+  trackers: string[];     // Known TDS/affiliate trackers
+  suspicious: string[];   // Keitaro, Binom, known cloaking
+  cdn: string[];          // Cloudflare, jsDelivr, etc.
+  allDomains: string[];
+}
+
+const KNOWN_SCRIPTS: Record<string, { name: string; category: keyof ThirdPartyScripts }> = {
+  'google-analytics.com': { name: 'Google Analytics', category: 'analytics' },
+  'googletagmanager.com': { name: 'Google Tag Manager', category: 'analytics' },
+  'mc.yandex.ru': { name: 'Yandex Metrica', category: 'analytics' },
+  'connect.facebook.net': { name: 'Facebook Pixel', category: 'advertising' },
+  'snap.licdn.com': { name: 'LinkedIn Insight', category: 'advertising' },
+  'analytics.tiktok.com': { name: 'TikTok Pixel', category: 'advertising' },
+  'googleads.g.doubleclick.net': { name: 'Google Ads', category: 'advertising' },
+  'googlesyndication.com': { name: 'Google AdSense', category: 'advertising' },
+  'pagead2.googlesyndication.com': { name: 'Google Ads', category: 'advertising' },
+  'www.googleadservices.com': { name: 'Google Ads Conversion', category: 'advertising' },
+  'keitaro.io': { name: 'Keitaro TDS', category: 'suspicious' },
+  'binom.org': { name: 'Binom TDS', category: 'suspicious' },
+  'trafficjunky.com': { name: 'TrafficJunky', category: 'suspicious' },
+  'clickadu.com': { name: 'Clickadu', category: 'suspicious' },
+  'propellerads.com': { name: 'PropellerAds', category: 'suspicious' },
+  'exoclick.com': { name: 'ExoClick', category: 'suspicious' },
+  'cdn.jsdelivr.net': { name: 'jsDelivr', category: 'cdn' },
+  'cdnjs.cloudflare.com': { name: 'Cloudflare CDN', category: 'cdn' },
+  'unpkg.com': { name: 'UNPKG', category: 'cdn' },
+  'ajax.googleapis.com': { name: 'Google CDN', category: 'cdn' },
+};
+
+function catalogScripts(html: string, baseUrl: string): ThirdPartyScripts {
+  const baseDomain = new URL(baseUrl).hostname.replace(/^www\./, '');
+  const srcRe = /<script[^>]*src=["']([^"']+)["']/gi;
+  const result: ThirdPartyScripts = { analytics: [], advertising: [], trackers: [], suspicious: [], cdn: [], allDomains: [] };
+  const seen = new Set<string>();
+
+  let m: RegExpExecArray | null;
+  while ((m = srcRe.exec(html)) !== null) {
+    try {
+      const scriptUrl = new URL(m[1], baseUrl);
+      const domain = scriptUrl.hostname.replace(/^www\./, '');
+      if (domain === baseDomain || seen.has(domain)) continue;
+      seen.add(domain);
+      result.allDomains.push(domain);
+
+      // Match against known scripts
+      for (const [pattern, info] of Object.entries(KNOWN_SCRIPTS)) {
+        if (domain.includes(pattern)) {
+          result[info.category].push(info.name);
+          break;
+        }
+      }
+    } catch { /* invalid URL */ }
+  }
+
+  // Also check inline patterns
+  if (/gtag|GA_TRACKING_ID|G-[A-Z0-9]{10}/i.test(html) && !result.analytics.includes('Google Analytics')) {
+    result.analytics.push('Google Analytics (inline)');
+  }
+  if (/fbq\s*\(|facebook\.com\/tr/i.test(html) && !result.advertising.includes('Facebook Pixel')) {
+    result.advertising.push('Facebook Pixel (inline)');
+  }
+  if (/ym\s*\(\s*\d+/i.test(html) && !result.analytics.includes('Yandex Metrica')) {
+    result.analytics.push('Yandex Metrica (inline)');
+  }
+  if (/keitaro|binom|tds.*redirect/i.test(html)) {
+    result.suspicious.push('TDS pattern (inline)');
+  }
+
+  return result;
+}
+
+// ─── External link reputation ────────────────────────────────────────────────
+
+const KNOWN_BAD_DOMAINS = new Set([
+  'bit.ly', 'tinyurl.com', 'goo.gl', 't.co', // URL shorteners (hiding destination)
+  'keitaro.io', 'binom.org', 'bemob.com', 'voluum.com', // TDS/trackers
+  'clickbank.net', 'clickbank.com', // Affiliate networks
+  'digistore24.com', 'warriorplus.com', // Affiliate
+  'buygoods.com', 'clktrk.com', 'trk.as', // Tracking
+]);
+
+interface LinkReputation {
+  shortenerLinks: string[];
+  affiliateLinks: string[];
+  trackerLinks: string[];
+  suspiciousDomains: string[];
+  score: number; // 0-100 risk
+}
+
+function checkLinkReputation(outboundDomains: string[]): LinkReputation {
+  const shorteners: string[] = [];
+  const affiliates: string[] = [];
+  const trackers: string[] = [];
+  const suspicious: string[] = [];
+
+  for (const domain of outboundDomains) {
+    const lower = domain.toLowerCase();
+    if (['bit.ly', 'tinyurl.com', 'goo.gl', 't.co', 'cutt.ly', 'rb.gy', 'is.gd', 'v.gd', 'shorturl.at'].some(s => lower === s)) {
+      shorteners.push(domain);
+    } else if (['clickbank.net', 'clickbank.com', 'digistore24.com', 'warriorplus.com', 'buygoods.com', 'jvzoo.com'].some(s => lower.includes(s))) {
+      affiliates.push(domain);
+    } else if (['keitaro.io', 'binom.org', 'bemob.com', 'voluum.com', 'clktrk.com', 'trk.as'].some(s => lower.includes(s))) {
+      trackers.push(domain);
+    } else if (KNOWN_BAD_DOMAINS.has(lower)) {
+      suspicious.push(domain);
+    }
+  }
+
+  let score = 0;
+  score += shorteners.length * 15;
+  score += affiliates.length * 20;
+  score += trackers.length * 25;
+  score += suspicious.length * 10;
+
+  return { shortenerLinks: shorteners, affiliateLinks: affiliates, trackerLinks: trackers, suspiciousDomains: suspicious, score: Math.min(100, score) };
+}
+
+// ─── Schema.org structured data ──────────────────────────────────────────────
+
+interface StructuredDataResult {
+  hasJsonLd: boolean;
+  hasSchemaOrg: boolean;
+  schemaTypes: string[]; // e.g. ["Organization", "Product", "WebSite"]
+  hasBreadcrumbs: boolean;
+  hasProductSchema: boolean;
+  hasOrganizationSchema: boolean;
+  hasFaqSchema: boolean;
+  legitimacyBonus: number; // 0-30 bonus for having proper structured data
+}
+
+function analyzeStructuredData(html: string): StructuredDataResult {
+  const jsonLdRe = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  const schemaTypes: string[] = [];
+  let hasJsonLd = false;
+
+  let m: RegExpExecArray | null;
+  while ((m = jsonLdRe.exec(html)) !== null) {
+    hasJsonLd = true;
+    try {
+      const data = JSON.parse(m[1]) as Record<string, unknown>;
+      const type = (data['@type'] as string) ?? '';
+      if (type) schemaTypes.push(type);
+      if (Array.isArray(data['@graph'])) {
+        for (const item of data['@graph']) {
+          const t = (item as Record<string, unknown>)['@type'] as string;
+          if (t) schemaTypes.push(t);
+        }
+      }
+    } catch { /* invalid JSON-LD */ }
+  }
+
+  const hasSchemaOrg = /itemtype=["']https?:\/\/schema\.org/i.test(html) || hasJsonLd;
+  const hasBreadcrumbs = schemaTypes.some(t => /breadcrumb/i.test(t)) || /breadcrumb/i.test(html);
+  const hasProductSchema = schemaTypes.some(t => /product/i.test(t));
+  const hasOrganizationSchema = schemaTypes.some(t => /organization|localbusiness/i.test(t));
+  const hasFaqSchema = schemaTypes.some(t => /faq/i.test(t));
+
+  let legitimacyBonus = 0;
+  if (hasJsonLd) legitimacyBonus += 10;
+  if (hasOrganizationSchema) legitimacyBonus += 10;
+  if (hasBreadcrumbs) legitimacyBonus += 5;
+  if (hasFaqSchema) legitimacyBonus += 5;
+
+  return { hasJsonLd, hasSchemaOrg, schemaTypes, hasBreadcrumbs, hasProductSchema, hasOrganizationSchema, hasFaqSchema, legitimacyBonus };
+}
+
 // ─── LLM context builder ─────────────────────────────────────────────────────
 
 function buildLlmContext(result: ContentAnalysisResult): { summary: string; context: Record<string, unknown> } {
@@ -558,6 +944,38 @@ function buildLlmContext(result: ContentAnalysisResult): { summary: string; cont
   lines.push(`\nPage Metrics: ${result.wordCount} words, ${result.totalLinks} links (${result.externalLinks} external), ${result.formCount} forms, ${result.scriptCount} scripts, ${result.iframeCount} iframes`);
   if (result.pageLanguage) lines.push(`Language: ${result.pageLanguage}`);
 
+  // Level 2 data
+  lines.push(`\nTLD Risk: ${result.tldRisk.tld} (${result.tldRisk.risk})`);
+  lines.push(`Security Headers Score: ${result.securityHeaders.securityScore}/100`);
+  if (result.securityHeaders.serverHeader) lines.push(`Server: ${result.securityHeaders.serverHeader}`);
+
+  if (result.robotsTxt.exists) {
+    lines.push(`\nrobots.txt: exists`);
+    if (result.robotsTxt.blocksGooglebot) lines.push('  ⚠️ BLOCKS GOOGLEBOT');
+    if (result.robotsTxt.hasSitemap) lines.push(`  Sitemap: ${result.robotsTxt.sitemapUrls.join(', ')}`);
+  }
+
+  if (result.formAnalysis.forms.length > 0) {
+    lines.push(`\nForms: ${result.formAnalysis.forms.length}`);
+    if (result.formAnalysis.collectsPersonalData) lines.push('  Collects personal data');
+    if (result.formAnalysis.collectsPaymentData) lines.push('  ⚠️ Collects payment data');
+    if (result.formAnalysis.externalFormTargets.length > 0) lines.push(`  External targets: ${result.formAnalysis.externalFormTargets.join(', ')}`);
+  }
+
+  const allScripts = [...result.thirdPartyScripts.analytics, ...result.thirdPartyScripts.advertising, ...result.thirdPartyScripts.suspicious];
+  if (allScripts.length > 0) lines.push(`\nThird-party scripts: ${allScripts.join(', ')}`);
+  if (result.thirdPartyScripts.suspicious.length > 0) lines.push(`  ⚠️ SUSPICIOUS: ${result.thirdPartyScripts.suspicious.join(', ')}`);
+
+  if (result.linkReputation.affiliateLinks.length > 0 || result.linkReputation.trackerLinks.length > 0) {
+    lines.push(`\nLink reputation issues:`);
+    if (result.linkReputation.affiliateLinks.length > 0) lines.push(`  Affiliate: ${result.linkReputation.affiliateLinks.join(', ')}`);
+    if (result.linkReputation.trackerLinks.length > 0) lines.push(`  Trackers: ${result.linkReputation.trackerLinks.join(', ')}`);
+  }
+
+  if (result.structuredData.hasJsonLd) {
+    lines.push(`\nStructured data: ${result.structuredData.schemaTypes.join(', ')}`);
+  }
+
   const summary = lines.join('\n');
 
   const context: Record<string, unknown> = {
@@ -597,6 +1015,40 @@ function buildLlmContext(result: ContentAnalysisResult): { summary: string; cont
       images: result.imageCount,
     },
     outbound_domains: result.outboundDomains,
+    tld_risk: result.tldRisk,
+    security_headers: {
+      score: result.securityHeaders.securityScore,
+      hsts: result.securityHeaders.hasHsts,
+      csp: result.securityHeaders.hasCsp,
+      server: result.securityHeaders.serverHeader,
+    },
+    robots_txt: {
+      exists: result.robotsTxt.exists,
+      blocks_googlebot: result.robotsTxt.blocksGooglebot,
+      has_sitemap: result.robotsTxt.hasSitemap,
+    },
+    forms: {
+      count: result.formAnalysis.forms.length,
+      collects_personal: result.formAnalysis.collectsPersonalData,
+      collects_payment: result.formAnalysis.collectsPaymentData,
+      external_targets: result.formAnalysis.externalFormTargets,
+    },
+    third_party_scripts: {
+      analytics: result.thirdPartyScripts.analytics,
+      advertising: result.thirdPartyScripts.advertising,
+      suspicious: result.thirdPartyScripts.suspicious,
+    },
+    link_reputation: {
+      affiliate_links: result.linkReputation.affiliateLinks,
+      tracker_links: result.linkReputation.trackerLinks,
+      shortener_links: result.linkReputation.shortenerLinks,
+      score: result.linkReputation.score,
+    },
+    structured_data: {
+      has_json_ld: result.structuredData.hasJsonLd,
+      types: result.structuredData.schemaTypes,
+      legitimacy_bonus: result.structuredData.legitimacyBonus,
+    },
   };
 
   return { summary, context };
@@ -607,7 +1059,7 @@ function buildLlmContext(result: ContentAnalysisResult): { summary: string; cont
 export async function analyzeContent(url: string, declaredUrl?: string): Promise<ContentAnalysisResult> {
   const fullUrl = url.startsWith('http') ? url : `https://${url}`;
   const fetchResult = await fetchWithRedirects(fullUrl);
-  const { html, finalUrl, redirectChain } = fetchResult;
+  const { html, finalUrl, redirectChain, headers } = fetchResult;
 
   const text = extractText(html);
   const links = extractLinks(html, finalUrl);
@@ -616,25 +1068,39 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
   const structure = analyzeStructure(html, text);
   const redirects = analyzeRedirects(redirectChain, declaredUrl);
 
+  // Level 2 analyzers
+  const securityHeaders = analyzeSecurityHeaders(headers);
+  const domain = new URL(finalUrl).hostname.replace(/^www\./, '');
+  const tldRisk = scoreTld(domain);
+  const robotsTxt = await analyzeRobotsTxt(finalUrl);
+  const formAnalysis = analyzeForms(html, finalUrl);
+  const thirdPartyScripts = catalogScripts(html, finalUrl);
+  const linkReputation = checkLinkReputation(links.outboundDomains);
+  const structuredData = analyzeStructuredData(html);
+
   const ogTags: Record<string, string> = {};
   for (const prop of ['og:title', 'og:description', 'og:image', 'og:type']) {
     const val = extractMeta(html, prop);
     if (val) ogTags[prop.replace('og:', '')] = val;
   }
 
-  // Weighted composite risk score
+  // Weighted composite risk score (enhanced with Level 2 data)
+  const complianceAdjusted = Math.min(100, compliance.score + structuredData.legitimacyBonus);
   const contentRiskScore = Math.min(100, Math.round(
-    kwScore * 0.35 +
-    (100 - compliance.score) * 0.25 +
-    structure.score * 0.25 +
-    redirects.score * 0.15
+    kwScore * 0.25 +
+    (100 - complianceAdjusted) * 0.20 +
+    structure.score * 0.20 +
+    redirects.score * 0.10 +
+    tldRisk.score * 0.10 +
+    linkReputation.score * 0.10 +
+    (100 - securityHeaders.securityScore) * 0.05
   ));
 
   const result: ContentAnalysisResult = {
     url: fullUrl,
     contentRiskScore,
     keywordRiskScore: kwScore,
-    complianceScore: compliance.score,
+    complianceScore: complianceAdjusted,
     structureRiskScore: structure.score,
     redirectRiskScore: redirects.score,
 
@@ -661,6 +1127,14 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
     pageDescription: extractMeta(html, 'description'),
     ogTags: Object.keys(ogTags).length > 0 ? ogTags : null,
     outboundDomains: links.outboundDomains,
+
+    securityHeaders,
+    tldRisk,
+    robotsTxt,
+    formAnalysis,
+    thirdPartyScripts,
+    linkReputation,
+    structuredData,
 
     analysisSummary: '',
     llmContext: {},

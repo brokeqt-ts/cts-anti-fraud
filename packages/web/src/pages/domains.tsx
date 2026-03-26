@@ -372,6 +372,101 @@ export function DomainsPage() {
                   </div>
                 )}
 
+                {/* Security & TLD */}
+                <div className="grid grid-cols-2 gap-3">
+                  {analysis.tld_risk && (
+                    <div className="p-2 rounded-lg" style={{ background: 'var(--bg-base)' }}>
+                      <div className="text-[10px] mb-1" style={{ color: 'var(--text-muted)' }}>TLD Risk</div>
+                      <span className="text-xs font-semibold" style={{ color: analysis.tld_risk.risk === 'high' ? '#f87171' : analysis.tld_risk.risk === 'medium' ? '#fbbf24' : '#4ade80' }}>
+                        {analysis.tld_risk.tld} ({analysis.tld_risk.risk})
+                      </span>
+                    </div>
+                  )}
+                  {analysis.security_headers && (
+                    <div className="p-2 rounded-lg" style={{ background: 'var(--bg-base)' }}>
+                      <div className="text-[10px] mb-1" style={{ color: 'var(--text-muted)' }}>Security Headers</div>
+                      <span className="text-xs font-mono font-semibold" style={{ color: analysis.security_headers.securityScore >= 50 ? '#4ade80' : analysis.security_headers.securityScore >= 25 ? '#fbbf24' : '#f87171' }}>
+                        {analysis.security_headers.securityScore}/100
+                      </span>
+                      {analysis.security_headers.serverHeader && (
+                        <span className="text-[10px] ml-2" style={{ color: 'var(--text-muted)' }}>{analysis.security_headers.serverHeader}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* robots.txt */}
+                {analysis.robots_txt?.exists && (
+                  <div className="text-xs space-y-1">
+                    <div className="font-semibold" style={{ color: 'var(--text-secondary)' }}>robots.txt</div>
+                    <div className="flex flex-wrap gap-2">
+                      {analysis.robots_txt.blocksGooglebot && <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>Blocks Googlebot!</span>}
+                      {analysis.robots_txt.hasSitemap && <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(74,222,128,0.1)', color: '#4ade80' }}>✓ Sitemap</span>}
+                      {!analysis.robots_txt.blocksGooglebot && <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(74,222,128,0.1)', color: '#4ade80' }}>✓ Googlebot allowed</span>}
+                    </div>
+                  </div>
+                )}
+
+                {/* Third-party Scripts */}
+                {analysis.third_party_scripts && (analysis.third_party_scripts.analytics.length > 0 || analysis.third_party_scripts.advertising.length > 0 || analysis.third_party_scripts.suspicious.length > 0) && (
+                  <div className="text-xs space-y-1">
+                    <div className="font-semibold" style={{ color: 'var(--text-secondary)' }}>Third-party Scripts</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {analysis.third_party_scripts.analytics.map((s, i) => (
+                        <span key={`a${i}`} className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(96,165,250,0.1)', color: '#60a5fa' }}>{s}</span>
+                      ))}
+                      {analysis.third_party_scripts.advertising.map((s, i) => (
+                        <span key={`ad${i}`} className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(251,191,36,0.1)', color: '#fbbf24' }}>{s}</span>
+                      ))}
+                      {analysis.third_party_scripts.suspicious.map((s, i) => (
+                        <span key={`s${i}`} className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>⚠ {s}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Form Analysis */}
+                {analysis.form_analysis && analysis.form_analysis.forms.length > 0 && (
+                  <div className="text-xs space-y-1">
+                    <div className="font-semibold" style={{ color: 'var(--text-secondary)' }}>Forms ({analysis.form_analysis.forms.length})</div>
+                    <div className="flex flex-wrap gap-2">
+                      {analysis.form_analysis.collectsPersonalData && <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(251,191,36,0.1)', color: '#fbbf24' }}>Collects personal data</span>}
+                      {analysis.form_analysis.collectsPaymentData && <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>Collects payment data</span>}
+                      {analysis.form_analysis.externalFormTargets.length > 0 && <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>External: {analysis.form_analysis.externalFormTargets.join(', ')}</span>}
+                    </div>
+                  </div>
+                )}
+
+                {/* Link Reputation */}
+                {analysis.link_reputation && analysis.link_reputation.score > 0 && (
+                  <div className="text-xs space-y-1">
+                    <div className="font-semibold" style={{ color: 'var(--text-secondary)' }}>Link Reputation Issues</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {analysis.link_reputation.affiliateLinks?.map((l, i) => (
+                        <span key={`af${i}`} className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>Affiliate: {l}</span>
+                      ))}
+                      {analysis.link_reputation.trackerLinks?.map((l, i) => (
+                        <span key={`tr${i}`} className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>Tracker: {l}</span>
+                      ))}
+                      {analysis.link_reputation.shortenerLinks?.map((l, i) => (
+                        <span key={`sh${i}`} className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(251,191,36,0.1)', color: '#fbbf24' }}>Shortener: {l}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Structured Data */}
+                {analysis.structured_data?.hasJsonLd && (
+                  <div className="text-xs space-y-1">
+                    <div className="font-semibold" style={{ color: 'var(--text-secondary)' }}>Structured Data (JSON-LD)</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {analysis.structured_data.schemaTypes.map((t, i) => (
+                        <span key={i} className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(74,222,128,0.1)', color: '#4ade80' }}>{t}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* SPA warning */}
                 {analysis.word_count < 50 && (
                   <div className="text-xs p-2.5 rounded-lg flex items-start gap-2" style={{ background: 'rgba(96,165,250,0.08)', color: '#60a5fa' }}>

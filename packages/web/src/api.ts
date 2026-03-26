@@ -541,6 +541,48 @@ export interface DomainContentAnalysis {
   form_count: number;
   script_count: number;
   iframe_count: number;
+  security_headers?: {
+    securityScore: number;
+    hasHsts: boolean;
+    hasCsp: boolean;
+    hasXFrameOptions: boolean;
+    hasXContentType: boolean;
+    serverHeader: string | null;
+    poweredBy: string | null;
+    details: Array<{ header: string; status: string; value?: string }>;
+  };
+  tld_risk?: { tld: string; risk: string; score: number };
+  robots_txt?: {
+    exists: boolean;
+    blocksGooglebot: boolean;
+    blocksAll: boolean;
+    hasSitemap: boolean;
+    sitemapUrls: string[];
+  };
+  form_analysis?: {
+    forms: Array<{ action: string; method: string; isExternal: boolean; inputNames: string[] }>;
+    collectsPersonalData: boolean;
+    collectsPaymentData: boolean;
+    externalFormTargets: string[];
+  };
+  third_party_scripts?: {
+    analytics: string[];
+    advertising: string[];
+    suspicious: string[];
+    cdn: string[];
+    allDomains: string[];
+  };
+  link_reputation?: {
+    shortenerLinks: string[];
+    affiliateLinks: string[];
+    trackerLinks: string[];
+    score: number;
+  };
+  structured_data?: {
+    hasJsonLd: boolean;
+    schemaTypes: string[];
+    legitimacyBonus: number;
+  };
   analysis_summary: string;
   analyzed_at: string | null;
 }
