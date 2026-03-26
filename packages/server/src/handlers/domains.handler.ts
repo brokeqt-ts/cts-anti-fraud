@@ -133,6 +133,7 @@ export async function analyzeDomainContentHandler(
       page_speed: r.pageSpeed,
       virus_total: r.virusTotal,
       wayback: r.wayback,
+      external_apis: r.externalApis,
       analysis_summary: r.analysisSummary,
       llm_context: r.llmContext,
       analyzed_at: new Date().toISOString(),

@@ -10,6 +10,7 @@
  */
 
 import type pg from 'pg';
+import { runAllExternalChecks, type AllExternalResults } from './domain-external-apis.js';
 
 // ─── Grey keyword dictionaries by vertical ────────────────────────────────────
 
@@ -229,11 +230,14 @@ export interface ContentAnalysisResult {
   // Level 2: Structured data
   structuredData: StructuredDataResult;
 
-  // Level 3: External APIs
+  // Level 3: External APIs (built-in)
   safeBrowsing: SafeBrowsingResult;
   pageSpeed: PageSpeedResult;
   virusTotal: VirusTotalResult;
   wayback: WaybackResult;
+
+  // Level 4: External API suite (13 services)
+  externalApis: AllExternalResults | null;
 
   // LLM context
   analysisSummary: string;
@@ -1258,6 +1262,19 @@ function buildLlmContext(result: ContentAnalysisResult): { summary: string; cont
     page_speed: result.pageSpeed.checked ? { score: result.pageSpeed.performanceScore, lcp: result.pageSpeed.largestContentfulPaint, cls: result.pageSpeed.cumulativeLayoutShift } : null,
     virus_total: result.virusTotal.checked ? { malicious: result.virusTotal.malicious, suspicious: result.virusTotal.suspicious, reputation: result.virusTotal.reputation, categories: result.virusTotal.categories } : null,
     wayback: result.wayback.checked ? { first: result.wayback.firstSnapshot, last: result.wayback.lastSnapshot, snapshots: result.wayback.totalSnapshots, age_days: result.wayback.domainAgeFromArchive } : null,
+    external_apis: result.externalApis ? {
+      dns: result.externalApis.dnsAnalysis.checked ? { spf: result.externalApis.dnsAnalysis.hasSpf, dmarc: result.externalApis.dnsAnalysis.hasDmarc, mx: result.externalApis.dnsAnalysis.hasMx } : null,
+      blocklists: result.externalApis.blocklists.checked ? { listed: result.externalApis.blocklists.lists } : null,
+      crt_sh: result.externalApis.crtSh.checked ? { certs: result.externalApis.crtSh.totalCerts, subdomains: result.externalApis.crtSh.subdomains.length } : null,
+      shodan: result.externalApis.shodan.checked ? { ports: result.externalApis.shodan.ports, vulns: result.externalApis.shodan.vulns } : null,
+      ipqs: result.externalApis.ipqs.checked ? { risk: result.externalApis.ipqs.riskScore, malware: result.externalApis.ipqs.malware, phishing: result.externalApis.ipqs.phishing } : null,
+      abuse_ipdb: result.externalApis.abuseIpdb.checked ? { score: result.externalApis.abuseIpdb.abuseScore, reports: result.externalApis.abuseIpdb.totalReports } : null,
+      urlhaus: result.externalApis.urlhaus.checked ? { malware: result.externalApis.urlhaus.isMalware } : null,
+      phishtank: result.externalApis.phishTank.checked ? { phishing: result.externalApis.phishTank.isPhishing } : null,
+      wot: result.externalApis.wot.checked ? { trust: result.externalApis.wot.trustworthiness } : null,
+      google_indexed: result.externalApis.googleIndex.checked ? { indexed: result.externalApis.googleIndex.indexed, pages: result.externalApis.googleIndex.totalResults } : null,
+      serp: result.externalApis.serpApi.checked ? { indexed: result.externalApis.serpApi.indexed, pages: result.externalApis.serpApi.totalResults } : null,
+    } : null,
   };
 
   return { summary, context };
@@ -1286,13 +1303,17 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
   const linkReputation = checkLinkReputation(links.outboundDomains);
   const structuredData = analyzeStructuredData(html);
 
-  // Level 1 + Level 2 analyzers (async, run in parallel)
-  const [robotsTxt, safeBrowsing, pageSpeed, virusTotal, wayback] = await Promise.all([
+  // Level 1 + Level 2 + Level 3 analyzers (async, run in parallel)
+  const [robotsTxt, safeBrowsing, pageSpeed, virusTotal, wayback, externalApis] = await Promise.all([
     analyzeRobotsTxt(finalUrl),
     checkSafeBrowsing(fullUrl),
     checkPageSpeed(fullUrl),
     checkVirusTotal(domain),
     checkWayback(domain),
+    runAllExternalChecks(domain, fullUrl).catch((err) => {
+      console.error('[domain-content] External APIs batch error:', err instanceof Error ? err.message : err);
+      return null;
+    }),
   ]);
 
   const ogTags: Record<string, string> = {};
@@ -1357,6 +1378,7 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
     pageSpeed,
     virusTotal,
     wayback,
+    externalApis: externalApis ?? null,
 
     analysisSummary: '',
     llmContext: {},
