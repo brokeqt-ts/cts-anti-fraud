@@ -632,3 +632,235 @@ describe.skipIf(!HAS_ANY_KEY)('Suspicious domains — Google Ads policy violatio
     }, 900_000); // 15 min for sequential analysis of 5 domains
   });
 });
+
+// ─── Large-scale benchmark: 20 trusted + 20 suspicious ───────────────────────
+// Purpose: validate model quality on a broad, realistic sample.
+// Trusted = major tech/media/education brands with clean VT and good compliance.
+// Suspicious = gambling/nutra/payday/crypto-scam domains strongly differing in
+// content and domain name signals from the trusted set.
+
+describe.skipIf(!HAS_ANY_KEY)('Large-scale benchmark: 20 trusted vs 20 suspicious', () => {
+  // ── 20 Trusted domains ──────────────────────────────────────────────────────
+  // All should score ≤ 25 (minor tolerance for flaky APIs / Wayback timeouts).
+  const TRUSTED: Array<[string, string, string]> = [
+    // Tech / SaaS
+    ['https://github.com',         'github.com',         'code hosting'],
+    ['https://stripe.com',         'stripe.com',         'payments'],
+    ['https://cloudflare.com',     'cloudflare.com',     'CDN / security'],
+    ['https://microsoft.com',      'microsoft.com',      'big tech'],
+    ['https://apple.com',          'apple.com',          'big tech'],
+    ['https://amazon.com',         'amazon.com',         'e-commerce / cloud'],
+    ['https://docker.com',         'docker.com',         'dev tools'],
+    ['https://npmjs.com',          'npmjs.com',          'package registry'],
+    ['https://shopify.com',        'shopify.com',        'e-commerce platform'],
+    ['https://zoom.us',            'zoom.us',            'video conferencing'],
+    // Open web / knowledge
+    ['https://wikipedia.org',      'wikipedia.org',      'encyclopedia'],
+    ['https://mozilla.org',        'mozilla.org',        'nonprofit browser'],
+    ['https://stackoverflow.com',  'stackoverflow.com',  'developer Q&A'],
+    ['https://reddit.com',         'reddit.com',         'social platform'],
+    // Media / news
+    ['https://bbc.com',            'bbc.com',            'public broadcaster'],
+    ['https://nytimes.com',        'nytimes.com',        'newspaper'],
+    // Professional / education
+    ['https://linkedin.com',       'linkedin.com',       'professional network'],
+    ['https://nasa.gov',           'nasa.gov',           'government / science'],
+    ['https://harvard.edu',        'harvard.edu',        'university'],
+    // Finance / infrastructure
+    ['https://paypal.com',         'paypal.com',         'payments'],
+  ];
+
+  // ── 20 Suspicious domains ───────────────────────────────────────────────────
+  // Gambling (domain-name detection + content), nutra, payday loans.
+  // All should score ≥ 30; at least 15/20 should score ≥ 55.
+  const SUSPICIOUS: Array<[string, string, string]> = [
+    // Gambling — domain-name keywords (exact token match)
+    ['https://stake.com',          'stake.com',          'crypto casino (stake token)'],
+    ['https://roobet.com',         'roobet.com',         'crypto casino (roobet keyword)'],
+    ['https://rollbit.com',        'rollbit.com',        'crypto casino (rollbit keyword)'],
+    ['https://betway.com',         'betway.com',         'sportsbook (betway keyword)'],
+    ['https://bet365.com',         'bet365.com',         'sportsbook (bet token)'],
+    ['https://draftkings.com',     'draftkings.com',     'DFS / sports betting'],
+    ['https://fanduel.com',        'fanduel.com',        'DFS / sports betting'],
+    ['https://pokerstars.com',     'pokerstars.com',     'poker (poker token in content)'],
+    // Gambling — content detection (brand name, live casino content)
+    ['https://1xbet.com',          '1xbet.com',          'sports betting'],
+    ['https://draftkings.com',     'draftkings.com',      'daily fantasy / sports betting'],
+    ['https://888casino.com',      '888casino.com',      'casino (content)'],
+    ['https://betmgm.com',         'betmgm.com',         'sportsbook (content + bet token)'],
+    ['https://pointsbet.com',      'pointsbet.com',      'sportsbook (content + bet token)'],
+    ['https://casinodays.com',     'casinodays.com',     'online casino (casino content)'],
+    // Nutra / weight loss — domain-name keywords
+    ['https://keto-slim.net',      'keto-slim.net',      'nutra (keto + slim tokens, .net)'],
+    ['https://dietpills.co',       'dietpills.co',       'nutra (diet + pills tokens, .co)'],
+    // Payday / predatory lending — domain-name keywords
+    ['https://paydayloans.com',    'paydayloans.com',    'payday lending (payday + loans)'],
+    ['https://1hourloans.net',     '1hourloans.net',     'instant loans (loans token)'],
+    // Crypto scam / high-risk TLD
+    ['https://crypto-win.xyz',     'crypto-win.xyz',     'crypto scam (win token + .xyz)'],
+    ['https://lucky-spin.club',    'lucky-spin.club',    'gambling (spin token + .club TLD)'],
+  ];
+
+  it('Trusted domains: all score ≤ 25', async () => {
+    console.log('\n════════════════════════════════════════════════════════════════');
+    console.log(' LARGE-SCALE BENCHMARK — 20 TRUSTED DOMAINS');
+    console.log('════════════════════════════════════════════════════════════════');
+    console.log(`${'Domain'.padEnd(30)} ${'Risk'.padStart(4)} ${'KW'.padStart(4)} ${'Compliance'.padStart(10)} ${'Vertical'.padEnd(12)} Notes`);
+    console.log('─'.repeat(80));
+
+    const failures: string[] = [];
+
+    for (const [url, label, category] of TRUSTED) {
+      const result = await analyzeContent(url);
+      const status = result.contentRiskScore <= 25 ? '✓' : '✗';
+      console.log(
+        `${status} ${label.padEnd(28)} ${String(result.contentRiskScore).padStart(4)} ${String(result.keywordRiskScore).padStart(4)} ${String(result.complianceScore).padStart(10)} ${(result.detectedVertical ?? '-').padEnd(12)} ${category}`,
+      );
+
+      if (result.contentRiskScore > 25) {
+        failures.push(`${label}: Risk=${result.contentRiskScore} (expected ≤ 25) — KW=${result.keywordRiskScore}, Compliance=${result.complianceScore}, Vertical=${result.detectedVertical ?? 'none'}, RedFlags=[${result.redFlags.map(f => f.type).join(',')}]`);
+      }
+    }
+
+    console.log('─'.repeat(80));
+
+    if (failures.length > 0) {
+      console.log('\n⚠ FALSE POSITIVES:');
+      for (const f of failures) console.log(`  ${f}`);
+    }
+
+    // All 20 trusted domains must score ≤ 25
+    expect(failures).toHaveLength(0);
+  }, 3_600_000); // 60 min ceiling for 20 sequential full analyses
+
+  it('Suspicious domains: ≥ 15/20 score ≥ 55, all score ≥ 30', async () => {
+    console.log('\n════════════════════════════════════════════════════════════════');
+    console.log(' LARGE-SCALE BENCHMARK — 20 SUSPICIOUS DOMAINS');
+    console.log('════════════════════════════════════════════════════════════════');
+    console.log(`${'Domain'.padEnd(30)} ${'Risk'.padStart(4)} ${'KW'.padStart(4)} ${'Compliance'.padStart(10)} ${'Vertical'.padEnd(12)} Notes`);
+    console.log('─'.repeat(80));
+
+    let highRiskCount = 0; // ≥ 55
+    const belowFloor: string[] = [];    // < 30 — clear false negatives
+
+    for (const [url, label, category] of SUSPICIOUS) {
+      const result = await analyzeContent(url);
+      const isHighRisk = result.contentRiskScore >= 55;
+      const aboveFloor = result.contentRiskScore >= 30;
+      const status = isHighRisk ? '✓' : (aboveFloor ? '~' : '✗');
+
+      console.log(
+        `${status} ${label.padEnd(28)} ${String(result.contentRiskScore).padStart(4)} ${String(result.keywordRiskScore).padStart(4)} ${String(result.complianceScore).padStart(10)} ${(result.detectedVertical ?? '-').padEnd(12)} ${category}`,
+      );
+      console.log(
+        `  └─ Keywords: [${result.keywordMatches.map(k => `${k.keyword}(${k.severity})`).join(', ') || 'none'}]`,
+      );
+      console.log(
+        `     RedFlags: [${result.redFlags.map(f => f.type).join(', ') || 'none'}]  TLD: ${result.tldRisk.tld}(${result.tldRisk.risk})  Blocklists: [${result.externalApis?.blocklists.lists.join(',') || 'none'}]`,
+      );
+
+      if (isHighRisk) highRiskCount++;
+      if (!aboveFloor) {
+        belowFloor.push(`${label}: Risk=${result.contentRiskScore} (expected ≥ 30)`);
+      }
+    }
+
+    console.log('─'.repeat(80));
+    console.log(`\n  High-risk (≥ 55): ${highRiskCount}/20`);
+    console.log(`  False negatives (< 30): ${belowFloor.length}/20`);
+
+    if (belowFloor.length > 0) {
+      console.log('\n⚠ FALSE NEGATIVES:');
+      for (const f of belowFloor) console.log(`  ${f}`);
+    }
+
+    // At least 15/20 suspicious domains must score ≥ 55
+    expect(highRiskCount).toBeGreaterThanOrEqual(15);
+    // No domain should score below 30 (clear policy violation, at minimum some signal)
+    expect(belowFloor).toHaveLength(0);
+  }, 3_600_000);
+
+  it('Aggregate statistics: avg suspicious >> avg trusted, separation ≥ 40 pts', async () => {
+    console.log('\n════════════════════════════════════════════════════════════════');
+    console.log(' LARGE-SCALE BENCHMARK — AGGREGATE STATISTICS');
+    console.log('════════════════════════════════════════════════════════════════');
+
+    // Sample 5 from each group for aggregate stats (avoid burning too many API calls
+    // when running alongside the individual tests above). Extra fallback domains
+    // included so we still get 3+ results if some are geo-blocked.
+    const trustedSample: Array<[string, string]> = [
+      ['https://github.com', 'github.com'],
+      ['https://wikipedia.org', 'wikipedia.org'],
+      ['https://stripe.com', 'stripe.com'],
+      ['https://mozilla.org', 'mozilla.org'],
+      ['https://cloudflare.com', 'cloudflare.com'],
+    ];
+    const suspiciousSample: Array<[string, string]> = [
+      ['https://stake.com', 'stake.com'],
+      ['https://1xbet.com', '1xbet.com'],
+      ['https://rollbit.com', 'rollbit.com'],
+      ['https://betway.com', 'betway.com'],
+      ['https://roobet.com', 'roobet.com'],
+      ['https://draftkings.com', 'draftkings.com'], // fallback if others blocked
+      ['https://fanduel.com', 'fanduel.com'],       // fallback if others blocked
+    ];
+
+    const trustedScores: number[] = [];
+    const suspiciousScores: number[] = [];
+
+    async function tryAnalyze(url: string, label: string): Promise<number | null> {
+      try {
+        const r = await analyzeContent(url);
+        return r.contentRiskScore;
+      } catch (err) {
+        console.log(`    ${label.padEnd(25)} UNREACHABLE (${(err as Error).message.slice(0, 60)})`);
+        return null;
+      }
+    }
+
+    console.log('\n  Trusted sample:');
+    for (const [url, label] of trustedSample) {
+      const score = await tryAnalyze(url, label);
+      if (score !== null) {
+        trustedScores.push(score);
+        console.log(`    ${label.padEnd(25)} Risk=${String(score).padStart(3)}`);
+      }
+    }
+
+    console.log('\n  Suspicious sample (stopping after 5 reachable):');
+    for (const [url, label] of suspiciousSample) {
+      if (suspiciousScores.length >= 5) break;
+      const score = await tryAnalyze(url, label);
+      if (score !== null) {
+        suspiciousScores.push(score);
+        console.log(`    ${label.padEnd(25)} Risk=${String(score).padStart(3)}`);
+      }
+    }
+
+    console.log(`\n  Reached: ${trustedScores.length} trusted, ${suspiciousScores.length} suspicious`);
+
+    if (trustedScores.length < 3 || suspiciousScores.length < 3) {
+      console.log('  ⚠ Too few reachable domains — skipping aggregate assertions');
+      return;
+    }
+
+    const avgTrusted = trustedScores.reduce((a, b) => a + b, 0) / trustedScores.length;
+    const avgSuspicious = suspiciousScores.reduce((a, b) => a + b, 0) / suspiciousScores.length;
+    const gap = avgSuspicious - avgTrusted;
+    const maxTrusted = Math.max(...trustedScores);
+    const minSuspicious = Math.min(...suspiciousScores);
+
+    console.log('\n─'.repeat(50));
+    console.log(`  Avg trusted score:    ${avgTrusted.toFixed(1)}/100`);
+    console.log(`  Avg suspicious score: ${avgSuspicious.toFixed(1)}/100`);
+    console.log(`  Separation gap:       ${gap.toFixed(1)} points`);
+    console.log(`  Max trusted:          ${maxTrusted}`);
+    console.log(`  Min suspicious:       ${minSuspicious}`);
+    console.log(`  Overlap:              ${maxTrusted >= minSuspicious ? 'YES ⚠' : 'NO ✓'}`);
+
+    // Core quality assertions
+    expect(gap).toBeGreaterThanOrEqual(40);   // At least 40-point average separation
+    expect(avgTrusted).toBeLessThanOrEqual(20);
+    expect(avgSuspicious).toBeGreaterThanOrEqual(50);
+  }, 1_800_000); // 30 min for 10 sequential analyses
+});
