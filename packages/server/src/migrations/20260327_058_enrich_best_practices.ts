@@ -341,7 +341,7 @@ casino, slot, jackpot, poker, roulette, blackjack, win money, guaranteed win,
 | 15–30% | СРЕДНИЙ |
 | > 30% | ВЫСОКИЙ — сменить карту |
 | > 50% | КРИТИЧЕСКИЙ — немедленно сменить |`,
-      priority: 18,
+      priority: 10,
       created_by: adminId,
     },
     {
@@ -379,7 +379,7 @@ casino, slot, jackpot, poker, roulette, blackjack, win money, guaranteed win,
 2. Аккаунт B использует тот же домен → банится в течение 7–14 дней
 3. Аккаунт C использует тот же BIN → банится в течение 3–7 дней
 4. Ключ: сразу после бана A нужно ротировать ресурсы для B и C`,
-      priority: 17,
+      priority: 10,
       created_by: adminId,
     },
     {
@@ -416,7 +416,7 @@ casino, slot, jackpot, poker, roulette, blackjack, win money, guaranteed win,
 ### Контекст: аккаунт в первые 7 дней
 - Во время прогрева (account_age_days < 8) velocity > 1.5 = ABNORMAL (бюджет должен расти постепенно)
 - Резкий spend при account_age_days < 7 и spend_velocity_ratio > 2.0 = сигнал мошенничества или ошибки`,
-      priority: 16,
+      priority: 10,
       created_by: adminId,
     },
     {
@@ -457,7 +457,7 @@ casino, slot, jackpot, poker, roulette, blackjack, win money, guaranteed win,
 - domain_age_days < 30 + domain_has_ssl = false → не запускать
 - domain_safe_page_score < 50 + offer_vertical in (nutra, gambling, crypto) → высокий риск бана в первые 48 ч
 - domain_has_privacy_page = false + offer_vertical = nutra → исправить до запуска`,
-      priority: 15,
+      priority: 10,
       created_by: adminId,
     },
     {
@@ -504,7 +504,7 @@ casino, slot, jackpot, poker, roulette, blackjack, win money, guaranteed win,
 | Display | 0.1–0.5% | < 0.05% |
 | PMax | 2–5% | < 0.5% |
 | Shopping | 0.5–2% | < 0.2% |`,
-      priority: 14,
+      priority: 10,
       created_by: adminId,
     },
     {
@@ -553,7 +553,7 @@ casino, slot, jackpot, poker, roulette, blackjack, win money, guaranteed win,
 - **BIN chain:** один BIN на 3+ аккаунтах → бан всей цепочки за 3–5 дней
 - **Domain reuse:** домен с историей бана → новый аккаунт банится в 48–72 ч
 - **Aggressive scaling:** резкий рост бюджета (×5 за 1 день) → триггер ревью → бан`,
-      priority: 13,
+      priority: 10,
       created_by: adminId,
     },
     {
@@ -589,7 +589,7 @@ casino, slot, jackpot, poker, roulette, blackjack, win money, guaranteed win,
 - Молодой аккаунт (< 30 дней) с daily_spend_avg > $200 = КРАСНЫЙ ФЛАГ
 - Аккаунт с нулевым total_spend_usd и активными кампаниями = только что запущен, максимальный риск
 - Резкое падение daily_spend_avg до $0 = либо пауза, либо скрытый бан`,
-      priority: 12,
+      priority: 10,
       created_by: adminId,
     },
     {
@@ -626,7 +626,7 @@ casino, slot, jackpot, poker, roulette, blackjack, win money, guaranteed win,
 ### Для AI: как влиять на оценку
 - bin_ban_rate > 30% + policy_violation_count > 0 = ВЫСОКИЙ суммарный риск (синергия)
 - bin_ban_rate > 50% = доминирующий фактор риска вне зависимости от остальных метрик`,
-      priority: 11,
+      priority: 10,
       created_by: adminId,
     },
     // Additional vertical-specific creative practices
