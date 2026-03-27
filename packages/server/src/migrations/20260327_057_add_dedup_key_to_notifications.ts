@@ -6,7 +6,7 @@ export async function up(knex: Knex): Promise<void> {
   });
 
   await knex.raw(`
-    CREATE INDEX idx_notifications_dedup ON notifications(user_id, dedup_key, created_at DESC)
+    CREATE UNIQUE INDEX idx_notifications_dedup ON notifications(user_id, dedup_key)
     WHERE dedup_key IS NOT NULL
   `);
 }

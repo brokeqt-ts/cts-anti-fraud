@@ -39,11 +39,11 @@ export async function insertNotification(
 ): Promise<NotificationRow | null> {
   const dedupKey = params.dedupKey ?? null;
 
-  // Skip duplicate: same user + dedup_key within 24h
+  // Skip duplicate: same user + dedup_key (all time, not just 24h)
   if (dedupKey) {
     const existing = await pool.query(
       `SELECT id FROM notifications
-       WHERE user_id = $1 AND dedup_key = $2 AND created_at > NOW() - INTERVAL '24 hours'
+       WHERE user_id = $1 AND dedup_key = $2
        LIMIT 1`,
       [params.userId, dedupKey],
     );
