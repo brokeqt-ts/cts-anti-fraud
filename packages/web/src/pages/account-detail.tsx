@@ -215,6 +215,20 @@ export function AccountDetailPage() {
     fetchQualityHistory(id).then((r) => setQsHistory(r.history)).catch(() => {});
   }, [id, navigate]);
 
+  const handleAiAnalyze = useCallback(async () => {
+    if (!id || aiLoading) return;
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const result = await analyzeAccount(id);
+      setAiResult(result);
+    } catch (e: unknown) {
+      setAiError(e instanceof Error ? e.message : 'Ошибка AI-анализа');
+    } finally {
+      setAiLoading(false);
+    }
+  }, [id, aiLoading]);
+
   if (error) {
     return (
       <div className="py-5 px-6">
@@ -244,20 +258,6 @@ export function AccountDetailPage() {
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
-
-  const handleAiAnalyze = useCallback(async () => {
-    if (!id || aiLoading) return;
-    setAiLoading(true);
-    setAiError(null);
-    try {
-      const result = await analyzeAccount(id);
-      setAiResult(result);
-    } catch (e: unknown) {
-      setAiError(e instanceof Error ? e.message : 'Ошибка AI-анализа');
-    } finally {
-      setAiLoading(false);
-    }
-  }, [id, aiLoading]);
 
   const billingAddr = acc['billing_address'] as Record<string, string> | null;
   const dedupedCampaigns = deduplicateCampaigns(data.campaigns ?? []);
