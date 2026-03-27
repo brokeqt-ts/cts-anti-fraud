@@ -766,6 +766,26 @@ export interface BanChainDomain {
 export const fetchBanChainAll = (): Promise<{ shared_domains: BanChainDomain[] }> =>
   apiFetch('/analytics/ban-chain-all');
 
+export interface BanChainConnection {
+  connected_account: string;
+  display_name: string | null;
+  link_type: string;
+  link_value: string;
+  weight: number;
+  is_banned: boolean;
+  banned_at: string | null;
+}
+
+export interface BanChainData {
+  account_google_id: string;
+  connections: BanChainConnection[];
+  chain_risk_score: number;
+  risk_level: string;
+}
+
+export const fetchBanChain = (accountGoogleId: string): Promise<BanChainData> =>
+  apiFetch(`/analytics/ban-chain?account_google_id=${encodeURIComponent(accountGoogleId)}`);
+
 // --- KF-7: Consumable Scoring ---
 
 export interface ScoredItem {

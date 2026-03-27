@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, Bell, BellRing, Copy, MapPin, Database, Shield, LayoutList, Wallet, ExternalLink, Megaphone, Search, BarChart3, Tag, Eye, Star, Clock, Calendar, ShieldOff, AlertCircle, AlertTriangle } from 'lucide-react';
-import { fetchAccount, patchAccount, generatePostMortem, fetchAccountCompetitiveIntelligence, fetchQualityDistribution, fetchLowQualityKeywords, fetchQualityHistory, ApiError, type AccountDetail, type AccountSummary, type AccountCompetitorRow, type PostMortemData, type CampaignRow, type CampaignMetric, type BillingRow, type AdRow, type KeywordRow, type KeywordDailyStat, type QualityDistributionEntry, type KeywordQualityRow, type QualityScoreSnapshot, timeAgo, formatDateRu, formatCid, riskLevel, effectiveStatus, isSuspendedFromSignal } from '../api.js';
+import { ArrowLeft, CheckCircle, Bell, BellRing, Copy, MapPin, Database, Shield, LayoutList, Wallet, ExternalLink, Megaphone, Search, BarChart3, Tag, Eye, Star, Clock, Calendar, ShieldOff, AlertCircle, AlertTriangle, Bot, Link2, Globe, Loader2, Zap } from 'lucide-react';
+import { fetchAccount, patchAccount, analyzeAccount, fetchBanChain, fetchDomainDetail, generatePostMortem, fetchAccountCompetitiveIntelligence, fetchQualityDistribution, fetchLowQualityKeywords, fetchQualityHistory, ApiError, type AccountDetail, type AccountSummary, type AccountCompetitorRow, type PostMortemData, type CampaignRow, type CampaignMetric, type BillingRow, type AdRow, type KeywordRow, type KeywordDailyStat, type QualityDistributionEntry, type KeywordQualityRow, type QualityScoreSnapshot, type AiAnalyzeResponse, type BanChainData, type DomainContentAnalysis, timeAgo, formatDateRu, formatCid, riskLevel, effectiveStatus, isSuspendedFromSignal } from '../api.js';
 import { StatusBadge } from '../components/badge.js';
 import { TableSkeleton } from '../components/skeleton.js';
 import {
@@ -177,16 +177,36 @@ export function AccountDetailPage() {
   const [qsHistory, setQsHistory] = useState<QualityScoreSnapshot[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [banChain, setBanChain] = useState<BanChainData | null>(null);
+  const [aiResult, setAiResult] = useState<AiAnalyzeResponse | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [domainAnalysis, setDomainAnalysis] = useState<DomainContentAnalysis | null>(null);
+  const [domainForHealth, setDomainForHealth] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!id) return;
     fetchAccount(id)
-      .then(setData)
+      .then((result) => {
+        setData(result);
+        const a = result.account;
+        const dom =
+          (a['domain_name'] as string | null) ??
+          result.bans.find((b) => b.domain)?.domain ??
+          null;
+        setDomainForHealth(dom);
+        if (dom) {
+          fetchDomainDetail(dom)
+            .then((r) => { if (r.content_analysis) setDomainAnalysis(r.content_analysis); })
+            .catch(() => {});
+        }
+      })
       .catch((e: unknown) => {
         if (e instanceof ApiError && e.status === 401) { navigate('/settings'); return; }
         setError(e instanceof Error ? e.message : 'Неизвестная ошибка');
       });
+    fetchBanChain(id).then(setBanChain).catch(() => {});
     fetchAccountCompetitiveIntelligence(id)
       .then((r) => setCompetitors(r.competitors))
       .catch(() => {});
@@ -224,6 +244,20 @@ export function AccountDetailPage() {
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
+
+  const handleAiAnalyze = useCallback(async () => {
+    if (!id || aiLoading) return;
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const result = await analyzeAccount(id);
+      setAiResult(result);
+    } catch (e: unknown) {
+      setAiError(e instanceof Error ? e.message : 'Ошибка AI-анализа');
+    } finally {
+      setAiLoading(false);
+    }
+  }, [id, aiLoading]);
 
   const billingAddr = acc['billing_address'] as Record<string, string> | null;
   const dedupedCampaigns = deduplicateCampaigns(data.campaigns ?? []);
@@ -330,6 +364,17 @@ export function AccountDetailPage() {
         />
       </StaggerItem>
 
+      {/* Inline AI Analysis */}
+      <StaggerItem>
+        <InlineAiCard
+          accountId={id ?? ''}
+          aiResult={aiResult}
+          aiLoading={aiLoading}
+          aiError={aiError}
+          onAnalyze={handleAiAnalyze}
+        />
+      </StaggerItem>
+
       {/* Campaigns — hide when empty */}
       {dedupedCampaigns.length > 0 && (
         <StaggerItem>
@@ -423,6 +468,13 @@ export function AccountDetailPage() {
         }} />
       </StaggerItem>
 
+      {/* Connected Accounts / Shared Resources */}
+      {banChain && banChain.connections.length > 0 && (
+        <StaggerItem>
+          <ConnectedAccountsPanel banChain={banChain} />
+        </StaggerItem>
+      )}
+
       {/* Competitors */}
       {competitors.length > 0 && (
         <StaggerItem>
@@ -434,6 +486,13 @@ export function AccountDetailPage() {
       <StaggerItem>
         <BanHistorySection bans={data.bans} navigate={navigate} accountCid={id ?? ''} />
       </StaggerItem>
+
+      {/* Domain Health */}
+      {domainForHealth && domainAnalysis && (
+        <StaggerItem>
+          <DomainHealthCard domain={domainForHealth} analysis={domainAnalysis} />
+        </StaggerItem>
+      )}
 
       {/* Raw Data Stats */}
       <StaggerItem>
@@ -665,6 +724,339 @@ function EventTimeline({
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ── Inline AI Analysis Card ──────────────────────────────── */
+
+const AI_RISK_COLORS: Record<string, { color: string; bg: string }> = {
+  HIGH:    { color: '#f87171', bg: 'rgba(239,68,68,0.10)' },
+  MEDIUM:  { color: '#fbbf24', bg: 'rgba(245,158,11,0.10)' },
+  LOW:     { color: '#4ade80', bg: 'rgba(34,197,94,0.10)' },
+};
+const AI_CONFIDENCE_COLORS: Record<string, string> = { high: '#4ade80', medium: '#fbbf24', low: '#f87171' };
+
+function InlineAiCard({
+  aiResult,
+  aiLoading,
+  aiError,
+  onAnalyze,
+}: {
+  accountId: string;
+  aiResult: AiAnalyzeResponse | null;
+  aiLoading: boolean;
+  aiError: string | null;
+  onAnalyze: () => void;
+}) {
+  return (
+    <div className="card-static p-[12px_14px]">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+          <Bot className="w-4 h-4 inline-block mr-1.5" strokeWidth={1.5} style={{ color: '#818cf8' }} />
+          AI-анализ аккаунта
+        </h2>
+        {!aiResult ? (
+          <button
+            onClick={onAnalyze}
+            disabled={aiLoading}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
+            style={{
+              background: aiLoading ? 'var(--bg-raised)' : 'rgba(129,140,248,0.12)',
+              border: '1px solid rgba(129,140,248,0.25)',
+              color: aiLoading ? 'var(--text-muted)' : '#818cf8',
+              cursor: aiLoading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {aiLoading ? (
+              <><Loader2 className="w-3 h-3 animate-spin" />Анализирую...</>
+            ) : (
+              <><Zap className="w-3 h-3" />Запустить AI-анализ</>
+            )}
+          </button>
+        ) : (
+          <button
+            onClick={onAnalyze}
+            disabled={aiLoading}
+            className="text-xs transition-colors"
+            style={{ color: 'var(--text-muted)' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}
+          >
+            {aiLoading ? 'Обновляю...' : '↺ Обновить'}
+          </button>
+        )}
+      </div>
+
+      {aiError && (
+        <div className="text-xs p-2 rounded-lg" style={{ background: 'rgba(239,68,68,0.06)', color: '#f87171', border: '1px solid rgba(239,68,68,0.15)' }}>
+          {aiError}
+        </div>
+      )}
+
+      {!aiResult && !aiLoading && !aiError && (
+        <div className="relative py-6 flex flex-col items-center gap-2 overflow-hidden">
+          <DotPattern />
+          <Bot className="w-5 h-5" style={{ color: 'var(--border-hover)' }} />
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Нажмите «Запустить AI-анализ» для оценки рисков аккаунта</p>
+        </div>
+      )}
+
+      {aiLoading && !aiResult && (
+        <div className="py-6 flex flex-col items-center gap-2">
+          <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#818cf8' }} />
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>AI анализирует аккаунт...</p>
+        </div>
+      )}
+
+      {aiResult && (
+        <div className="space-y-3">
+          {/* Risk badge + confidence + model */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {(() => {
+              const upper = aiResult.risk_assessment?.toUpperCase() ?? '';
+              const key = upper.includes('HIGH') ? 'HIGH' : upper.includes('MEDIUM') ? 'MEDIUM' : 'LOW';
+              const s = AI_RISK_COLORS[key] ?? AI_RISK_COLORS['LOW']!;
+              return (
+                <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ background: s.bg, color: s.color, border: `1px solid ${s.color}30` }}>
+                  {aiResult.risk_assessment}
+                </span>
+              );
+            })()}
+            <span className="text-xs" style={{ color: AI_CONFIDENCE_COLORS[aiResult.confidence] ?? 'var(--text-muted)' }}>
+              Уверенность: {aiResult.confidence}
+            </span>
+            <span className="text-xs ml-auto" style={{ color: 'var(--text-muted)' }}>
+              {aiResult.model} · {aiResult.latency_ms}ms
+            </span>
+          </div>
+
+          {/* Summary */}
+          <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+            {aiResult.summary_ru}
+          </p>
+
+          {/* Immediate actions */}
+          {aiResult.immediate_actions.length > 0 && (
+            <div>
+              <div className="text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>Действия сейчас:</div>
+              <div className="space-y-1.5">
+                {aiResult.immediate_actions.slice(0, 3).map((a, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    <span className="flex-shrink-0 inline-flex items-center justify-center rounded-full font-mono" style={{ width: 16, height: 16, background: 'rgba(239,68,68,0.1)', color: '#f87171', fontSize: 9, lineHeight: 1 }}>{i + 1}</span>
+                    <span>{a.action_ru}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Connected Accounts / Ban Chain Panel ─────────────────── */
+
+const LINK_TYPE_META: Record<string, { label: string; color: string }> = {
+  domain:             { label: 'Домен',     color: '#60a5fa' },
+  bin:                { label: 'BIN карты', color: '#fbbf24' },
+  proxy:              { label: 'Прокси',    color: '#a78bfa' },
+  antidetect_profile: { label: 'Antidetect', color: '#34d399' },
+};
+
+function ConnectedAccountsPanel({ banChain }: { banChain: BanChainData }) {
+  const [expanded, setExpanded] = useState(false);
+  const LIMIT = 5;
+  const { connections, chain_risk_score, risk_level } = banChain;
+
+  const riskColor = risk_level === 'critical' ? '#f87171' : risk_level === 'elevated' ? '#fbbf24' : '#4ade80';
+  const riskLabel = risk_level === 'critical' ? 'Критический' : risk_level === 'elevated' ? 'Повышенный' : 'Низкий';
+  const bannedCount = connections.filter((c) => c.is_banned).length;
+  const shown = expanded ? connections : connections.slice(0, LIMIT);
+
+  return (
+    <div className="card-static p-[12px_14px]">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+          <Link2 className="w-4 h-4 inline-block mr-1.5" strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />
+          Связанные аккаунты ({connections.length})
+        </h2>
+        <div className="flex items-center gap-2">
+          {bannedCount > 0 && (
+            <span className="text-xs" style={{ color: '#f87171' }}>
+              {bannedCount} забанено
+            </span>
+          )}
+          <span
+            className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+            style={{ background: `${riskColor}18`, color: riskColor, border: `1px solid ${riskColor}30` }}
+          >
+            {riskLabel} · {Math.round(chain_risk_score * 100)}%
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        {shown.map((conn) => {
+          const lt = LINK_TYPE_META[conn.link_type] ?? { label: conn.link_type, color: 'var(--text-muted)' };
+          return (
+            <div
+              key={conn.connected_account}
+              className="flex items-center gap-2 py-1.5 px-2 rounded-lg"
+              style={{
+                background: conn.is_banned ? 'rgba(239,68,68,0.04)' : 'var(--bg-raised)',
+                border: `1px solid ${conn.is_banned ? 'rgba(239,68,68,0.15)' : 'var(--border-subtle)'}`,
+              }}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-mono truncate" style={{ color: 'var(--text-secondary)' }}>
+                    {conn.display_name ?? conn.connected_account}
+                  </span>
+                  {conn.is_banned && (
+                    <span
+                      className="inline-flex items-center rounded-full px-1.5 py-0 text-xs font-medium flex-shrink-0"
+                      style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171', fontSize: 9 }}
+                    >
+                      БАН
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className="text-xs" style={{ color: lt.color, fontSize: 10 }}>{lt.label}</span>
+                  <span className="text-xs font-mono truncate" style={{ color: 'var(--text-muted)', fontSize: 10 }}>· {conn.link_value}</span>
+                </div>
+              </div>
+              <Link
+                to={`/accounts/${conn.connected_account}`}
+                className="text-xs flex-shrink-0 transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}
+              >
+                →
+              </Link>
+            </div>
+          );
+        })}
+      </div>
+
+      {connections.length > LIMIT && (
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="text-xs mt-2 transition-colors"
+          style={{ color: 'var(--text-muted)' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}
+        >
+          {expanded ? '↑ Свернуть' : `↓ Ещё ${connections.length - LIMIT}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ── Domain Health Card ───────────────────────────────────── */
+
+function DomainHealthCard({ domain, analysis }: { domain: string; analysis: DomainContentAnalysis }) {
+  const compliance = analysis.compliance_score ?? 0;
+  const risk = analysis.content_risk_score ?? 0;
+  const complianceColor = compliance >= 70 ? '#4ade80' : compliance >= 40 ? '#fbbf24' : '#f87171';
+  const riskColor = risk >= 70 ? '#f87171' : risk >= 40 ? '#fbbf24' : '#4ade80';
+
+  const greenChecks: string[] = [
+    analysis.has_privacy_policy ? 'Privacy Policy' : '',
+    analysis.has_terms_of_service ? 'Terms of Service' : '',
+    analysis.has_contact_info ? 'Контакты' : '',
+    analysis.has_disclaimer ? 'Disclaimer' : '',
+    analysis.has_cookie_consent ? 'Cookie consent' : '',
+  ].filter(Boolean);
+
+  const redPresent: string[] = [
+    analysis.has_countdown_timer ? 'Countdown timer' : '',
+    analysis.has_fake_reviews ? 'Fake reviews' : '',
+    analysis.has_before_after ? 'Before/After' : '',
+    analysis.has_hidden_text ? 'Hidden text' : '',
+    analysis.has_aggressive_cta ? 'Aggressive CTA' : '',
+  ].filter(Boolean);
+
+  const criticalFlags = (analysis.red_flags ?? []).filter((f) => f.severity === 'critical' || f.severity === 'high');
+  const warnFlags = (analysis.red_flags ?? []).filter((f) => f.severity === 'medium' || f.severity === 'warning');
+
+  return (
+    <div className="card-static p-[12px_14px]">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+          <Globe className="w-4 h-4 inline-block mr-1.5" strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />
+          Домен: <span className="font-mono">{domain}</span>
+        </h2>
+        {analysis.detected_vertical && (
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            Вертикаль: {analysis.detected_vertical}
+          </span>
+        )}
+      </div>
+
+      {/* Score bars */}
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="label-xs">Compliance</span>
+            <span className="text-xs font-semibold font-mono" style={{ color: complianceColor }}>{compliance}%</span>
+          </div>
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-hover)' }}>
+            <div className="h-full rounded-full" style={{ width: `${compliance}%`, background: complianceColor }} />
+          </div>
+        </div>
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="label-xs">Контент-риск</span>
+            <span className="text-xs font-semibold font-mono" style={{ color: riskColor }}>{risk}%</span>
+          </div>
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-hover)' }}>
+            <div className="h-full rounded-full" style={{ width: `${risk}%`, background: riskColor }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Boolean flags */}
+      {(greenChecks.length > 0 || redPresent.length > 0) && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {greenChecks.map((f) => (
+            <span key={f} className="inline-flex items-center rounded-full px-2 py-0.5 text-xs" style={{ background: 'rgba(34,197,94,0.08)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.2)', fontSize: 10 }}>
+              ✓ {f}
+            </span>
+          ))}
+          {redPresent.map((f) => (
+            <span key={f} className="inline-flex items-center rounded-full px-2 py-0.5 text-xs" style={{ background: 'rgba(239,68,68,0.08)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)', fontSize: 10 }}>
+              ✗ {f}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Critical red flags */}
+      {criticalFlags.length > 0 && (
+        <div className="space-y-1 mt-1">
+          {criticalFlags.slice(0, 3).map((f, i) => (
+            <div key={i} className="flex items-start gap-1.5 text-xs" style={{ color: '#f87171' }}>
+              <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
+              <span>{f.detail}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {criticalFlags.length === 0 && warnFlags.length > 0 && (
+        <div className="space-y-1 mt-1">
+          {warnFlags.slice(0, 2).map((f, i) => (
+            <div key={i} className="flex items-start gap-1.5 text-xs" style={{ color: '#fbbf24' }}>
+              <AlertTriangle className="w-3 h-3 flex-shrink-0 mt-0.5" />
+              <span>{f.detail}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
