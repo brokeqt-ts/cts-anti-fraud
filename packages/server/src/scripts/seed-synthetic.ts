@@ -42,7 +42,9 @@ function pick<T>(arr: T[]): T {
 }
 
 function googleId(): string {
-  return `${rng(100, 999)}-${rng(100, 999)}-${rng(1000, 9999)}`;
+  // Real Google Ads CIDs are 10-digit numbers stored without dashes
+  // (dashes are display formatting only). Must match ^\d{7,13}$ filter.
+  return String(rng(1000000000, 9999999999));
 }
 
 function daysAgo(n: number): Date {
