@@ -33,6 +33,8 @@ export interface SimilarAccountsStats {
 }
 
 export const ACCOUNT_ANALYSIS_SYSTEM = `Ты — эксперт по антифроду Google Ads для команды медиабаинга.
+Данные собраны через антидетект-браузер. Каждый аккаунт работает в изолированном профиле.
+Команда работает с серыми и белыми вертикалями: gambling, nutra, crypto, dating, finance, sweepstakes, ecommerce.
 Ты анализируешь данные аккаунтов и прогнозируешь риски бана.
 Отвечай ТОЛЬКО на русском языке.
 Отвечай ТОЛЬКО валидным JSON, соответствующим указанной схеме.
@@ -172,7 +174,24 @@ export function buildBanAnalysisPrompt(
   lifetimeHours: number | null,
   features: AccountFeatureVector,
   postMortemFactors: Array<{ factor: string; severity: string }>,
+  domainAnalysis?: DomainAnalysisData | null,
+  consumablesSummary?: string | null,
 ): string {
+  const domainSection = domainAnalysis
+    ? `\nАНАЛИЗ ЛЕНДИНГА (${domainAnalysis.domain_name}):
+- Compliance score: ${domainAnalysis.compliance_score ?? 'нет данных'}/100
+- Content risk: ${domainAnalysis.content_risk_score ?? 'нет данных'}/100
+- Privacy Policy: ${domainAnalysis.has_privacy_policy ? 'есть' : 'ОТСУТСТВУЕТ'}
+- Terms of Service: ${domainAnalysis.has_terms_of_service ? 'есть' : 'ОТСУТСТВУЕТ'}
+- Countdown timer: ${domainAnalysis.has_countdown_timer ? 'ЕСТЬ' : 'нет'}
+- Fake reviews: ${domainAnalysis.has_fake_reviews ? 'ЕСТЬ' : 'нет'}
+${domainAnalysis.red_flags.length > 0 ? `- Флаги: ${domainAnalysis.red_flags.map(f => `${f.type}[${f.severity}]`).join(', ')}` : ''}`
+    : '';
+
+  const consumablesSection = consumablesSummary
+    ? `\nРЕСУРСЫ АККАУНТА:\n${consumablesSummary}`
+    : '';
+
   return `Проанализируй причину бана этого аккаунта Google Ads.
 
 ЗАБАНЕННЫЙ АККАУНТ: ${accountGoogleId}
@@ -184,8 +203,11 @@ export function buildBanAnalysisPrompt(
 - Расход: $${features.total_spend_usd.toFixed(2)}
 - Нарушения: ${features.policy_violation_count}
 - BIN ban rate: ${features.bin_ban_rate ?? 'нет данных'}%
+- Shared BIN with banned: ${features.shared_bin_with_banned ? 'ДА' : 'нет'}
+- Shared domain with banned: ${features.shared_domain_with_banned ? 'ДА' : 'нет'}
 - Связи с забаненными: ${features.connected_banned_accounts}
 - Отклонённые объявления: ${features.ad_disapproval_count}
+${domainSection}${consumablesSection}
 
 ФАКТОРЫ POST-MORTEM:
 ${postMortemFactors.map(f => `- [${f.severity}] ${f.factor}`).join('\n')}
@@ -202,11 +224,23 @@ ${postMortemFactors.map(f => `- [${f.severity}] ${f.factor}`).join('\n')}
 }
 
 export function buildComparisonPrompt(
-  accounts: Array<{ id: string; features: AccountFeatureVector; prediction: PredictionResult | null }>,
+  accounts: Array<{
+    id: string;
+    features: AccountFeatureVector;
+    prediction: PredictionResult | null;
+    domain_name?: string | null;
+    domain_score?: number | null;
+    offer_vertical?: string | null;
+    is_banned?: boolean;
+  }>,
 ): string {
-  const summaries = accounts.map(a =>
-    `Аккаунт ${a.id}: возраст ${a.features.account_age_days}д, расход $${a.features.total_spend_usd.toFixed(0)}, нарушения ${a.features.policy_violation_count}, BIN ban rate ${a.features.bin_ban_rate ?? '?'}%, связи с баном ${a.features.connected_banned_accounts}${a.prediction ? `, ML прогноз: ${(a.prediction.ban_probability * 100).toFixed(0)}%` : ''}`,
-  ).join('\n');
+  const summaries = accounts.map(a => {
+    const status = a.is_banned ? '[БАН]' : '[активен]';
+    const domain = a.domain_name ? `, домен ${a.domain_name}(score:${a.domain_score ?? '?'})` : '';
+    const vertical = a.offer_vertical ? `, верт. ${a.offer_vertical}` : '';
+    const ml = a.prediction ? `, ML:${(a.prediction.ban_probability * 100).toFixed(0)}%` : '';
+    return `${status} Аккаунт ${a.id}${vertical}: возраст ${a.features.account_age_days}д, расход $${a.features.total_spend_usd.toFixed(0)}, нарушения ${a.features.policy_violation_count}, BIN ban rate ${a.features.bin_ban_rate ?? '?'}%, связи с баном ${a.features.connected_banned_accounts}, QS ${a.features.avg_quality_score ?? '?'}${domain}${ml}`;
+  }).join('\n');
 
   return `Сравни эти аккаунты Google Ads и определи кто под наибольшим риском бана:
 

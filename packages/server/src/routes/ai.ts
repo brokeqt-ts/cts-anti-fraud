@@ -12,6 +12,10 @@ import {
   getPredictionFeedbackHandler,
   feedbackStatsHandler,
   mockCompareModelsHandler,
+  analyzeDomainHandler,
+  analyzeRotationHandler,
+  analyzeAppealHandler,
+  analyzeFarmHandler,
 } from '../handlers/ai.handler.js';
 
 export async function aiRoutes(fastify: FastifyInstance): Promise<void> {
@@ -64,6 +68,31 @@ export async function aiRoutes(fastify: FastifyInstance): Promise<void> {
     '/ai/models',
     { preHandler: [fastify.authenticate] },
     configuredModelsHandler,
+  );
+
+  // Specialized prompts: domain audit, rotation, appeal, farm analysis
+  fastify.post(
+    '/ai/audit-domain/:domainId',
+    { preHandler: [fastify.authenticate] },
+    analyzeDomainHandler,
+  );
+
+  fastify.post(
+    '/ai/rotation-strategy/:banLogId',
+    { preHandler: [fastify.authenticate] },
+    analyzeRotationHandler,
+  );
+
+  fastify.post(
+    '/ai/appeal-strategy/:banLogId',
+    { preHandler: [fastify.authenticate] },
+    analyzeAppealHandler,
+  );
+
+  fastify.post(
+    '/ai/farm-analysis',
+    { preHandler: [fastify.authenticate] },
+    analyzeFarmHandler,
   );
 
   // Test-only mock (non-production)

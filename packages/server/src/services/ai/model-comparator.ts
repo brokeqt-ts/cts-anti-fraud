@@ -311,9 +311,9 @@ export async function compareModels(
   try {
     const bpResult = await pool.query(
       `SELECT title, content, category FROM best_practices
-       WHERE bp.is_active = true
+       WHERE is_active = true
          AND (offer_vertical IS NULL OR offer_vertical = $1)
-       ORDER BY priority DESC LIMIT 5`,
+       ORDER BY priority DESC LIMIT 10`,
       [vertical],
     );
     if (bpResult.rows.length > 0) {
