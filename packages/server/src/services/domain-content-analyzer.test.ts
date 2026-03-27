@@ -113,7 +113,6 @@ function setupPageResponse(pageHtml: string, headers: Record<string, string> = {
   addMockResponse(/internetdb\.shodan/, { ok: false, status: 404 });
   addMockResponse(/openphish/, { ok: false, status: 404 });
   addMockResponse(/urlhaus/, { json: { query_status: 'no_results' } });
-  addMockResponse(/phishtank/, { json: { results: { in_database: false } } });
   addMockResponse(/commoncrawl/, { ok: false, status: 404 });
   addMockResponse(/serpapi/, { ok: false, status: 403 });
   addMockResponse(/abuseipdb/, { ok: false, status: 403 });
@@ -374,7 +373,7 @@ describe('Redirect Analysis', () => {
     });
     // Mock external APIs
     addMockResponse(/robots\.txt/, { ok: false, status: 404 });
-    addMockResponse(/pagespeedonline|safebrowsing|virustotal|web\.archive|crt\.sh|internetdb|openphish|urlhaus|phishtank|commoncrawl|serpapi|abuseipdb/, { ok: false, status: 404 });
+    addMockResponse(/pagespeedonline|safebrowsing|virustotal|web\.archive|crt\.sh|internetdb|openphish|urlhaus|commoncrawl|serpapi|abuseipdb/, { ok: false, status: 404 });
 
     const result = await analyzeContent('https://test.com');
     expect(result.redirectCount).toBeGreaterThanOrEqual(2);
@@ -390,7 +389,7 @@ describe('Redirect Analysis', () => {
     addMockResponse(/^https:\/\/actual-landing\.xyz$/, {
       text: html('Landing page content with enough words'),
     });
-    addMockResponse(/robots\.txt|pagespeedonline|safebrowsing|virustotal|web\.archive|crt\.sh|internetdb|openphish|urlhaus|phishtank|commoncrawl|serpapi|abuseipdb/, { ok: false, status: 404 });
+    addMockResponse(/robots\.txt|pagespeedonline|safebrowsing|virustotal|web\.archive|crt\.sh|internetdb|openphish|urlhaus|commoncrawl|serpapi|abuseipdb/, { ok: false, status: 404 });
 
     const result = await analyzeContent('https://declared.com', 'https://declared.com');
     expect(result.urlMismatch).toBe(true);
@@ -444,7 +443,7 @@ describe('Risk Scoring Model', () => {
     addMockResponse(/^https:\/\/scam\.xyz$/, {
       text: html('Normal looking page with enough words for analysis and no keywords'),
     });
-    addMockResponse(/robots\.txt|pagespeedonline|safebrowsing|virustotal|web\.archive|crt\.sh|internetdb|openphish|urlhaus|phishtank|commoncrawl|serpapi|abuseipdb/, { ok: false, status: 404 });
+    addMockResponse(/robots\.txt|pagespeedonline|safebrowsing|virustotal|web\.archive|crt\.sh|internetdb|openphish|urlhaus|commoncrawl|serpapi|abuseipdb/, { ok: false, status: 404 });
 
     const result = await analyzeContent('https://safe.com', 'https://safe.com');
     expect(result.urlMismatch).toBe(true);
@@ -595,7 +594,7 @@ describe('TLD Risk', () => {
 
   it('scores .xyz as high risk', async () => {
     addMockResponse(/^https:\/\/scam\.xyz/, { text: html('Content with enough words') });
-    addMockResponse(/robots\.txt|pagespeedonline|safebrowsing|virustotal|web\.archive|crt\.sh|internetdb|openphish|urlhaus|phishtank|commoncrawl|serpapi|abuseipdb/, { ok: false, status: 404 });
+    addMockResponse(/robots\.txt|pagespeedonline|safebrowsing|virustotal|web\.archive|crt\.sh|internetdb|openphish|urlhaus|commoncrawl|serpapi|abuseipdb/, { ok: false, status: 404 });
     const result = await analyzeContent('https://scam.xyz');
     expect(result.tldRisk.risk).toBe('high');
     expect(result.tldRisk.score).toBe(80);
@@ -603,7 +602,7 @@ describe('TLD Risk', () => {
 
   it('scores .io as medium risk', async () => {
     addMockResponse(/^https:\/\/app\.io/, { text: html('Content') });
-    addMockResponse(/robots\.txt|pagespeedonline|safebrowsing|virustotal|web\.archive|crt\.sh|internetdb|openphish|urlhaus|phishtank|commoncrawl|serpapi|abuseipdb/, { ok: false, status: 404 });
+    addMockResponse(/robots\.txt|pagespeedonline|safebrowsing|virustotal|web\.archive|crt\.sh|internetdb|openphish|urlhaus|commoncrawl|serpapi|abuseipdb/, { ok: false, status: 404 });
     const result = await analyzeContent('https://app.io');
     expect(result.tldRisk.risk).toBe('medium');
   });

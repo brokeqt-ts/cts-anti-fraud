@@ -683,7 +683,6 @@ function ExtendedChecks({ analysis }: { analysis: DomainContentAnalysis }) {
   const shd = ext.shodan as { checked: boolean; ports: number[]; vulns: string[] } | undefined;
   const abuse = ext.abuseIpdb as { checked: boolean; abuseScore: number; totalReports: number } | undefined;
   const uh = ext.urlhaus as { checked: boolean; isMalware: boolean } | undefined;
-  const pt = ext.phishTank as { checked: boolean; isPhishing: boolean } | undefined;
   const serp = ext.serpApi as { checked: boolean; indexed: boolean; totalResults: number } | undefined;
   const oph = ext.openPhish as { checked: boolean; isPhishing: boolean } | undefined;
   const cc = ext.commonCrawl as { checked: boolean; found: boolean; pages: number } | undefined;
@@ -720,9 +719,6 @@ function ExtendedChecks({ analysis }: { analysis: DomainContentAnalysis }) {
         )}
         {uh?.checked && uh.isMalware && (
           <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>🦠 URLhaus: malware</span>
-        )}
-        {pt?.checked && pt.isPhishing && (
-          <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>🎣 PhishTank: phishing</span>
         )}
         {oph?.checked && oph.isPhishing && (
           <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>🎣 OpenPhish: phishing</span>

@@ -2,7 +2,7 @@
 
 > Обновлено: 2026-03-26
 > Сервис: `packages/server/src/services/domain-content-analyzer.ts` + `domain-external-apis.ts`
-> Всего проверок: **27**
+> Всего проверок: **26**
 
 ---
 
@@ -39,7 +39,7 @@
 
 ---
 
-## Внешние API — с ключом (8 проверок)
+## Внешние API — с ключом (7 проверок)
 
 | # | API | Переменная | Лимит | Что проверяет |
 |---|---|---|---|---|
@@ -47,10 +47,9 @@
 | 21 | **VirusTotal** | `VIRUSTOTAL_API_KEY` | 500/день | 70+ антивирусов, репутация, категории |
 | 22 | **AbuseIPDB** | `ABUSEIPDB_API_KEY` | 1K/день | Жалобы на IP, abuse score, ISP, Tor |
 | 23 | **URLhaus** | — (бесплатный) | fair use | Malware URL база |
-| 24 | **PhishTank** | `PHISHTANK_API_KEY` | fair use | Фишинг URL база |
-| 25 | **SerpAPI** | `SERPAPI_KEY` | 100/мес | Google индексация (`site:domain.com`) |
-| 26 | **Node.js DNS** | — | локально | SPF, DKIM, DMARC, MX, CAA записи |
-| 27 | **RDAP** | — | бесплатно | WHOIS данные (уже в domain-enrichment) |
+| 24 | **SerpAPI** | `SERPAPI_KEY` | 100/мес | Google индексация (`site:domain.com`) |
+| 25 | **Node.js DNS** | — | локально | SPF, DKIM, DMARC, MX, CAA записи |
+| 26 | **RDAP** | — | бесплатно | WHOIS данные (уже в domain-enrichment) |
 
 ---
 

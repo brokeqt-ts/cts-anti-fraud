@@ -283,30 +283,7 @@ describe('URLhaus', () => {
   });
 });
 
-// ─── 9. PhishTank Tests ──────────────────────────────────────────────────────
-
-describe('PhishTank', () => {
-  it('detects phishing URL', async () => {
-    fetchMock.mockImplementationOnce(async () => mockFetchResponse({
-      json: { results: { in_database: true, valid: true, phish_id: '12345' } },
-    }));
-    const result = await mod.checkPhishTank('https://phishing.com/login');
-    expect(result.checked).toBe(true);
-    expect(result.isPhishing).toBe(true);
-    expect(result.phishId).toBe('12345');
-  });
-
-  it('returns clean for safe URL', async () => {
-    fetchMock.mockImplementationOnce(async () => mockFetchResponse({
-      json: { results: { in_database: false, valid: false } },
-    }));
-    const result = await mod.checkPhishTank('https://google.com');
-    expect(result.checked).toBe(true);
-    expect(result.isPhishing).toBe(false);
-  });
-});
-
-// ─── 10. SerpAPI Tests ───────────────────────────────────────────────────────
+// ─── 9. SerpAPI Tests ────────────────────────────────────────────────────────
 
 describe('SerpAPI', () => {
   it('returns empty when no API key', async () => {
@@ -367,7 +344,6 @@ describe.skip('runAllExternalChecks (requires dns)', () => {
     expect(result).toHaveProperty('openPhish');
     expect(result).toHaveProperty('abuseIpdb');
     expect(result).toHaveProperty('urlhaus');
-    expect(result).toHaveProperty('phishTank');
     expect(result).toHaveProperty('serpApi');
     expect(result).toHaveProperty('shodan');
   });

@@ -367,44 +367,7 @@ export async function checkUrlhaus(url: string): Promise<UrlhausResult> {
   }
 }
 
-// ─── 11. PhishTank ───────────────────────────────────────────────────────────
-
-export interface PhishTankResult {
-  checked: boolean;
-  isPhishing: boolean;
-  inDatabase: boolean;
-  phishId: string | null;
-}
-
-export async function checkPhishTank(url: string): Promise<PhishTankResult> {
-  const key = process.env['PHISHTANK_API_KEY'];
-  const empty: PhishTankResult = { checked: false, isPhishing: false, inDatabase: false, phishId: null };
-  try {
-    const body = key
-      ? `url=${encodeURIComponent(url)}&format=json&app_key=${key}`
-      : `url=${encodeURIComponent(url)}&format=json`;
-    const res = await safeFetch('https://checkurl.phishtank.com/checkurl/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
-      timeout: 8000,
-    });
-    if (!res?.ok) return empty;
-    const data = await res.json() as { results?: { in_database?: boolean; valid?: boolean; phish_id?: string } };
-    const r = data.results;
-    return {
-      checked: true,
-      isPhishing: r?.valid === true,
-      inDatabase: r?.in_database === true,
-      phishId: r?.phish_id ?? null,
-    };
-  } catch (err) {
-    console.error('[ext-api] PhishTank error:', err instanceof Error ? err.message : err);
-    return empty;
-  }
-}
-
-// ─── 12. SerpAPI (Google index check) ────────────────────────────────────────
+// ─── 11. SerpAPI (Google index check) ────────────────────────────────────────
 
 export interface SerpApiResult {
   checked: boolean;
@@ -450,18 +413,16 @@ export interface AllExternalResults {
   openPhish: PhishCheckResult;
   abuseIpdb: AbuseIpdbResult;
   urlhaus: UrlhausResult;
-  phishTank: PhishTankResult;
   serpApi: SerpApiResult;
 }
 
 export async function runAllExternalChecks(domain: string, url: string, ip?: string): Promise<AllExternalResults> {
-  const [crtSh, dnsAnalysis, commonCrawl, openPhish, urlhaus, phishTank, serpApi] = await Promise.all([
+  const [crtSh, dnsAnalysis, commonCrawl, openPhish, urlhaus, serpApi] = await Promise.all([
     checkCrtSh(domain),
     analyzeDns(domain),
     checkCommonCrawl(domain),
     checkOpenPhish(domain),
     checkUrlhaus(url),
-    checkPhishTank(url),
     checkSerpApi(domain),
   ]);
 
@@ -473,5 +434,5 @@ export async function runAllExternalChecks(domain: string, url: string, ip?: str
     resolvedIp ? checkAbuseIpdb(resolvedIp) : Promise.resolve({ checked: false, abuseScore: 0, totalReports: 0, countryCode: null, isp: null, usageType: null, isTor: false, isWhitelisted: false } as AbuseIpdbResult),
   ]);
 
-  return { crtSh, shodan, dnsAnalysis, blocklists, commonCrawl, openPhish, abuseIpdb, urlhaus, phishTank, serpApi };
+  return { crtSh, shodan, dnsAnalysis, blocklists, commonCrawl, openPhish, abuseIpdb, urlhaus, serpApi };
 }

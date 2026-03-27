@@ -1269,7 +1269,6 @@ function buildLlmContext(result: ContentAnalysisResult): { summary: string; cont
       shodan: result.externalApis.shodan.checked ? { ports: result.externalApis.shodan.ports, vulns: result.externalApis.shodan.vulns } : null,
       abuse_ipdb: result.externalApis.abuseIpdb.checked ? { score: result.externalApis.abuseIpdb.abuseScore, reports: result.externalApis.abuseIpdb.totalReports } : null,
       urlhaus: result.externalApis.urlhaus.checked ? { malware: result.externalApis.urlhaus.isMalware } : null,
-      phishtank: result.externalApis.phishTank.checked ? { phishing: result.externalApis.phishTank.isPhishing } : null,
       serp: result.externalApis.serpApi.checked ? { indexed: result.externalApis.serpApi.indexed, pages: result.externalApis.serpApi.totalResults } : null,
     } : null,
   };
@@ -1421,7 +1420,6 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
 
     // Malware/Phishing databases (URL-based — always reliable)
     if (externalApis.urlhaus.checked && externalApis.urlhaus.isMalware) riskPoints += 25;
-    if (externalApis.phishTank.checked && externalApis.phishTank.isPhishing) riskPoints += 25;
     if (externalApis.openPhish.checked && externalApis.openPhish.isPhishing) riskPoints += 25;
 
     // Not in Google index
