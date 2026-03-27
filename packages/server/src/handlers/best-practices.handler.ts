@@ -15,7 +15,7 @@ export async function listBestPracticesHandler(
     campaign_type?: string;
   };
 
-  const conditions: string[] = ['is_active = true'];
+  const conditions: string[] = ['bp.is_active = true'];
   const params: string[] = [];
   let idx = 1;
 
