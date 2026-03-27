@@ -255,7 +255,7 @@ export function BestPracticesPage() {
                 </div>
                 <div>
                   <label className="block label-xs mb-1">Приоритет</label>
-                  <input type="number" min={0} max={10} value={formPriority} onChange={e => setFormPriority(Number(e.target.value))} className="w-full px-3 py-2 rounded-lg text-sm" style={selectStyle} />
+                  <input type="number" min={0} value={formPriority} onChange={e => setFormPriority(Number(e.target.value))} className="w-full px-3 py-2 rounded-lg text-sm" style={selectStyle} />
                 </div>
               </div>
               <div>
