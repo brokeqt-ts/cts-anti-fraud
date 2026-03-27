@@ -259,7 +259,7 @@ describe('Full analyzeContent (real)', () => {
     expect(result.tldRisk.risk).toBe('low');
     expect(result.securityHeaders).toBeDefined();
     expect(result.robotsTxt).toBeDefined();
-  }, 60_000);
+  }, 120_000);
 
   it('analyzes wikipedia.org — low risk, good compliance', async () => {
     const result = await analyzeContent('https://wikipedia.org');
@@ -271,7 +271,7 @@ describe('Full analyzeContent (real)', () => {
     // Wikipedia should have structured data
     expect(result.pageLanguage).toBeDefined();
     expect(result.wordCount).toBeGreaterThan(10);
-  }, 60_000);
+  }, 120_000);
 
   it('provides complete analysis summary', async () => {
     const result = await analyzeContent('https://example.com');
@@ -282,7 +282,7 @@ describe('Full analyzeContent (real)', () => {
     expect(result.analysisSummary).toContain('Compliance');
     expect(result.analysisSummary).toContain('TLD Risk:');
     expect(result.analysisSummary).toContain('Security Headers');
-  }, 60_000);
+  }, 120_000);
 
   it('llmContext has all required fields', async () => {
     const result = await analyzeContent('https://example.com');
@@ -297,14 +297,14 @@ describe('Full analyzeContent (real)', () => {
     expect(ctx).toHaveProperty('page_metrics');
     expect(ctx).toHaveProperty('tld_risk');
     expect(ctx).toHaveProperty('security_headers');
-  }, 60_000);
+  }, 120_000);
 
   it('detects Cloudflare behind cloudflare.com', async () => {
     const result = await analyzeContent('https://cloudflare.com');
 
     // Should detect CF and skip IP-based checks
     expect(result.securityHeaders.serverHeader?.toLowerCase()).toContain('cloudflare');
-  }, 60_000);
+  }, 120_000);
 
   it('external APIs data is populated', async () => {
     const result = await analyzeContent('https://example.com');
@@ -316,7 +316,7 @@ describe('Full analyzeContent (real)', () => {
       expect(result.externalApis.blocklists.checked).toBe(true);
       expect(result.externalApis.crtSh.checked).toBe(true);
     }
-  }, 60_000);
+  }, 120_000);
 });
 
 // ─── Scoring model validation with real data ─────────────────────────────────
@@ -325,10 +325,10 @@ describe.skipIf(!HAS_ANY_KEY)('Scoring validation (real APIs)', () => {
   it('safe domain scores < 15', async () => {
     const result = await analyzeContent('https://example.com');
     expect(result.contentRiskScore).toBeLessThanOrEqual(15);
-  }, 60_000);
+  }, 120_000);
 
   it('google.com scores 0-5', async () => {
     const result = await analyzeContent('https://google.com');
     expect(result.contentRiskScore).toBeLessThanOrEqual(10);
-  }, 60_000);
+  }, 120_000);
 });
