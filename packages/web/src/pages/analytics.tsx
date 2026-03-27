@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Clock, Link, AlertTriangle, Zap, Eye, RefreshCw, Users, Search } from 'lucide-react';
+import { BarChart3, Clock, Link, AlertTriangle, Zap, Eye, RefreshCw, Users, Search, Download } from 'lucide-react';
 import {
   fetchBanTiming,
   fetchSpendVelocityAll, fetchBanChainAll,
@@ -16,6 +16,7 @@ import {
   type DecayScanResult,
   formatCid,
 } from '../api.js';
+import { downloadMultiSectionCsv } from '../utils/csv.js';
 import { useAuth } from '../contexts/auth-context.js';
 import { Skeleton } from '../components/skeleton.js';
 import { BlurFade, StaggerContainer, AnimatedRow } from '../components/ui/animations.js';
@@ -100,13 +101,93 @@ export function AnalyticsPage() {
               Статистика по банам, расходам и паттернам
             </p>
           </div>
-          {freshness && (
-            <div className="text-xs flex items-center gap-1.5" style={{ color: isStale ? '#fbbf24' : 'var(--text-ghost)' }}>
-              <Clock className="w-3 h-3" />
-              Данные обновлены: {new Date(freshness).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-              {isStale && <span className="ml-1">(данные могут быть устаревшими)</span>}
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            {freshness && (
+              <div className="text-xs flex items-center gap-1.5" style={{ color: isStale ? '#fbbf24' : 'var(--text-ghost)' }}>
+                <Clock className="w-3 h-3" />
+                Данные обновлены: {new Date(freshness).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                {isStale && <span className="ml-1">(данные могут быть устаревшими)</span>}
+              </div>
+            )}
+            <button
+              onClick={() => {
+                const sections: Parameters<typeof downloadMultiSectionCsv>[1] = [];
+
+                if (riskSummary && riskSummary.length > 0) {
+                  sections.push({
+                    title: 'Сводка по аккаунтам',
+                    headers: ['Аккаунт', 'Название', 'Дней активен', 'Расход', 'Скорость/день', 'Нарушений', 'Банов', 'Кампаний', 'Risk Score'],
+                    rows: riskSummary.map((r) => [r.account_google_id, r.display_name, r.days_active, r.total_spend, r.daily_velocity, r.policy_violations, r.ban_count, r.campaign_count, r.risk_score]),
+                  });
+                }
+
+                if (velocity && velocity.length > 0) {
+                  sections.push({
+                    title: 'Spend Velocity',
+                    headers: ['Аккаунт', 'Название', 'Расход', 'Изм. %', 'Порог', 'Возраст (дн)', 'Валюта', 'Статус'],
+                    rows: velocity.map((v) => [v.account_google_id, v.display_name, v.latest_spend, v.change_pct, v.threshold, v.account_age_days, v.currency, v.status]),
+                  });
+                }
+
+                if (scoring) {
+                  if (scoring.bins.length > 0) {
+                    sections.push({
+                      title: 'BIN Scoring',
+                      headers: ['BIN', 'Всего', 'Забанено', 'Ban Rate %', 'Ср. лайфтайм (ч)', 'Оценка'],
+                      rows: scoring.bins.map((s) => [s.bin, s.total, s.banned, (s.ban_rate * 100).toFixed(1), s.avg_lifetime_hours, s.score]),
+                    });
+                  }
+                  if (scoring.domains.length > 0) {
+                    sections.push({
+                      title: 'Domain Scoring',
+                      headers: ['Домен', 'Всего', 'Забанено', 'Ban Rate %', 'Ср. лайфтайм (ч)', 'Оценка'],
+                      rows: scoring.domains.map((s) => [s.domain, s.total, s.banned, (s.ban_rate * 100).toFixed(1), s.avg_lifetime_hours, s.score]),
+                    });
+                  }
+                  if (scoring.proxies.length > 0) {
+                    sections.push({
+                      title: 'Proxy Scoring',
+                      headers: ['Прокси', 'Всего', 'Забанено', 'Ban Rate %', 'Ср. лайфтайм (ч)', 'Оценка'],
+                      rows: scoring.proxies.map((s) => [s.proxy, s.total, s.banned, (s.ban_rate * 100).toFixed(1), s.avg_lifetime_hours, s.score]),
+                    });
+                  }
+                }
+
+                if (chains && chains.length > 0) {
+                  sections.push({
+                    title: 'Ban Chain — Shared Domains',
+                    headers: ['Домен', 'Аккаунтов', 'Забанено'],
+                    rows: chains.map((c) => [c.domain, c.account_count, c.banned_count]),
+                  });
+                }
+
+                if (decay && decay.length > 0) {
+                  sections.push({
+                    title: 'Creative Decay',
+                    headers: ['Кампания', 'Аккаунт', 'Baseline CTR', 'Текущий CTR', 'Изм. CTR %', 'Деградация', 'Дней в деградации'],
+                    rows: decay.map((d) => [d.campaign_name, d.account_google_id, d.baseline_ctr, d.current_ctr, d.ctr_change_pct, d.decay_detected ? 'Да' : 'Нет', d.days_in_decay]),
+                  });
+                }
+
+                if (competitive?.competitors && competitive.competitors.length > 0) {
+                  sections.push({
+                    title: 'Competitive Intelligence',
+                    headers: ['Домен', 'Impression Share', 'Overlap Rate', 'Аккаунтов', 'Дней активен'],
+                    rows: competitive.competitors.map((c) => [c.domain, c.avg_impression_share, c.avg_overlap_rate, c.accounts_seen_in, c.longevity_days]),
+                  });
+                }
+
+                if (sections.length === 0) return;
+                downloadMultiSectionCsv(`analytics_${new Date().toISOString().slice(0, 10)}.csv`, sections);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
+              style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', color: '#818cf8' }}
+              title="Экспорт всех данных аналитики в CSV"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Скачать CSV
+            </button>
+          </div>
         </div>
       </BlurFade>
 

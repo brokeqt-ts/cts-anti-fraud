@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, ChevronRight, ShieldOff, TrendingUp, Clock, BarChart3 } from 'lucide-react';
+import { Plus, ChevronRight, ShieldOff, TrendingUp, Clock, BarChart3, Download } from 'lucide-react';
 import { fetchBans, fetchOverview, generatePostMortemAll, ApiError, type BanSummary, type OverviewStats, timeAgo, formatBanReason } from '../api.js';
+import { downloadCsv } from '../utils/csv.js';
 import { VerticalBadge, TargetBadge } from '../components/badge.js';
 import { TableSkeleton } from '../components/skeleton.js';
 import {
@@ -66,6 +67,30 @@ export function BansPage() {
             Баны
           </h1>
           <div className="flex gap-2">
+            <button
+              onClick={() => {
+                const headers = ['ID', 'Аккаунт', 'Дата бана', 'Цель', 'Причина', 'Вертикаль', 'Домен', 'Лайфтайм (ч)', 'Тип', 'Закрыт'];
+                const rows = bans.map((b) => [
+                  b.id,
+                  b.account_google_id,
+                  new Date(b.banned_at).toLocaleString('ru-RU'),
+                  b.ban_target,
+                  b.ban_reason ?? b.ban_reason_internal,
+                  b.offer_vertical,
+                  b.domain,
+                  b.lifetime_hours,
+                  b.source ?? 'manual',
+                  b.resolved_at ? new Date(b.resolved_at).toLocaleString('ru-RU') : '',
+                ]);
+                downloadCsv(`bans_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+              style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', color: '#818cf8' }}
+              title="Экспорт в CSV"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Скачать CSV
+            </button>
             <button
               onClick={() => {
                 setPmBulk('loading');

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, ChevronRight, Users } from 'lucide-react';
+import { Search, ChevronRight, Users, Download } from 'lucide-react';
 import { fetchAccounts, ApiError, type AccountSummary, type OverviewStats, fetchOverview, timeAgo, formatCid, riskLevel, effectiveStatus } from '../api.js';
+import { downloadCsv } from '../utils/csv.js';
 import { StatusBadge } from '../components/badge.js';
 import { TableSkeleton } from '../components/skeleton.js';
 import {
@@ -76,7 +77,36 @@ export function AccountsPage() {
   return (
     <div className="py-5 px-6 space-y-1.5">
       <BlurFade>
-        <h1 className="text-lg font-semibold mb-[14px] tracking-tight" style={{ color: 'var(--text-primary)' }}>Аккаунты</h1>
+        <div className="flex items-center justify-between mb-[14px]">
+          <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Аккаунты</h1>
+          <button
+            onClick={() => {
+              const headers = ['Google ID', 'Название', 'Статус', 'Тип', 'Риск', 'Валюта', 'Карта', 'Домен', 'Профиль', 'Баны', 'Уведомления', 'Первый визит', 'Последний визит'];
+              const rows = filteredAccounts.map((acc) => [
+                acc.google_account_id,
+                acc.display_name,
+                effectiveStatus(acc),
+                acc.account_type,
+                riskLevel(acc),
+                acc.currency,
+                acc.card_info,
+                acc.domain,
+                acc.profile_name,
+                acc.ban_count,
+                acc.notifications_count,
+                acc.first_seen ? new Date(acc.first_seen).toLocaleDateString('ru-RU') : null,
+                acc.last_seen ? new Date(acc.last_seen).toLocaleDateString('ru-RU') : null,
+              ]);
+              downloadCsv(`accounts_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+            }}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
+            style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', color: '#818cf8' }}
+            title="Экспорт в CSV"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Скачать CSV
+          </button>
+        </div>
       </BlurFade>
 
       {/* Summary bar */}
