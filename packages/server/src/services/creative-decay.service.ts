@@ -260,9 +260,10 @@ export async function runDecayScanWithAlerts(pool: pg.Pool): Promise<ScanResult>
     );
     const ownerUserId = (ownerResult.rows[0]?.['user_id'] as string) ?? null;
 
-    // Create in-app notification
+    // Create in-app notification — dedup is enforced by notification service
+    let notifyResult = { sent: 0, skipped: false };
     try {
-      await notifyOwnerAndAdmins(pool, ownerUserId, {
+      notifyResult = await notifyOwnerAndAdmins(pool, ownerUserId, {
         type: 'creative_decay',
         severity: decay.severity,
         title: `Creative Decay: ${decay.campaign_name}`,
@@ -277,18 +278,20 @@ export async function runDecayScanWithAlerts(pool: pg.Pool): Promise<ScanResult>
       // notification failure should not block scan
     }
 
-    // Send Telegram alert
-    try {
-      await sendCreativeDecayAlert({
-        accountGoogleId: decay.account_google_id,
-        campaignName: decay.campaign_name,
-        adId: decay.campaign_id,
-        ctrPrevious: decay.ctr_previous * 100,
-        ctrCurrent: decay.ctr_current * 100,
-        declinePercent: decay.decline_percent,
-      });
-    } catch {
-      // telegram failure should not block scan
+    // Send Telegram only if a new notification was actually created (not a dedup skip)
+    if (notifyResult.sent > 0) {
+      try {
+        await sendCreativeDecayAlert({
+          accountGoogleId: decay.account_google_id,
+          campaignName: decay.campaign_name,
+          adId: decay.campaign_id,
+          ctrPrevious: decay.ctr_previous * 100,
+          ctrCurrent: decay.ctr_current * 100,
+          declinePercent: decay.decline_percent,
+        });
+      } catch {
+        // telegram failure should not block scan
+      }
     }
   }
 
