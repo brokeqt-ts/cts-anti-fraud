@@ -1,6 +1,37 @@
 import type { AccountFeatureVector } from '../../../repositories/features.repository.js';
 import type { PredictionResult } from '../../ml/ban-predictor.js';
 
+export interface DomainAnalysisData {
+  domain_name: string;
+  content_risk_score: number | null;
+  keyword_risk_score: number | null;
+  compliance_score: number | null;
+  structure_risk_score: number | null;
+  has_privacy_policy: boolean;
+  has_terms_of_service: boolean;
+  has_disclaimer: boolean;
+  has_age_verification: boolean;
+  has_countdown_timer: boolean;
+  has_fake_reviews: boolean;
+  has_before_after: boolean;
+  has_hidden_text: boolean;
+  redirect_count: number;
+  url_mismatch: boolean;
+  analysis_summary: string | null;
+  red_flags: Array<{ type: string; severity: string; detail?: string }>;
+  keyword_matches: Array<{ keyword: string; vertical: string; severity: string }>;
+}
+
+export interface SimilarAccountsStats {
+  vertical: string;
+  total_accounts: number;
+  banned_count: number;
+  ban_rate_percent: number;
+  avg_lifetime_days: number | null;
+  min_lifetime_days: number | null;
+  common_ban_reasons: string[];
+}
+
 export const ACCOUNT_ANALYSIS_SYSTEM = `Ты — эксперт по антифроду Google Ads для команды медиабаинга.
 Ты анализируешь данные аккаунтов и прогнозируешь риски бана.
 Отвечай ТОЛЬКО на русском языке.
@@ -13,6 +44,8 @@ export function buildAccountAnalysisPrompt(
   notifications: Array<{ title: string; category: string }>,
   campaignSummary: { total: number; active: number; paused: number },
   bestPracticesText?: string,
+  domainAnalysis?: DomainAnalysisData,
+  similarStats?: SimilarAccountsStats,
 ): string {
   return `Проанализируй этот аккаунт Google Ads и оцени риски бана.
 
@@ -58,34 +91,77 @@ ${prediction ? `ML ПРОГНОЗ:
 - Прогноз дней до бана: ${prediction.predicted_days_to_ban ?? 'не определён'}
 - Топ-факторы: ${prediction.top_factors.slice(0, 3).map(f => f.label).join(', ')}` : 'ML прогноз: модель не обучена'}
 
+${domainAnalysis ? `АНАЛИЗ ЛЕНДИНГА (${domainAnalysis.domain_name}):
+- Общий риск контента: ${domainAnalysis.content_risk_score ?? 'нет данных'}/100
+- Риск ключевых слов: ${domainAnalysis.keyword_risk_score ?? 'нет данных'}/100
+- Compliance score: ${domainAnalysis.compliance_score ?? 'нет данных'}/100
+- Структурный риск: ${domainAnalysis.structure_risk_score ?? 'нет данных'}/100
+- Privacy Policy: ${domainAnalysis.has_privacy_policy ? 'есть' : 'ОТСУТСТВУЕТ'}
+- Terms of Service: ${domainAnalysis.has_terms_of_service ? 'есть' : 'ОТСУТСТВУЕТ'}
+- Disclaimer: ${domainAnalysis.has_disclaimer ? 'есть' : 'ОТСУТСТВУЕТ'}
+- Age verification: ${domainAnalysis.has_age_verification ? 'есть' : 'нет'}
+- Countdown timer: ${domainAnalysis.has_countdown_timer ? 'ОБНАРУЖЕН' : 'нет'}
+- Fake reviews: ${domainAnalysis.has_fake_reviews ? 'ОБНАРУЖЕНЫ' : 'нет'}
+- Before/after: ${domainAnalysis.has_before_after ? 'ОБНАРУЖЕНО' : 'нет'}
+- Скрытый текст: ${domainAnalysis.has_hidden_text ? 'ОБНАРУЖЕН' : 'нет'}
+- Редиректов: ${domainAnalysis.redirect_count}${domainAnalysis.url_mismatch ? ' (URL не совпадает с объявлением — ПОДОЗРИТЕЛЬНО)' : ''}
+${domainAnalysis.keyword_matches.length > 0 ? `- Серые ключевые слова: ${domainAnalysis.keyword_matches.slice(0, 5).map(k => `"${k.keyword}" (${k.vertical}, ${k.severity})`).join(', ')}` : ''}
+${domainAnalysis.red_flags.length > 0 ? `- Красные флаги: ${domainAnalysis.red_flags.map(f => `${f.type} [${f.severity}]`).join(', ')}` : ''}
+${domainAnalysis.analysis_summary ? `- Краткий анализ: ${domainAnalysis.analysis_summary}` : ''}` : ''}
+
+${similarStats && similarStats.total_accounts > 0 ? `ПОХОЖИЕ АККАУНТЫ (вертикаль: ${similarStats.vertical}):
+- Всего аналогичных аккаунтов в системе: ${similarStats.total_accounts}
+- Из них забанено: ${similarStats.banned_count} (${similarStats.ban_rate_percent}%)
+- Средний lifetime до бана: ${similarStats.avg_lifetime_days != null ? `${similarStats.avg_lifetime_days} дней` : 'нет данных'}
+- Минимальный lifetime: ${similarStats.min_lifetime_days != null ? `${similarStats.min_lifetime_days} дней` : 'нет данных'}
+${similarStats.common_ban_reasons.length > 0 ? `- Типичные причины банов: ${similarStats.common_ban_reasons.join(', ')}` : ''}` : ''}
+
 ${bestPracticesText ? `МЕТОДИЧКА КОМАНДЫ:
 Сверь настройки аккаунта с методичкой и укажи нарушения в рекомендациях.
 
 ${bestPracticesText}` : ''}
 
-ОТВЕТЬ в формате JSON:
+ОТВЕТЬ в формате JSON (все поля обязательны):
 {
-  "summary_ru": "Краткое резюме на 2-3 предложения",
-  "risk_assessment": "Детальная оценка риска",
-  "immediate_actions": [
+  "risk_level": "LOW|MEDIUM|HIGH|CRITICAL",
+  "summary_ru": "Одна строка: УРОВЕНЬ — главная причина с конкретными значениями",
+  "top_risk_factors": [
     {
-      "priority": "critical|high|medium|low",
-      "action_ru": "Что сделать",
-      "reasoning_ru": "Почему",
+      "factor": "название поля или сигнала",
+      "value": "конкретное значение из данных",
+      "interpretation": "почему это опасно в данном контексте"
+    }
+  ],
+  "risk_assessment": "Детальная оценка с опорой на цифры из данных аккаунта",
+  "actions_today": [
+    {
+      "priority": "critical|high",
+      "action_ru": "Что сделать прямо сейчас",
+      "reasoning_ru": "Почему срочно",
       "estimated_impact": "Ожидаемый эффект"
     }
   ],
-  "strategic_recommendations": [
+  "actions_this_week": [
     {
-      "priority": "critical|high|medium|low",
-      "action_ru": "Что сделать",
-      "reasoning_ru": "Почему",
+      "priority": "medium|low",
+      "action_ru": "Что сделать на этой неделе",
+      "reasoning_ru": "Почему важно",
       "estimated_impact": "Ожидаемый эффект"
     }
   ],
-  "similar_patterns": ["Описание похожих паттернов"],
+  "stable_factors": ["Метрика X в норме — не менять", "..."],
+  "similar_patterns": ["Описание похожих паттернов из истории аккаунтов"],
+  "immediate_actions": [],
+  "strategic_recommendations": [],
   "confidence": "low|medium|high"
-}`;
+}
+
+Правила:
+- top_risk_factors: только значимые отклонения (максимум 5), только с реальными значениями из данных
+- actions_today: только если есть HIGH или CRITICAL факторы, максимум 3 пункта
+- actions_this_week: максимум 4 пункта
+- stable_factors: укажи что работает хорошо и не требует вмешательства
+- immediate_actions и strategic_recommendations оставь пустыми массивами (deprecated)`;
 }
 
 export const BAN_ANALYSIS_SYSTEM = ACCOUNT_ANALYSIS_SYSTEM;

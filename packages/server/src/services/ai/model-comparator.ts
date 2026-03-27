@@ -6,6 +6,8 @@ import type { AiAnalysisResult, AiAnalysisAction } from './analysis-utils.js';
 import {
   ACCOUNT_ANALYSIS_SYSTEM,
   buildAccountAnalysisPrompt,
+  type DomainAnalysisData,
+  type SimilarAccountsStats,
 } from './prompts/account-analysis.prompt.js';
 import { getAccountFeatures } from '../feature-extraction.service.js';
 import { BanPredictor } from '../ml/ban-predictor.js';
@@ -302,13 +304,14 @@ export async function compareModels(
     // optional
   }
 
+  const vertical = (features as unknown as Record<string, string>).offer_vertical ?? '';
+
   // Load relevant best practices for prompt injection
   let bestPracticesText = '';
   try {
-    const vertical = (features as unknown as Record<string, string>).offer_vertical ?? '';
     const bpResult = await pool.query(
       `SELECT title, content, category FROM best_practices
-       WHERE is_active = true
+       WHERE bp.is_active = true
          AND (offer_vertical IS NULL OR offer_vertical = $1)
        ORDER BY priority DESC LIMIT 5`,
       [vertical],
@@ -321,7 +324,108 @@ export async function compareModels(
     }
   } catch { /* optional */ }
 
-  const prompt = buildAccountAnalysisPrompt(features, prediction, notifications, campaignSummary, bestPracticesText);
+  // Load domain content analysis for the account's landing page
+  let domainAnalysis: DomainAnalysisData | undefined;
+  try {
+    const domainResult = await pool.query<Record<string, unknown>>(
+      `SELECT
+         d.domain_name,
+         dca.content_risk_score,
+         dca.keyword_risk_score,
+         dca.compliance_score,
+         dca.structure_risk_score,
+         dca.has_privacy_policy,
+         dca.has_terms_of_service,
+         dca.has_disclaimer,
+         dca.has_age_verification,
+         dca.has_countdown_timer,
+         dca.has_fake_reviews,
+         dca.has_before_after,
+         dca.has_hidden_text,
+         dca.redirect_count,
+         dca.url_mismatch,
+         dca.analysis_summary,
+         COALESCE(dca.red_flags, '[]'::jsonb) AS red_flags,
+         COALESCE(dca.keyword_matches, '[]'::jsonb) AS keyword_matches
+       FROM accounts a
+       JOIN ads ad ON ad.account_google_id = a.google_account_id
+       JOIN domains d ON ad.final_urls::text ILIKE '%' || d.domain_name || '%'
+       JOIN domain_content_analysis dca ON dca.domain = d.domain_name
+       WHERE a.google_account_id = $1
+       ORDER BY dca.analyzed_at DESC
+       LIMIT 1`,
+      [accountGoogleId],
+    );
+    if (domainResult.rows.length > 0) {
+      const r = domainResult.rows[0]!;
+      domainAnalysis = {
+        domain_name: r['domain_name'] as string,
+        content_risk_score: r['content_risk_score'] != null ? Number(r['content_risk_score']) : null,
+        keyword_risk_score: r['keyword_risk_score'] != null ? Number(r['keyword_risk_score']) : null,
+        compliance_score: r['compliance_score'] != null ? Number(r['compliance_score']) : null,
+        structure_risk_score: r['structure_risk_score'] != null ? Number(r['structure_risk_score']) : null,
+        has_privacy_policy: Boolean(r['has_privacy_policy']),
+        has_terms_of_service: Boolean(r['has_terms_of_service']),
+        has_disclaimer: Boolean(r['has_disclaimer']),
+        has_age_verification: Boolean(r['has_age_verification']),
+        has_countdown_timer: Boolean(r['has_countdown_timer']),
+        has_fake_reviews: Boolean(r['has_fake_reviews']),
+        has_before_after: Boolean(r['has_before_after']),
+        has_hidden_text: Boolean(r['has_hidden_text']),
+        redirect_count: Number(r['redirect_count'] ?? 0),
+        url_mismatch: Boolean(r['url_mismatch']),
+        analysis_summary: (r['analysis_summary'] as string | null) ?? null,
+        red_flags: (r['red_flags'] as DomainAnalysisData['red_flags']) ?? [],
+        keyword_matches: (r['keyword_matches'] as DomainAnalysisData['keyword_matches']) ?? [],
+      };
+    }
+  } catch { /* optional — domain analysis may not exist */ }
+
+  // Load similar accounts statistics for context
+  let similarStats: SimilarAccountsStats | undefined;
+  try {
+    if (vertical) {
+      const simResult = await pool.query<Record<string, unknown>>(
+        `SELECT
+           COUNT(DISTINCT a.google_account_id)::int AS total_accounts,
+           COUNT(DISTINCT bl.account_google_id)::int AS banned_count,
+           ROUND(AVG(bl.lifetime_hours)::numeric / 24, 1) AS avg_lifetime_days,
+           ROUND(MIN(bl.lifetime_hours)::numeric / 24, 1) AS min_lifetime_days
+         FROM accounts a
+         LEFT JOIN ban_logs bl ON bl.account_google_id = a.google_account_id
+         WHERE a.offer_vertical = $1
+           AND a.google_account_id != $2`,
+        [vertical, accountGoogleId],
+      );
+      const reasonResult = await pool.query<Record<string, unknown>>(
+        `SELECT ban_reason, COUNT(*)::int AS cnt
+         FROM ban_logs bl
+         JOIN accounts a ON a.google_account_id = bl.account_google_id
+         WHERE a.offer_vertical = $1
+           AND bl.ban_reason IS NOT NULL
+         GROUP BY ban_reason
+         ORDER BY cnt DESC
+         LIMIT 3`,
+        [vertical],
+      );
+      const row = simResult.rows[0];
+      if (row && Number(row['total_accounts']) > 0) {
+        const total = Number(row['total_accounts']);
+        const banned = Number(row['banned_count']);
+        similarStats = {
+          vertical,
+          total_accounts: total,
+          banned_count: banned,
+          ban_rate_percent: total > 0 ? Math.round((banned / total) * 100) : 0,
+          avg_lifetime_days: row['avg_lifetime_days'] != null ? Number(row['avg_lifetime_days']) : null,
+          min_lifetime_days: row['min_lifetime_days'] != null ? Number(row['min_lifetime_days']) : null,
+          common_ban_reasons: reasonResult.rows.map(r => r['ban_reason'] as string),
+        };
+      }
+    }
+  } catch { /* optional */ }
+
+  const prompt = buildAccountAnalysisPrompt(features, prediction, notifications, campaignSummary, bestPracticesText, domainAnalysis, similarStats);
 
   // Get adapters
   let adapters: ModelAdapter[];

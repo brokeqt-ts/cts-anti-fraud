@@ -7,7 +7,20 @@ export interface AiAnalysisAction {
   estimated_impact: string;
 }
 
+export interface AiRiskFactor {
+  factor: string;
+  value: string;
+  interpretation: string;
+}
+
 export interface AiAnalysisResult {
+  // Structured output fields (new)
+  risk_level?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  top_risk_factors?: AiRiskFactor[];
+  actions_today?: AiAnalysisAction[];
+  actions_this_week?: AiAnalysisAction[];
+  stable_factors?: string[];
+  // Legacy fields (kept for backwards compatibility)
   summary_ru: string;
   risk_assessment: string;
   immediate_actions: AiAnalysisAction[];
@@ -29,6 +42,23 @@ export function parseAnalysisResponse(text: string): Omit<AiAnalysisResult, 'mod
   const parsed = JSON.parse(cleaned) as Record<string, unknown>;
 
   return {
+    // Structured output fields
+    risk_level: (['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(parsed['risk_level'] as string)
+      ? parsed['risk_level']
+      : undefined) as AiAnalysisResult['risk_level'],
+    top_risk_factors: Array.isArray(parsed['top_risk_factors'])
+      ? (parsed['top_risk_factors'] as AiRiskFactor[])
+      : undefined,
+    actions_today: Array.isArray(parsed['actions_today'])
+      ? (parsed['actions_today'] as AiAnalysisAction[])
+      : undefined,
+    actions_this_week: Array.isArray(parsed['actions_this_week'])
+      ? (parsed['actions_this_week'] as AiAnalysisAction[])
+      : undefined,
+    stable_factors: Array.isArray(parsed['stable_factors'])
+      ? (parsed['stable_factors'] as string[])
+      : undefined,
+    // Legacy fields
     summary_ru: (parsed['summary_ru'] as string) ?? '',
     risk_assessment: (parsed['risk_assessment'] as string) ?? '',
     immediate_actions: Array.isArray(parsed['immediate_actions'])
