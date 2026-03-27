@@ -495,10 +495,11 @@ describe.skipIf(!HAS_ANY_KEY)('Suspicious domains — Google Ads policy violatio
 
   // ── Gambling vertical ─────────────────────────────────────────────────────
 
-  describe('Gambling sites (must score ≥ 25 and detect keywords)', () => {
+  describe('Gambling sites (must score ≥ 55 and detect keywords)', () => {
     const gamblingDomains: [string, string][] = [
       ['https://1xbet.com', '1xbet.com — sports betting'],
       ['https://vulkanvegas.com', 'vulkanvegas.com — online casino'],
+      ['https://stake.com', 'stake.com — crypto casino (SPA with Cloudflare)'],
     ];
 
     for (const [url, label] of gamblingDomains) {
@@ -517,8 +518,8 @@ describe.skipIf(!HAS_ANY_KEY)('Suspicious domains — Google Ads policy violatio
         console.log(`  Blocklists:     ${result.externalApis?.blocklists.lists.join(', ') || 'none'}`);
         console.log(`  Has Privacy:    ${result.hasPrivacyPolicy}, ToS: ${result.hasTermsOfService}, Contact: ${result.hasContactInfo}`);
 
-        // Gambling sites must score high
-        expect(result.contentRiskScore).toBeGreaterThanOrEqual(25);
+        // Gambling sites must score clearly above 50 (visible separation from safe domains)
+        expect(result.contentRiskScore).toBeGreaterThanOrEqual(55);
 
         // Must detect gambling keywords
         expect(result.keywordRiskScore).toBeGreaterThan(0);
@@ -586,9 +587,10 @@ describe.skipIf(!HAS_ANY_KEY)('Suspicious domains — Google Ads policy violatio
         ['https://github.com', 'github.com (trusted)'],
         ['https://wikipedia.org', 'wikipedia.org (trusted)'],
         ['https://stripe.com', 'stripe.com (trusted)'],
-        // Suspicious
+        // Suspicious gambling
         ['https://1xbet.com', '1xbet.com (gambling)'],
         ['https://vulkanvegas.com', 'vulkanvegas.com (casino)'],
+        ['https://stake.com', 'stake.com (crypto casino, SPA)'],
       ];
 
       for (const [url, label] of toTest) {

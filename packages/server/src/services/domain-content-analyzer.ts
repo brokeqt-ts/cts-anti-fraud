@@ -413,22 +413,39 @@ function scanKeywords(text: string): { matches: KeywordMatch[]; score: number; d
 // This catches obvious gambling/pharma/finance domains even when the site blocks crawling.
 
 const DOMAIN_ONLY_KEYWORDS: KeywordEntry[] = [
-  // Short gambling terms — too common in English text but unambiguous in domain names
+  // ── Gambling — unambiguous in domain context (exact-token only) ──
   { keyword: 'bet', severity: 'warning', vertical: 'gambling' },
   { keyword: 'bets', severity: 'warning', vertical: 'gambling' },
   { keyword: 'gaming', severity: 'warning', vertical: 'gambling' },
   { keyword: 'vegas', severity: 'warning', vertical: 'gambling' },
   { keyword: 'spin', severity: 'warning', vertical: 'gambling' },
   { keyword: 'win', severity: 'warning', vertical: 'gambling' },
-  // Pharma/nutra domain patterns
+  // Crypto casino / online gambling brands and terms
+  { keyword: 'stake', severity: 'critical', vertical: 'gambling' },   // stake.com
+  { keyword: 'crash', severity: 'warning', vertical: 'gambling' },    // crash game type
+  { keyword: 'dice', severity: 'warning', vertical: 'gambling' },     // dice gambling
+  { keyword: 'wager', severity: 'critical', vertical: 'gambling' },   // wagering
+  { keyword: 'wagering', severity: 'critical', vertical: 'gambling' },
+  { keyword: 'sportsbook', severity: 'critical', vertical: 'gambling' },
+  { keyword: 'betway', severity: 'critical', vertical: 'gambling' },  // brand
+  { keyword: 'roobet', severity: 'critical', vertical: 'gambling' },  // brand
+  { keyword: 'rollbit', severity: 'critical', vertical: 'gambling' }, // brand
+  { keyword: 'punt', severity: 'critical', vertical: 'gambling' },    // betting term
+  { keyword: 'punt', severity: 'critical', vertical: 'gambling' },
+  { keyword: 'odds', severity: 'warning', vertical: 'gambling' },
+  { keyword: 'bettor', severity: 'critical', vertical: 'gambling' },
+  // ── Pharma/nutra domain patterns ──
   { keyword: 'pharma', severity: 'critical', vertical: 'nutra' },
   { keyword: 'pills', severity: 'critical', vertical: 'nutra' },
   { keyword: 'diet', severity: 'warning', vertical: 'nutra' },
-  // Finance/loan domain patterns
+  { keyword: 'slim', severity: 'warning', vertical: 'nutra' },
+  { keyword: 'keto', severity: 'warning', vertical: 'nutra' },
+  // ── Finance/loan domain patterns ──
   { keyword: 'loan', severity: 'warning', vertical: 'finance' },
   { keyword: 'loans', severity: 'warning', vertical: 'finance' },
   { keyword: 'forex', severity: 'warning', vertical: 'finance' },
-  { keyword: 'trade', severity: 'warning', vertical: 'finance' },
+  { keyword: 'payday', severity: 'critical', vertical: 'finance' },
+  { keyword: 'lender', severity: 'warning', vertical: 'finance' },
 ];
 
 function scanDomainName(hostname: string): { matches: KeywordMatch[]; score: number; detectedVertical: string | null } {
@@ -457,7 +474,9 @@ function scanDomainName(hostname: string): { matches: KeywordMatch[]; score: num
 
   let score = pageResult.score;
   for (const [, count] of Object.entries(verticalCounts)) {
-    score += count * 5; // each warning token = +10 (2 * 5)
+    // critical token (count=3) → 3*7=21 ≥ threshold(20) → triggers vertical penalty + floor
+    // warning token (count=2) → 2*7=14, two warnings → 28 → also triggers
+    score += count * 7;
   }
   score = Math.min(100, score);
 
@@ -1423,128 +1442,125 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
   }
 
   // ─── Composite risk score ─────────────────────────────────────────────────
-  // Additive model: risk points for bad signals, bonuses for good signals.
-  // Bonuses capped at -30 to prevent infrastructure whitewashing.
+  //
+  // Two-tier model:
+  //   hardRisk — confirmed policy violations and threat intelligence signals.
+  //              Legitimacy bonuses (good DNS, many certs) CANNOT cancel this.
+  //   softRisk — probabilistic indicators (compliance gaps for SPAs, TLD, etc.).
+  //              Legitimacy bonuses CAN partially offset this.
+  //
+  // This prevents a well-established gambling/malware site from scoring 0 just
+  // because it has Cloudflare + SPF + DMARC + thousands of TLS certificates.
 
   const wordCount = text.split(/\s+/).filter(Boolean).length;
   const isBehindCloudflare = (securityHeaders.serverHeader ?? '').toLowerCase().includes('cloudflare')
     || (headers['cf-ray'] != null);
-  // Legitimate SPA = low word count + has analytics/good security (React/Vue app)
-  // Explicitly exclude sites where a prohibited vertical was detected — their compliance
-  // gap is real and should not be masked by Cloudflare infrastructure.
+
+  // Legitimate SPA = low word count + analytics/good security, AND no prohibited
+  // vertical detected. Gambling/nutra SPAs are not "legitimate" in this context.
   const isLegitSpa = wordCount < 50
     && detectedVertical === null
     && (thirdPartyScripts.analytics.length > 0 || securityHeaders.securityScore >= 40);
   const isThinContent = wordCount < 20 && !isLegitSpa;
 
   const complianceAdjusted = Math.min(100, compliance.score + structuredData.legitimacyBonus);
-  let riskPoints = 0;
 
-  // ── Content signals ────────────────────────────────────────────────────
-  // Non-linear keyword scaling — extra penalty for keyword-saturated pages
-  riskPoints += kwScore * 0.35;
-  if (kwScore > 60) riskPoints += 5;
-  if (kwScore > 80) riskPoints += 5;
+  let hardRisk = 0; // uncancellable by bonuses
+  let softRisk = 0; // can be partially offset by legitimacy bonuses
 
-  // Prohibited vertical penalty — explicit +30 when a recognised bad vertical
-  // is detected from either page content or domain name keywords
+  // ── Content / keyword signals ──────────────────────────────────────────
+  softRisk += kwScore * 0.35;
+  if (kwScore > 60) softRisk += 5;
+  if (kwScore > 80) softRisk += 5;
+
+  // Prohibited vertical detected → hard penalty (domain name is itself evidence)
   if (kwScore >= 20 && detectedVertical !== null) {
-    riskPoints += 30;
+    hardRisk += 30;
   }
 
-  // Compliance gaps — only skip for LEGITIMATE SPAs (gambling/nutra sites behind Cloudflare
-  // are NOT legit SPAs even if they look like one to the fetcher)
+  // ── Compliance gaps ────────────────────────────────────────────────────
+  // Full sites with zero compliance → hard risk (not cancellable by DNS bonuses).
+  // Full sites with partial compliance → soft risk.
+  // Legit SPAs → reduced soft risk (JS app may not embed legal pages in HTML).
   if (!isLegitSpa) {
-    riskPoints += (100 - complianceAdjusted) * 0.20;
+    const compliancePenalty = (100 - complianceAdjusted) * 0.20;
+    if (complianceAdjusted === 0) {
+      hardRisk += compliancePenalty; // complete absence of compliance → hard
+    } else {
+      softRisk += compliancePenalty;
+    }
+  } else {
+    // Even for legit SPAs: if ALL compliance items missing, apply a reduced penalty
+    softRisk += (100 - complianceAdjusted) * 0.08;
   }
 
-  // Structural red flags
-  riskPoints += structure.score * 0.15;
+  // ── Structure / redirects ──────────────────────────────────────────────
+  softRisk += structure.score * 0.15;
+  softRisk += redirects.score * 0.15;
+  if (redirects.mismatch) softRisk += 15;
+  if (isThinContent) softRisk += 10;
 
-  // Redirect risk
-  riskPoints += redirects.score * 0.15;
+  // ── Infrastructure signals (soft) ──────────────────────────────────────
+  softRisk += tldRisk.score * 0.10;
+  softRisk += linkReputation.score * 0.05;
+  softRisk += (100 - securityHeaders.securityScore) * 0.02;
+  if (robotsTxt.blocksGooglebot) softRisk += 15;
+  if (formAnalysis.collectsPaymentData) softRisk += 8;
+  if (formAnalysis.externalFormTargets.length > 0) softRisk += 5;
+  softRisk += thirdPartyScripts.suspicious.length * 10;
 
-  // Direct URL mismatch penalty (declared ad URL != final URL)
-  if (redirects.mismatch) riskPoints += 15;
+  // ── Threat intelligence (hard — uncancellable) ─────────────────────────
+  // Safe Browsing flag is a definitive statement from Google.
+  if (safeBrowsing.checked && !safeBrowsing.safe) hardRisk += 40;
 
-  // Thin content penalty (< 20 words, not a legit SPA)
-  if (isThinContent) riskPoints += 10;
-
-  // ── Infrastructure signals ─────────────────────────────────────────────
-  // TLD risk (doubled weight — high-risk TLDs are a strong signal)
-  riskPoints += tldRisk.score * 0.10;
-
-  // Link reputation
-  riskPoints += linkReputation.score * 0.05;
-
-  // Security headers missing
-  riskPoints += (100 - securityHeaders.securityScore) * 0.02;
-
-  // robots.txt
-  if (robotsTxt.blocksGooglebot) riskPoints += 15;
-
-  // Form risks
-  if (formAnalysis.collectsPaymentData) riskPoints += 8;
-  if (formAnalysis.externalFormTargets.length > 0) riskPoints += 5;
-
-  // Suspicious third-party scripts (Keitaro, Binom, etc.)
-  riskPoints += thirdPartyScripts.suspicious.length * 10;
-
-  // ── Threat intelligence ────────────────────────────────────────────────
-  // Safe Browsing
-  if (safeBrowsing.checked && !safeBrowsing.safe) riskPoints += 30;
-
-  // VirusTotal
+  // VirusTotal: malicious detections are hard; suspicious are soft.
   if (virusTotal.checked) {
-    riskPoints += virusTotal.malicious * 5;
-    riskPoints += virusTotal.suspicious * 2;
+    hardRisk += virusTotal.malicious * 20; // was 5 — threat intel must matter
+    softRisk += virusTotal.suspicious * 3;
   }
 
-  // PageSpeed (very slow = suspicious)
+  // PageSpeed (soft indicator)
   if (pageSpeed.checked && pageSpeed.performanceScore != null && pageSpeed.performanceScore < 20) {
-    riskPoints += 5;
+    softRisk += 5;
   }
 
-  // Wayback age
-  if (wayback.checked && !wayback.hasHistory) riskPoints += 8;
-  if (wayback.checked && wayback.domainAgeFromArchive != null && wayback.domainAgeFromArchive < 30) riskPoints += 10;
+  // Wayback age (soft — new domains are risky but not definitively bad)
+  if (wayback.checked && !wayback.hasHistory) softRisk += 8;
+  if (wayback.checked && wayback.domainAgeFromArchive != null && wayback.domainAgeFromArchive < 30) softRisk += 10;
 
   // ── External API signals ───────────────────────────────────────────────
   if (externalApis) {
-    // Blocklists — skip IP-based if behind Cloudflare
+    // Domain blocklists → hard (domain-based lists are reliable)
     if (externalApis.blocklists.checked && externalApis.blocklists.lists.length > 0) {
-      if (isBehindCloudflare) {
-        const domainLists = externalApis.blocklists.lists.filter(l => l.includes('DBL') || l.includes('SURBL') || l.includes('URIBL'));
-        riskPoints += domainLists.length * 15;
-      } else {
-        riskPoints += externalApis.blocklists.lists.length * 15;
-      }
+      const domainLists = isBehindCloudflare
+        ? externalApis.blocklists.lists.filter(l => l.includes('DBL') || l.includes('SURBL') || l.includes('URIBL'))
+        : externalApis.blocklists.lists;
+      hardRisk += domainLists.length * 20;
     }
 
-    // Shodan vulnerabilities — skip if Cloudflare
+    // Shodan, AbuseIPDB → soft (IP reputation, can be shared infra)
     if (!isBehindCloudflare && externalApis.shodan.checked && externalApis.shodan.vulns.length > 0) {
-      riskPoints += Math.min(15, externalApis.shodan.vulns.length * 3);
+      softRisk += Math.min(15, externalApis.shodan.vulns.length * 3);
     }
-
-    // AbuseIPDB — skip if Cloudflare or explicitly whitelisted (major infra IPs)
     if (!isBehindCloudflare && externalApis.abuseIpdb.checked) {
       if (!externalApis.abuseIpdb.isWhitelisted && externalApis.abuseIpdb.abuseScore > 0) {
-        riskPoints += Math.min(15, externalApis.abuseIpdb.abuseScore * 0.15);
+        softRisk += Math.min(15, externalApis.abuseIpdb.abuseScore * 0.15);
       }
     }
 
-    // Malware/Phishing databases (URL-based — always reliable)
-    if (externalApis.urlhaus.checked && externalApis.urlhaus.isMalware) riskPoints += 25;
-    if (externalApis.openPhish.checked && externalApis.openPhish.isPhishing) riskPoints += 25;
+    // Malware / phishing databases → hard
+    if (externalApis.urlhaus.checked && externalApis.urlhaus.isMalware) hardRisk += 35;
+    if (externalApis.openPhish.checked && externalApis.openPhish.isPhishing) hardRisk += 35;
 
-    // Not in Google index
-    if (externalApis.serpApi.checked && !externalApis.serpApi.indexed) riskPoints += 10;
-
-    // Not in CommonCrawl
-    if (externalApis.commonCrawl.checked && !externalApis.commonCrawl.found) riskPoints += 5;
+    // Index signals → soft
+    if (externalApis.serpApi.checked && !externalApis.serpApi.indexed) softRisk += 10;
+    if (externalApis.commonCrawl.checked && !externalApis.commonCrawl.found) softRisk += 5;
   }
 
-  // ── Legitimacy bonuses (FIX 6: capped at -25) ─────────────────────────
+  // ── Legitimacy bonuses ─────────────────────────────────────────────────
+  // These ONLY offset softRisk. They cannot cancel hardRisk.
+  // Cap is tighter (-10) when hard risk signals exist — a gambling site with
+  // 1000 TLS certs and perfect DNS is still a gambling site.
   let bonusPoints = 0;
 
   if (externalApis?.dnsAnalysis.checked) {
@@ -1554,33 +1570,35 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
   }
   if (externalApis?.crtSh.checked && externalApis.crtSh.totalCerts > 10) bonusPoints -= 3;
   if (externalApis?.crtSh.checked && externalApis.crtSh.totalCerts > 50) bonusPoints -= 3;
+  if (externalApis?.crtSh.checked && externalApis.crtSh.totalCerts > 500) bonusPoints -= 3;
   if (wayback.checked && wayback.domainAgeFromArchive != null && wayback.domainAgeFromArchive > 365) bonusPoints -= 5;
   if (wayback.checked && wayback.domainAgeFromArchive != null && wayback.domainAgeFromArchive > 1825) bonusPoints -= 5;
   if (thirdPartyScripts.analytics.length > 0) bonusPoints -= 2;
   if (pageSpeed.checked && pageSpeed.performanceScore != null && pageSpeed.performanceScore >= 80) bonusPoints -= 3;
-  if (virusTotal.checked && virusTotal.malicious === 0 && virusTotal.harmless > 50) bonusPoints -= 5;
-  // High VirusTotal reputation (positive score means the community trusts this domain)
-  if (virusTotal.checked && virusTotal.reputation > 0) bonusPoints -= Math.min(5, Math.floor(virusTotal.reputation / 10));
+  // VirusTotal bonuses ONLY apply when genuinely clean (no malicious AND no suspicious detections)
+  if (virusTotal.checked && virusTotal.malicious === 0 && virusTotal.suspicious === 0) {
+    if (virusTotal.harmless > 50) bonusPoints -= 5;
+    if (virusTotal.reputation > 0) bonusPoints -= Math.min(5, Math.floor(virusTotal.reputation / 10));
+  }
   if (safeBrowsing.checked && safeBrowsing.safe) bonusPoints -= 5;
   if (structuredData.hasJsonLd) bonusPoints -= 2;
   if (structuredData.hasOrganizationSchema) bonusPoints -= 2;
   if (isLegitSpa && securityHeaders.securityScore >= 70) bonusPoints -= 5;
-  // AbuseIPDB whitelisted = explicitly known good infrastructure (Wikimedia, GitHub, etc.)
   if (externalApis?.abuseIpdb.checked && externalApis.abuseIpdb.isWhitelisted) bonusPoints -= 5;
-  // Very large crt.sh cert count = well-established domain
-  if (externalApis?.crtSh.checked && externalApis.crtSh.totalCerts > 500) bonusPoints -= 3;
 
-  riskPoints += Math.max(-30, bonusPoints);
+  // Tighten bonus cap when hard signals are present — infrastructure cannot
+  // whitewash confirmed policy violations or malware flags.
+  const bonusCap = hardRisk > 0 ? -10 : -30;
+  const effectiveSoftRisk = Math.max(0, softRisk + Math.max(bonusCap, bonusPoints));
 
-  // Keyword floor: if a prohibited vertical is detected (from domain name or content),
-  // ensure the composite score reflects it regardless of page fetch outcome.
-  // Floor at 55 — a confirmed gambling/nutra/finance domain must score clearly above 50
-  // so that users can easily distinguish it from safe domains (0–20 range).
+  // ── Keyword floor ──────────────────────────────────────────────────────
+  // A confirmed prohibited vertical (gambling / nutra / finance) must always
+  // score ≥ 55 so users can clearly distinguish it from safe domains (0–20).
   if (kwScore >= 20 && detectedVertical !== null) {
-    riskPoints = Math.max(riskPoints, 55);
+    hardRisk = Math.max(hardRisk, 55);
   }
 
-  const contentRiskScore = Math.min(100, Math.max(0, Math.round(riskPoints)));
+  const contentRiskScore = Math.min(100, Math.max(0, Math.round(hardRisk + effectiveSoftRisk)));
 
   const result: ContentAnalysisResult = {
     url: fullUrl,
