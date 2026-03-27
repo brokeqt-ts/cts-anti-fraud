@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, Bell, BellRing, Copy, MapPin, Database, Shield, LayoutList, Wallet, ExternalLink, Megaphone, Search, BarChart3, Tag, Eye, Star } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Bell, BellRing, Copy, MapPin, Database, Shield, LayoutList, Wallet, ExternalLink, Megaphone, Search, BarChart3, Tag, Eye, Star, Clock, Calendar, ShieldOff, AlertCircle, AlertTriangle } from 'lucide-react';
 import { fetchAccount, patchAccount, generatePostMortem, fetchAccountCompetitiveIntelligence, fetchQualityDistribution, fetchLowQualityKeywords, fetchQualityHistory, ApiError, type AccountDetail, type AccountSummary, type AccountCompetitorRow, type PostMortemData, type CampaignRow, type CampaignMetric, type BillingRow, type AdRow, type KeywordRow, type KeywordDailyStat, type QualityDistributionEntry, type KeywordQualityRow, type QualityScoreSnapshot, timeAgo, formatDateRu, formatCid, riskLevel, effectiveStatus, isSuspendedFromSignal } from '../api.js';
 import { StatusBadge } from '../components/badge.js';
 import { TableSkeleton } from '../components/skeleton.js';
@@ -319,18 +319,16 @@ export function AccountDetailPage() {
         {isSuspended ? <ShimmerBorder color="var(--accent-red)">{headerContent}</ShimmerBorder> : headerContent}
       </StaggerItem>
 
-      {/* Signal Timeline */}
-      {data.signals.length > 0 && (
-        <StaggerItem>
-          <div className="card-static p-[12px_14px]">
-            <h2 className="text-xs font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
-              <Shield className="w-4 h-4 inline-block mr-1.5" strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />
-              Таймлайн сигналов ({data.signals.length})
-            </h2>
-            <SignalTimeline signals={data.signals} />
-          </div>
-        </StaggerItem>
-      )}
+      {/* Event Timeline */}
+      <StaggerItem>
+        <EventTimeline
+          account={acc}
+          bans={data.bans}
+          signals={data.signals}
+          notifCards={allNotifCards}
+          campaigns={data.campaigns ?? []}
+        />
+      </StaggerItem>
 
       {/* Campaigns — hide when empty */}
       {dedupedCampaigns.length > 0 && (
@@ -339,10 +337,10 @@ export function AccountDetailPage() {
         </StaggerItem>
       )}
 
-      {/* Spend Timeline */}
+      {/* Spend Chart */}
       {(data.keyword_daily_stats ?? []).length > 0 && (
         <StaggerItem>
-          <SpendTimeline stats={data.keyword_daily_stats ?? []} currency={(data.campaigns?.[0]?.currency) ?? null} />
+          <SpendChart stats={data.keyword_daily_stats ?? []} currency={(data.campaigns?.[0]?.currency) ?? null} bans={data.bans} />
         </StaggerItem>
       )}
 
@@ -455,40 +453,217 @@ export function AccountDetailPage() {
   );
 }
 
-function SignalTimeline({ signals }: { signals: AccountDetail['signals'] }) {
-  const sorted = [...signals].sort((a, b) => new Date(a.captured_at).getTime() - new Date(b.captured_at).getTime());
+// ── Event Timeline ────────────────────────────────────────
+
+type EventKind = 'created' | 'campaign' | 'ban' | 'suspended' | 'restored' | 'critical' | 'warning';
+
+interface LifeEvent {
+  id: string;
+  ts: Date;
+  kind: EventKind;
+  title: string;
+  detail?: string;
+}
+
+const EVENT_STYLE: Record<EventKind, { color: string; bg: string }> = {
+  created:   { color: '#4ade80', bg: 'rgba(34,197,94,0.12)' },
+  campaign:  { color: '#60a5fa', bg: 'rgba(59,130,246,0.12)' },
+  ban:       { color: '#f87171', bg: 'rgba(239,68,68,0.14)' },
+  suspended: { color: '#fbbf24', bg: 'rgba(245,158,11,0.12)' },
+  restored:  { color: '#4ade80', bg: 'rgba(34,197,94,0.12)' },
+  critical:  { color: '#f87171', bg: 'rgba(239,68,68,0.10)' },
+  warning:   { color: '#fbbf24', bg: 'rgba(245,158,11,0.10)' },
+};
+
+function EventIcon({ kind, size = 14 }: { kind: EventKind; size?: number }) {
+  const s = size;
+  const props = { style: { width: s, height: s }, strokeWidth: 1.8 };
+  if (kind === 'created')   return <Calendar {...props} />;
+  if (kind === 'campaign')  return <LayoutList {...props} />;
+  if (kind === 'ban')       return <ShieldOff {...props} />;
+  if (kind === 'suspended') return <AlertCircle {...props} />;
+  if (kind === 'restored')  return <CheckCircle {...props} />;
+  if (kind === 'critical')  return <AlertCircle {...props} />;
+  return <AlertTriangle {...props} />;
+}
+
+function buildLifeEvents(
+  account: Record<string, unknown>,
+  bans: import('../api.js').BanSummary[],
+  signals: AccountDetail['signals'],
+  notifCards: Array<NotifCard & { id: string; captured_at: string }>,
+  campaigns: CampaignRow[],
+): LifeEvent[] {
+  const events: LifeEvent[] = [];
+
+  // Account created
+  if (account['created_at']) {
+    events.push({
+      id: 'created',
+      ts: new Date(account['created_at'] as string),
+      kind: 'created',
+      title: 'Аккаунт создан',
+      detail: (account['display_name'] as string | null) ?? undefined,
+    });
+  }
+
+  // First campaign start per campaign_id
+  const dedupedCampaignsForTimeline = deduplicateCampaigns(campaigns);
+  for (const c of dedupedCampaignsForTimeline) {
+    const ts = parseGadsDate(c.start_date);
+    if (ts && !isNaN(ts.getTime())) {
+      const typeLabel = CAMPAIGN_TYPE_LABELS[String(c.campaign_type)] ?? null;
+      events.push({
+        id: `campaign-${c.campaign_id}`,
+        ts,
+        kind: 'campaign',
+        title: `Кампания запущена${typeLabel ? ` (${typeLabel})` : ''}`,
+        detail: c.campaign_name ?? c.campaign_id,
+      });
+    }
+  }
+
+  // Bans
+  for (const b of bans) {
+    if (!b.banned_at) continue;
+    events.push({
+      id: `ban-${b.id}`,
+      ts: new Date(b.banned_at),
+      kind: 'ban',
+      title: 'Аккаунт забанен',
+      detail: [b.ban_reason ?? b.ban_reason_internal, b.lifetime_hours != null ? `${b.lifetime_hours}ч lifetime` : null].filter(Boolean).join(' · ') || undefined,
+    });
+  }
+
+  // Suspension / restoration signals
+  for (const s of signals) {
+    const isSusp = isSuspendedFromSignal(s.signal_value);
+    events.push({
+      id: `signal-${s.id}`,
+      ts: new Date(s.captured_at),
+      kind: isSusp ? 'suspended' : 'restored',
+      title: isSusp ? 'Аккаунт приостановлен' : 'Сигнал восстановления',
+    });
+  }
+
+  // Critical notifications (up to 8 most recent)
+  const crits = notifCards.filter(c => c.category === 'CRITICAL').slice(0, 8);
+  for (const c of crits) {
+    events.push({
+      id: `notif-crit-${c.id}`,
+      ts: new Date(c.captured_at),
+      kind: 'critical',
+      title: c.title,
+      detail: c.description || undefined,
+    });
+  }
+
+  // Warning notifications (up to 5)
+  const warns = notifCards.filter(c => c.category === 'WARNING').slice(0, 5);
+  for (const c of warns) {
+    events.push({
+      id: `notif-warn-${c.id}`,
+      ts: new Date(c.captured_at),
+      kind: 'warning',
+      title: c.title,
+      detail: c.description || undefined,
+    });
+  }
+
+  // Sort descending (newest first)
+  return events.sort((a, b) => b.ts.getTime() - a.ts.getTime());
+}
+
+function EventTimeline({
+  account,
+  bans,
+  signals,
+  notifCards,
+  campaigns,
+}: {
+  account: Record<string, unknown>;
+  bans: import('../api.js').BanSummary[];
+  signals: AccountDetail['signals'];
+  notifCards: Array<NotifCard & { id: string; captured_at: string }>;
+  campaigns: CampaignRow[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const LIMIT = 7;
+
+  const events = buildLifeEvents(account, bans, signals, notifCards, campaigns);
+  if (events.length === 0) return null;
+
+  const shown = expanded ? events : events.slice(0, LIMIT);
+  const hidden = events.length - LIMIT;
+
   return (
-    <div className="overflow-x-auto">
-      <div className="flex items-center gap-0 min-w-fit">
-        {sorted.map((s, i) => {
-          const isTrue = isSuspendedFromSignal(s.signal_value);
-          return (
-            <div key={s.id} className="flex items-center">
-              <div className="flex flex-col items-center">
-                <div className="rounded-full flex-shrink-0" style={{ width: 12, height: 12, background: isTrue ? 'rgba(239,68,68,0.6)' : 'rgba(34,197,94,0.6)', boxShadow: isTrue ? '0 0 8px rgba(239,68,68,0.3)' : '0 0 8px rgba(34,197,94,0.3)' }} />
-                <span className="text-xs mt-1.5 whitespace-nowrap" style={{ color: 'var(--text-muted)', fontSize: 9 }}>
-                  {new Date(s.captured_at).toLocaleDateString('ru-RU', { month: 'short', day: 'numeric' })}
-                </span>
-                <span className="text-xs whitespace-nowrap" style={{ color: 'var(--text-muted)', fontSize: 8 }}>
-                  {new Date(s.captured_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-                </span>
+    <div className="card-static p-[12px_14px]">
+      <h2 className="text-xs font-medium mb-3" style={{ color: 'var(--text-secondary)' }}>
+        <Clock className="w-4 h-4 inline-block mr-1.5" strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />
+        Timeline событий ({events.length})
+      </h2>
+
+      <div className="relative pl-7">
+        {/* Vertical connector line */}
+        <div
+          className="absolute left-[10px] top-2 bottom-2 w-px"
+          style={{ background: 'var(--border-subtle)' }}
+        />
+
+        <div className="space-y-1">
+          {shown.map((e) => {
+            const s = EVENT_STYLE[e.kind];
+            return (
+              <div key={e.id} className="relative flex items-start gap-2.5 pb-2.5">
+                {/* Dot / icon */}
+                <div
+                  className="absolute -left-7 flex items-center justify-center rounded-full flex-shrink-0"
+                  style={{
+                    width: 22,
+                    height: 22,
+                    background: s.bg,
+                    border: `1px solid ${s.color}40`,
+                    color: s.color,
+                    top: 1,
+                  }}
+                >
+                  <EventIcon kind={e.kind} size={12} />
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                    <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+                      {e.title}
+                    </span>
+                    <span className="text-xs flex-shrink-0 tabular-nums" style={{ color: 'var(--text-muted)', fontSize: 10 }}>
+                      {e.ts.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: '2-digit' })}
+                      {' '}
+                      {e.ts.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  {e.detail && (
+                    <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
+                      {e.detail}
+                    </p>
+                  )}
+                </div>
               </div>
-              {i < sorted.length - 1 && (
-                <div className="flex-shrink-0 mx-1" style={{ width: 32, height: 2, background: 'var(--border-subtle)' }} />
-              )}
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex items-center gap-4 mt-3">
-        <div className="flex items-center gap-1.5">
-          <div className="rounded-full" style={{ width: 6, height: 6, background: 'rgba(34,197,94,0.6)' }} />
-          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Активен</span>
+            );
+          })}
         </div>
-        <div className="flex items-center gap-1.5">
-          <div className="rounded-full" style={{ width: 6, height: 6, background: 'rgba(239,68,68,0.6)' }} />
-          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Заблокирован</span>
-        </div>
+
+        {events.length > LIMIT && (
+          <button
+            onClick={() => setExpanded(v => !v)}
+            className="text-xs transition-colors"
+            style={{ color: 'var(--text-muted)', marginTop: 2 }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}
+          >
+            {expanded ? '↑ Свернуть' : `↓ Ещё ${hidden} событий`}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -911,51 +1086,111 @@ function KeywordsSection({ keywords }: { keywords: KeywordRow[] }) {
   );
 }
 
-/* ── Spend Timeline ──────────────────────────────────────── */
+/* ── Spend Chart (SVG area chart) ────────────────────────── */
 
-function SpendTimeline({ stats, currency }: { stats: KeywordDailyStat[]; currency: string | null }) {
-  // Group by date, pick stats.cost (or stats.clicks for fallback)
+function SpendChart({ stats, currency, bans }: { stats: KeywordDailyStat[]; currency: string | null; bans: import('../api.js').BanSummary[] }) {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+
   const costByDate = new Map<string, number>();
   const clicksByDate = new Map<string, number>();
   const impressionsByDate = new Map<string, number>();
-
   for (const s of stats) {
-    const val = s.metric_value != null ? Number(s.metric_value) : 0;
-    if (s.metric_name === 'stats.cost') costByDate.set(s.date, (costByDate.get(s.date) ?? 0) + val);
-    if (s.metric_name === 'stats.clicks') clicksByDate.set(s.date, (clicksByDate.get(s.date) ?? 0) + val);
-    if (s.metric_name === 'stats.impressions') impressionsByDate.set(s.date, (impressionsByDate.get(s.date) ?? 0) + val);
+    const v = s.metric_value != null ? Number(s.metric_value) : 0;
+    if (s.metric_name === 'stats.cost') costByDate.set(s.date, (costByDate.get(s.date) ?? 0) + v);
+    if (s.metric_name === 'stats.clicks') clicksByDate.set(s.date, (clicksByDate.get(s.date) ?? 0) + v);
+    if (s.metric_name === 'stats.impressions') impressionsByDate.set(s.date, (impressionsByDate.get(s.date) ?? 0) + v);
   }
 
-  // Use cost if available, otherwise clicks
   const hasCost = costByDate.size > 0;
-  const dataMap = hasCost ? costByDate : clicksByDate;
-  const metricLabel = hasCost ? 'Расход' : 'Клики';
-
-  const dates = [...dataMap.keys()].sort();
+  const dates = [...(hasCost ? costByDate : clicksByDate).keys()].sort();
   if (dates.length === 0) return null;
 
-  const values = dates.map(d => dataMap.get(d) ?? 0);
+  const values = dates.map(d => (hasCost ? costByDate.get(d) ?? 0 : clicksByDate.get(d) ?? 0));
   const maxVal = Math.max(...values, 1);
-
   const sym = currency === 'EUR' ? '€' : currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '';
-  const formatVal = (v: number) => hasCost ? `${sym}${(v / 1_000_000).toFixed(2)}` : String(Math.round(v));
+  const fmtCost = (v: number) => `${sym}${(v / 1_000_000).toFixed(2)}`;
+  const fmtVal = (v: number) => hasCost ? fmtCost(v) : v.toLocaleString();
 
-  // Summary
   const totalCost = [...costByDate.values()].reduce((a, b) => a + b, 0);
   const totalClicks = [...clicksByDate.values()].reduce((a, b) => a + b, 0);
   const totalImpressions = [...impressionsByDate.values()].reduce((a, b) => a + b, 0);
 
+  // SVG layout
+  const VW = 1000;
+  const VH = 175;
+  const PAD = { top: 12, right: 18, bottom: 34, left: 58 };
+  const cW = VW - PAD.left - PAD.right;
+  const cH = VH - PAD.top - PAD.bottom;
+  const bottom = PAD.top + cH;
+
+  const xPos = (i: number) => PAD.left + (dates.length > 1 ? (i / (dates.length - 1)) * cW : cW / 2);
+  const yPos = (v: number) => bottom - Math.max(0, Math.min(1, v / maxVal)) * cH;
+
+  // Paths
+  const pts = dates.map((_, i) => `${xPos(i).toFixed(1)},${yPos(values[i] ?? 0).toFixed(1)}`);
+  const linePath = pts.map((p, i) => (i === 0 ? `M${p}` : `L${p}`)).join(' ');
+  const areaPath = `${linePath} L${xPos(dates.length - 1).toFixed(1)},${bottom} L${xPos(0).toFixed(1)},${bottom} Z`;
+
+  // Y-axis ticks (4 levels)
+  const yTicks = [0.25, 0.5, 0.75, 1.0].map(f => ({
+    y: yPos(maxVal * f),
+    label: fmtVal(maxVal * f),
+  }));
+
+  // X-axis labels (sparse — at most 8)
+  const xStep = Math.max(1, Math.ceil(dates.length / 7));
+  const xLabels = dates
+    .map((d, i) => ({ d, i }))
+    .filter(({ i }) => i === 0 || i === dates.length - 1 || i % xStep === 0)
+    .map(({ d, i }) => ({
+      x: xPos(i),
+      label: new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }),
+    }));
+
+  // Ban markers — find nearest date index for each ban
+  const banMarkers: Array<{ x: number; date: string }> = [];
+  for (const b of bans) {
+    if (!b.banned_at) continue;
+    const bd = b.banned_at.slice(0, 10);
+    let best = -1, bestDiff = Infinity;
+    dates.forEach((d, i) => {
+      const diff = Math.abs(new Date(d).getTime() - new Date(bd).getTime());
+      if (diff < bestDiff) { bestDiff = diff; best = i; }
+    });
+    if (best >= 0 && bestDiff < 7 * 86400_000) {
+      banMarkers.push({ x: xPos(best), date: bd });
+    }
+  }
+
+  // Hover
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!svgRef.current || dates.length === 0) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const svgX = ((e.clientX - rect.left) / rect.width) * VW;
+    const idx = Math.round(((svgX - PAD.left) / cW) * (dates.length - 1));
+    setHovered(Math.max(0, Math.min(dates.length - 1, idx)));
+  };
+
+  const hDate = hovered !== null ? dates[hovered] : null;
+  const hVal = hovered !== null ? (values[hovered] ?? 0) : 0;
+  const hClicks = hDate ? (clicksByDate.get(hDate) ?? 0) : 0;
+  // Tooltip left%: clamp so it doesn't overflow
+  const tooltipLeft = hovered !== null
+    ? Math.min(Math.max(2, (xPos(hovered) / VW) * 100 - 6), 68)
+    : 0;
+
   return (
     <div className="card-static p-[12px_14px]">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-2">
         <h2 className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
           <BarChart3 className="w-4 h-4 inline-block mr-1.5" strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />
-          {metricLabel} по дням ({dates.length} дн.)
+          {hasCost ? 'Расход' : 'Клики'} по дням ({dates.length} дн.)
         </h2>
         <div className="flex items-center gap-3">
           {totalCost > 0 && (
             <span className="text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
-              Расход: {sym}{(totalCost / 1_000_000).toFixed(2)}
+              Итого: {sym}{(totalCost / 1_000_000).toFixed(2)}
             </span>
           )}
           <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
@@ -966,39 +1201,100 @@ function SpendTimeline({ stats, currency }: { stats: KeywordDailyStat[]; currenc
           </span>
         </div>
       </div>
-      <div className="flex items-end gap-[2px]" style={{ height: 80 }}>
-        {dates.map((date, i) => {
-          const val = values[i] ?? 0;
-          const pct = Math.max((val / maxVal) * 100, 2);
-          const dateObj = new Date(date);
-          const dayLabel = dateObj.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
-          return (
-            <div key={date} className="flex flex-col items-center flex-1 min-w-0 group" title={`${dayLabel}: ${formatVal(val)}`}>
-              <div
-                className="w-full rounded-t transition-all"
-                style={{
-                  height: `${pct}%`,
-                  minHeight: 2,
-                  background: 'rgba(59,130,246,0.5)',
-                  border: '1px solid rgba(59,130,246,0.3)',
-                  borderBottom: 'none',
-                }}
-              />
+
+      <div className="relative" style={{ userSelect: 'none' }}>
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${VW} ${VH}`}
+          style={{ width: '100%', display: 'block' }}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={() => setHovered(null)}
+        >
+          {/* Grid lines + Y labels */}
+          {yTicks.map((t, i) => (
+            <g key={i}>
+              <line x1={PAD.left} y1={t.y} x2={VW - PAD.right} y2={t.y}
+                stroke="var(--border-subtle)" strokeWidth={0.6} strokeDasharray="4,4" />
+              <text x={PAD.left - 6} y={t.y + 4} textAnchor="end"
+                fontSize={10} fill="var(--text-muted)" fontFamily="monospace">{t.label}</text>
+            </g>
+          ))}
+
+          {/* Area fill */}
+          <path d={areaPath} fill="rgba(59,130,246,0.07)" />
+
+          {/* Line */}
+          <path d={linePath} fill="none" stroke="rgba(59,130,246,0.65)" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+
+          {/* Ban markers */}
+          {banMarkers.map((m, i) => (
+            <g key={i}>
+              <line x1={m.x} y1={PAD.top} x2={m.x} y2={bottom}
+                stroke="rgba(239,68,68,0.45)" strokeWidth={1.5} strokeDasharray="3,3" />
+              <rect x={m.x - 12} y={PAD.top} width={24} height={13} rx={2}
+                fill="rgba(239,68,68,0.15)" />
+              <text x={m.x} y={PAD.top + 9.5} textAnchor="middle"
+                fontSize={8.5} fill="#f87171" fontWeight="600">БАН</text>
+            </g>
+          ))}
+
+          {/* X-axis line */}
+          <line x1={PAD.left} y1={bottom} x2={VW - PAD.right} y2={bottom}
+            stroke="var(--border-subtle)" strokeWidth={0.6} />
+
+          {/* X labels */}
+          {xLabels.map((l, i) => (
+            <text key={i} x={l.x} y={bottom + 16} textAnchor="middle"
+              fontSize={10} fill="var(--text-muted)">{l.label}</text>
+          ))}
+
+          {/* Hover crosshair + dot */}
+          {hovered !== null && (
+            <g>
+              <line x1={xPos(hovered)} y1={PAD.top} x2={xPos(hovered)} y2={bottom}
+                stroke="var(--border-hover)" strokeWidth={1} />
+              <circle cx={xPos(hovered)} cy={yPos(hVal)} r={4.5}
+                fill="rgba(59,130,246,0.9)" stroke="var(--bg-base)" strokeWidth={2} />
+            </g>
+          )}
+        </svg>
+
+        {/* Floating tooltip */}
+        {hovered !== null && hDate && (
+          <div
+            style={{
+              position: 'absolute',
+              left: `${tooltipLeft}%`,
+              top: 6,
+              background: 'var(--bg-raised)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 6,
+              padding: '6px 10px',
+              pointerEvents: 'none',
+              zIndex: 20,
+              minWidth: 110,
+            }}
+          >
+            <div className="text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+              {new Date(hDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
             </div>
-          );
-        })}
-      </div>
-      <div className="flex gap-[2px] mt-1">
-        {dates.map((date) => {
-          const dateObj = new Date(date);
-          return (
-            <div key={date} className="flex-1 min-w-0 text-center">
-              <span className="text-xs" style={{ color: 'var(--text-muted)', fontSize: 8 }}>
-                {dateObj.getDate()}
-              </span>
-            </div>
-          );
-        })}
+            {hasCost && (
+              <div className="text-xs font-mono" style={{ color: '#60a5fa' }}>
+                {fmtCost(hVal)}
+              </div>
+            )}
+            {!hasCost && (
+              <div className="text-xs font-mono" style={{ color: '#60a5fa' }}>
+                {hVal.toLocaleString()} кликов
+              </div>
+            )}
+            {hasCost && (
+              <div className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                {hClicks.toLocaleString()} кликов
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
