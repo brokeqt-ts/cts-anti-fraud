@@ -407,6 +407,71 @@ function scanKeywords(text: string): { matches: KeywordMatch[]; score: number; d
   return { matches, score, detectedVertical };
 }
 
+// ─── Domain-name keyword scanner (fallback when HTML fetch fails/blocked) ─────
+// Scans only the domain name tokens against GREY_KEYWORDS + domain-specific patterns.
+// Uses exact-token matching to avoid substring false positives (e.g., "bet" in "better").
+// This catches obvious gambling/pharma/finance domains even when the site blocks crawling.
+
+const DOMAIN_ONLY_KEYWORDS: KeywordEntry[] = [
+  // Short gambling terms — too common in English text but unambiguous in domain names
+  { keyword: 'bet', severity: 'warning', vertical: 'gambling' },
+  { keyword: 'bets', severity: 'warning', vertical: 'gambling' },
+  { keyword: 'gaming', severity: 'warning', vertical: 'gambling' },
+  { keyword: 'vegas', severity: 'warning', vertical: 'gambling' },
+  { keyword: 'spin', severity: 'warning', vertical: 'gambling' },
+  { keyword: 'win', severity: 'warning', vertical: 'gambling' },
+  // Pharma/nutra domain patterns
+  { keyword: 'pharma', severity: 'critical', vertical: 'nutra' },
+  { keyword: 'pills', severity: 'critical', vertical: 'nutra' },
+  { keyword: 'diet', severity: 'warning', vertical: 'nutra' },
+  // Finance/loan domain patterns
+  { keyword: 'loan', severity: 'warning', vertical: 'finance' },
+  { keyword: 'loans', severity: 'warning', vertical: 'finance' },
+  { keyword: 'forex', severity: 'warning', vertical: 'finance' },
+  { keyword: 'trade', severity: 'warning', vertical: 'finance' },
+];
+
+function scanDomainName(hostname: string): { matches: KeywordMatch[]; score: number; detectedVertical: string | null } {
+  // Strip TLD and expand hyphenated/dot-separated parts: "vulkan-vegas.com" → ["vulkan", "vegas"]
+  const withoutTld = hostname.replace(/\.[^.]+$/, '');
+  const tokens = withoutTld.toLowerCase().split(/[-_.]+/).filter(Boolean);
+  const tokenSet = new Set(tokens);
+  const fullName = tokens.join(' ');
+
+  const matches: KeywordMatch[] = [];
+  const verticalCounts: Record<string, number> = {};
+
+  // Run GREY_KEYWORDS (substring match on the full expanded name — works for "1xbet", "casino")
+  const pageResult = scanKeywords(fullName);
+  matches.push(...pageResult.matches);
+
+  // Run DOMAIN_ONLY_KEYWORDS — exact token match only (prevents "win" matching "darwin")
+  for (const entry of DOMAIN_ONLY_KEYWORDS) {
+    if (!tokenSet.has(entry.keyword)) continue;
+    // Skip if already found by page scan
+    if (matches.some((m) => m.keyword === entry.keyword)) continue;
+    matches.push({ keyword: entry.keyword, vertical: entry.vertical, severity: entry.severity, context: hostname });
+    verticalCounts[entry.vertical] = (verticalCounts[entry.vertical] ?? 0) +
+      (entry.severity === 'critical' ? 3 : entry.severity === 'warning' ? 2 : 1);
+  }
+
+  let score = pageResult.score;
+  for (const [, count] of Object.entries(verticalCounts)) {
+    score += count * 5; // each warning token = +10 (2 * 5)
+  }
+  score = Math.min(100, score);
+
+  let detectedVertical: string | null = pageResult.detectedVertical;
+  if (!detectedVertical) {
+    let maxCount = 0;
+    for (const [v, c] of Object.entries(verticalCounts)) {
+      if (c > maxCount && v !== 'generic') { maxCount = c; detectedVertical = v; }
+    }
+  }
+
+  return { matches, score, detectedVertical };
+}
+
 // ─── Compliance checker ───────────────────────────────────────────────────────
 
 interface ComplianceResult {
@@ -1306,12 +1371,24 @@ function buildLlmContext(result: ContentAnalysisResult): { summary: string; cont
 
 export async function analyzeContent(url: string, declaredUrl?: string): Promise<ContentAnalysisResult> {
   const fullUrl = url.startsWith('http') ? url : `https://${url}`;
+  // Input domain is used for TLD scoring (not the redirected destination)
+  const inputDomain = new URL(fullUrl).hostname.replace(/^www\./, '');
+
   const fetchResult = await fetchWithRedirects(fullUrl);
   const { html, finalUrl, redirectChain, headers } = fetchResult;
 
   const text = extractText(html);
   const links = extractLinks(html, finalUrl);
-  const { matches, score: kwScore, detectedVertical } = scanKeywords(text);
+  const pageKw = scanKeywords(text);
+  // Always scan the domain name itself — catches blocked/JS-only sites
+  const domainKw = scanDomainName(inputDomain);
+  // Merge: deduplicate by keyword, prefer higher severity
+  const seenKw = new Set(pageKw.matches.map((m) => m.keyword));
+  const extraMatches = domainKw.matches.filter((m) => !seenKw.has(m.keyword));
+  const matches = [...pageKw.matches, ...extraMatches];
+  const kwScore = Math.min(100, pageKw.score + domainKw.score);
+  const detectedVertical = pageKw.detectedVertical ?? domainKw.detectedVertical;
+
   const compliance = checkCompliance(html, text);
   const structure = analyzeStructure(html, text);
   const redirects = analyzeRedirects(redirectChain, declaredUrl);
@@ -1319,7 +1396,8 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
   // Level 1 analyzers (local)
   const securityHeaders = analyzeSecurityHeaders(headers);
   const domain = new URL(finalUrl).hostname.replace(/^www\./, '');
-  const tldRisk = scoreTld(domain);
+  // Use input domain for TLD — redirected destination may be on a different TLD
+  const tldRisk = scoreTld(inputDomain);
   const formAnalysis = analyzeForms(html, finalUrl);
   const thirdPartyScripts = catalogScripts(html, finalUrl);
   const linkReputation = checkLinkReputation(links.outboundDomains);
@@ -1346,14 +1424,16 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
 
   // ─── Composite risk score ─────────────────────────────────────────────────
   // Additive model: risk points for bad signals, bonuses for good signals.
-  // Bonuses capped at -25 to prevent infrastructure whitewashing.
+  // Bonuses capped at -30 to prevent infrastructure whitewashing.
 
   const wordCount = text.split(/\s+/).filter(Boolean).length;
   const isBehindCloudflare = (securityHeaders.serverHeader ?? '').toLowerCase().includes('cloudflare')
     || (headers['cf-ray'] != null);
-  // Legitimate SPA = low word count BUT has analytics/good security (React/Vue app)
-  // TDS/empty page = low word count AND no analytics/bad security
+  // Legitimate SPA = low word count + has analytics/good security (React/Vue app)
+  // Explicitly exclude sites where a prohibited vertical was detected — their compliance
+  // gap is real and should not be masked by Cloudflare infrastructure.
   const isLegitSpa = wordCount < 50
+    && detectedVertical === null
     && (thirdPartyScripts.analytics.length > 0 || securityHeaders.securityScore >= 40);
   const isThinContent = wordCount < 20 && !isLegitSpa;
 
@@ -1361,31 +1441,38 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
   let riskPoints = 0;
 
   // ── Content signals ────────────────────────────────────────────────────
-  // FIX 4: Non-linear keyword scaling — extra penalty for keyword-saturated pages
-  riskPoints += kwScore * 0.20;
+  // Non-linear keyword scaling — extra penalty for keyword-saturated pages
+  riskPoints += kwScore * 0.35;
   if (kwScore > 60) riskPoints += 5;
   if (kwScore > 80) riskPoints += 5;
 
-  // FIX 2: Compliance gaps — only skip for LEGITIMATE SPAs, not TDS/empty pages
+  // Prohibited vertical penalty — explicit +30 when a recognised bad vertical
+  // is detected from either page content or domain name keywords
+  if (kwScore >= 20 && detectedVertical !== null) {
+    riskPoints += 30;
+  }
+
+  // Compliance gaps — only skip for LEGITIMATE SPAs (gambling/nutra sites behind Cloudflare
+  // are NOT legit SPAs even if they look like one to the fetcher)
   if (!isLegitSpa) {
-    riskPoints += (100 - complianceAdjusted) * 0.10;
+    riskPoints += (100 - complianceAdjusted) * 0.20;
   }
 
   // Structural red flags
   riskPoints += structure.score * 0.15;
 
-  // FIX 1: Redirect risk — increased from 0.05 to 0.15
+  // Redirect risk
   riskPoints += redirects.score * 0.15;
 
-  // FIX 5: Direct URL mismatch penalty (declared ad URL != final URL)
+  // Direct URL mismatch penalty (declared ad URL != final URL)
   if (redirects.mismatch) riskPoints += 15;
 
-  // FIX 3: Thin content penalty (< 20 words, not a legit SPA)
+  // Thin content penalty (< 20 words, not a legit SPA)
   if (isThinContent) riskPoints += 10;
 
   // ── Infrastructure signals ─────────────────────────────────────────────
-  // TLD risk
-  riskPoints += tldRisk.score * 0.05;
+  // TLD risk (doubled weight — high-risk TLDs are a strong signal)
+  riskPoints += tldRisk.score * 0.10;
 
   // Link reputation
   riskPoints += linkReputation.score * 0.05;
@@ -1484,6 +1571,14 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
   if (externalApis?.crtSh.checked && externalApis.crtSh.totalCerts > 500) bonusPoints -= 3;
 
   riskPoints += Math.max(-30, bonusPoints);
+
+  // Keyword floor: if a prohibited vertical is detected (from domain name or content),
+  // ensure the composite score reflects it regardless of page fetch outcome.
+  // Floor at 55 — a confirmed gambling/nutra/finance domain must score clearly above 50
+  // so that users can easily distinguish it from safe domains (0–20 range).
+  if (kwScore >= 20 && detectedVertical !== null) {
+    riskPoints = Math.max(riskPoints, 55);
+  }
 
   const contentRiskScore = Math.min(100, Math.max(0, Math.round(riskPoints)));
 

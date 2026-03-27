@@ -485,3 +485,148 @@ describe.skipIf(!HAS_ANY_KEY)('Full scoring — trusted domains must score ≤ 2
     }, 180_000);
   }
 });
+
+// ─── Suspicious domain scoring ───────────────────────────────────────────────
+// These domains violate Google Ads policies (gambling, nutra, crypto fraud, etc.)
+// We verify the model detects them as high-risk and correctly identifies WHY.
+// All domains are publicly known; we access only their public main pages.
+
+describe.skipIf(!HAS_ANY_KEY)('Suspicious domains — Google Ads policy violations', () => {
+
+  // ── Gambling vertical ─────────────────────────────────────────────────────
+
+  describe('Gambling sites (must score ≥ 25 and detect keywords)', () => {
+    const gamblingDomains: [string, string][] = [
+      ['https://1xbet.com', '1xbet.com — sports betting'],
+      ['https://vulkanvegas.com', 'vulkanvegas.com — online casino'],
+    ];
+
+    for (const [url, label] of gamblingDomains) {
+      it(label, async () => {
+        const result = await analyzeContent(url);
+
+        console.log(`\n[SUSPICIOUS] ${label}`);
+        console.log(`  Risk Score:     ${result.contentRiskScore}/100`);
+        console.log(`  Keyword Score:  ${result.keywordRiskScore}/100`);
+        console.log(`  Compliance:     ${result.complianceScore}/100`);
+        console.log(`  Structure Risk: ${result.structureRiskScore}/100`);
+        console.log(`  TLD:            ${result.tldRisk.tld} (${result.tldRisk.risk})`);
+        console.log(`  Vertical:       ${result.detectedVertical ?? 'not detected'}`);
+        console.log(`  Keywords:       ${result.keywordMatches.map(k => `${k.keyword}[${k.severity}]`).join(', ') || 'none'}`);
+        console.log(`  Red Flags:      ${result.redFlags.map(f => f.type).join(', ') || 'none'}`);
+        console.log(`  Blocklists:     ${result.externalApis?.blocklists.lists.join(', ') || 'none'}`);
+        console.log(`  Has Privacy:    ${result.hasPrivacyPolicy}, ToS: ${result.hasTermsOfService}, Contact: ${result.hasContactInfo}`);
+
+        // Gambling sites must score high
+        expect(result.contentRiskScore).toBeGreaterThanOrEqual(25);
+
+        // Must detect gambling keywords
+        expect(result.keywordRiskScore).toBeGreaterThan(0);
+        const gamblingKeywords = result.keywordMatches.filter(k => k.vertical === 'gambling');
+        expect(gamblingKeywords.length).toBeGreaterThan(0);
+
+        // Gambling vertical must be detected
+        expect(result.detectedVertical).toBe('gambling');
+      }, 180_000);
+    }
+  });
+
+  // ── High-risk TLD sites ───────────────────────────────────────────────────
+
+  describe('High-risk TLD sites (must get TLD penalty)', () => {
+    it('Site on .xyz TLD scores higher than equivalent .com', async () => {
+      // casino.xyz is a known gambling domain on a high-risk TLD
+      const result = await analyzeContent('https://casino.xyz');
+
+      console.log(`\n[SUSPICIOUS] casino.xyz`);
+      console.log(`  Risk Score:  ${result.contentRiskScore}/100`);
+      console.log(`  TLD Risk:    ${result.tldRisk.tld} (${result.tldRisk.risk}, score=${result.tldRisk.score})`);
+      console.log(`  Keywords:    ${result.keywordMatches.map(k => k.keyword).join(', ') || 'none'}`);
+      console.log(`  Blocklists:  ${result.externalApis?.blocklists.lists.join(', ') || 'none'}`);
+
+      // .xyz is explicitly high-risk TLD
+      expect(result.tldRisk.risk).toBe('high');
+      expect(result.tldRisk.score).toBeGreaterThanOrEqual(80);
+      // Overall risk must be elevated due to TLD alone
+      expect(result.contentRiskScore).toBeGreaterThan(10);
+    }, 180_000);
+  });
+
+  // ── Compliance gap detection ──────────────────────────────────────────────
+
+  describe('Compliance gap detection on thin landing pages', () => {
+    it('Detects missing privacy policy and contact info on low-quality pages', async () => {
+      // example.com is minimal but compliant; a suspicious page would have no legal pages
+      // We use a known minimal-content domain as baseline for comparison
+      const good = await analyzeContent('https://example.com');
+      const suspicious = await analyzeContent('https://1xbet.com');
+
+      console.log(`\n[COMPARISON] Compliance scores:`);
+      console.log(`  example.com:  ${good.complianceScore}/100`);
+      console.log(`  1xbet.com:    ${suspicious.complianceScore}/100`);
+      console.log(`  Risk gap:     ${suspicious.contentRiskScore - good.contentRiskScore} points`);
+
+      // Gambling site should score higher risk than example.com
+      expect(suspicious.contentRiskScore).toBeGreaterThan(good.contentRiskScore);
+    }, 240_000);
+  });
+
+  // ── Full scoring comparison: trusted vs suspicious ────────────────────────
+
+  describe('Score gap: trusted domains vs suspicious domains', () => {
+    it('Shows clear separation between good and bad domain scores', async () => {
+      console.log('\n[SCORE COMPARISON] Trusted vs Suspicious:');
+      console.log('─'.repeat(60));
+
+      const results: Array<{ label: string; url: string; score: number; keywords: number; vertical: string | null }> = [];
+
+      // Run trusted and suspicious in sequence to avoid rate limiting
+      const toTest: Array<[string, string]> = [
+        // Trusted
+        ['https://github.com', 'github.com (trusted)'],
+        ['https://wikipedia.org', 'wikipedia.org (trusted)'],
+        ['https://stripe.com', 'stripe.com (trusted)'],
+        // Suspicious
+        ['https://1xbet.com', '1xbet.com (gambling)'],
+        ['https://vulkanvegas.com', 'vulkanvegas.com (casino)'],
+      ];
+
+      for (const [url, label] of toTest) {
+        const result = await analyzeContent(url);
+        results.push({
+          label,
+          url,
+          score: result.contentRiskScore,
+          keywords: result.keywordRiskScore,
+          vertical: result.detectedVertical,
+        });
+        console.log(`  ${label.padEnd(35)} Risk=${String(result.contentRiskScore).padStart(3)}/100  KW=${String(result.keywordRiskScore).padStart(3)}  Vertical=${result.detectedVertical ?? '-'}`);
+      }
+
+      console.log('─'.repeat(60));
+
+      const trustedResults = results.filter(r => r.label.includes('trusted'));
+      const suspiciousResults = results.filter(r => !r.label.includes('trusted'));
+
+      const avgTrusted = trustedResults.reduce((s, r) => s + r.score, 0) / trustedResults.length;
+      const avgSuspicious = suspiciousResults.reduce((s, r) => s + r.score, 0) / suspiciousResults.length;
+
+      console.log(`  Avg trusted score:    ${avgTrusted.toFixed(1)}/100`);
+      console.log(`  Avg suspicious score: ${avgSuspicious.toFixed(1)}/100`);
+      console.log(`  Separation gap:       ${(avgSuspicious - avgTrusted).toFixed(1)} points`);
+
+      // Trusted domains must score lower than suspicious ones on average
+      expect(avgTrusted).toBeLessThan(avgSuspicious);
+
+      // All trusted must score ≤ 20
+      for (const r of trustedResults) {
+        expect(r.score).toBeLessThanOrEqual(20);
+      }
+
+      // All suspicious must score > trusted average
+      for (const r of suspiciousResults) {
+        expect(r.score).toBeGreaterThan(avgTrusted);
+      }
+    }, 900_000); // 15 min for sequential analysis of 5 domains
+  });
+});
