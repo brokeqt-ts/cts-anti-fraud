@@ -51,13 +51,16 @@ function isAccountSuspended(signalValue: unknown): boolean {
   return false;
 }
 
-async function handleSuspension(pool: pg.Pool, accountGoogleId: string): Promise<void> {
-  // Check if unresolved ban already exists
+async function handleSuspension(
+  pool: pg.Pool,
+  accountGoogleId: string,
+  options: { silent?: boolean } = {},
+): Promise<void> {
+  // Check if ANY unresolved ban already exists (auto or manual)
   const existing = await pool.query(
     `SELECT id FROM ban_logs
      WHERE account_google_id = $1
        AND resolved_at IS NULL
-       AND source = 'auto'
      LIMIT 1`,
     [accountGoogleId],
   );
@@ -148,6 +151,12 @@ async function handleSuspension(pool: pg.Pool, accountGoogleId: string): Promise
   const banId = banIdResult.rows[0]?.['id'] as string | undefined;
 
   console.log(`[auto-ban-detector] Auto-created ban for CID ${accountGoogleId} (lifetime: ${lifetimeHours}h, reason: ${banReasonGoogle ?? 'unknown'})`);
+
+  // Skip notifications and alerts for catch-up (historical) bans
+  if (options.silent) {
+    console.log(`[auto-ban-detector] Silent catch-up ban created for CID ${accountGoogleId}`);
+    return;
+  }
 
   // Notify account owner + admins about the ban
   const ownerUserId = (accountSnap.rows[0]?.['user_id'] as string | null) ?? null;
@@ -246,7 +255,7 @@ export async function scanAllSuspendedAccounts(
     }
 
     try {
-      await handleSuspension(pool, cid);
+      await handleSuspension(pool, cid, { silent: true });
       created++;
     } catch (err) {
       if (errors.length < 20) {
