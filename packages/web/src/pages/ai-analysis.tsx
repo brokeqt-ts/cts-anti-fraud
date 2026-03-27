@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Brain, Loader2, AlertTriangle, Trophy, Zap, ChevronDown, ChevronUp,
-  CheckCircle2, XCircle, MinusCircle, ThumbsUp, ThumbsDown,
+  CheckCircle2, XCircle, MinusCircle, ThumbsUp, ThumbsDown, Download,
 } from 'lucide-react';
 import {
   compareModelsAI,
@@ -24,6 +24,7 @@ import {
   type AiFeedbackStats,
 } from '../api.js';
 import { BlurFade } from '../components/ui/animations.js';
+import { downloadCsv } from '../utils/csv.js';
 
 const priorityColors: Record<string, string> = {
   critical: '#f87171',
@@ -368,6 +369,33 @@ function LeaderboardSection({ leaderboard, onPeriodChange }: {
         <h3 className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
           <Trophy size={16} /> Лидерборд моделей
         </h3>
+        <div className="flex items-center gap-2">
+          {leaderboard && leaderboard.entries.length > 0 && (
+            <button
+              onClick={() => {
+                const headers = ['#', 'Модель', 'Accuracy', 'Precision', 'Recall', 'Lifetime err (дни)', 'Latency (мс)', 'Стоимость ($)', 'Анализов', 'Score'];
+                const rows = leaderboard.entries.map((e, i) => [
+                  i + 1,
+                  e.model,
+                  e.accuracy != null ? `${(e.accuracy * 100).toFixed(1)}%` : '',
+                  e.precision != null ? `${(e.precision * 100).toFixed(1)}%` : '',
+                  e.recall != null ? `${(e.recall * 100).toFixed(1)}%` : '',
+                  e.avg_lifetime_error_days ?? '',
+                  e.avg_latency_ms,
+                  e.avg_cost_usd.toFixed(4),
+                  e.total_analyses,
+                  (e.composite_score * 100).toFixed(1),
+                ]);
+                downloadCsv(`ai_leaderboard_${period}_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+              }}
+              className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium transition-colors"
+              style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', color: '#818cf8' }}
+              title="Экспорт в CSV"
+            >
+              <Download size={12} />
+              CSV
+            </button>
+          )}
         <div className="flex gap-1">
           {periods.map(p => (
             <button
@@ -382,6 +410,7 @@ function LeaderboardSection({ leaderboard, onPeriodChange }: {
               {p.label}
             </button>
           ))}
+        </div>
         </div>
       </div>
       {!leaderboard || leaderboard.entries.length === 0 ? (

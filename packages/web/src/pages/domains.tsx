@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
-import { Globe, ExternalLink, ShieldAlert, CheckCircle, XCircle, AlertTriangle, Cloud, ShieldCheck, EyeOff, Search, Loader2, FileSearch } from 'lucide-react';
+import { Globe, ExternalLink, ShieldAlert, CheckCircle, XCircle, AlertTriangle, Cloud, ShieldCheck, EyeOff, Search, Loader2, FileSearch, Download } from 'lucide-react';
 import { fetchDomains, fetchDomainDetail, scanDomainContent, ApiError, type DomainSummary, type DomainContentAnalysis } from '../api.js';
+import { downloadCsv } from '../utils/csv.js';
 import { TableSkeleton } from '../components/skeleton.js';
 import {
   BlurFade,
@@ -101,6 +102,29 @@ export function DomainsPage() {
               {enriched > 0 && <> · {enriched} обогащено</>}
             </p>
           </div>
+          <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const headers = ['Домен', 'Регистратор', 'SSL', 'Safe Score', 'Банов', 'Аккаунтов', 'Возраст (дней)', 'Последняя проверка'];
+              const rows = (domains ?? []).map((d) => [
+                d.domain,
+                d.registrar ?? '',
+                d.ssl_type_enum ?? '',
+                d.safe_page_quality_score ?? '',
+                d.ban_count,
+                (d.account_ids ?? []).length,
+                d.domain_age_days ?? '',
+                d.last_checked_at ? new Date(d.last_checked_at).toLocaleString('ru-RU') : '',
+              ]);
+              downloadCsv(`domains_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+            style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', color: '#818cf8' }}
+            title="Экспорт в CSV"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Скачать CSV
+          </button>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -126,6 +150,7 @@ export function DomainsPage() {
               Анализ
             </button>
           </form>
+          </div>
         </div>
       </BlurFade>
 

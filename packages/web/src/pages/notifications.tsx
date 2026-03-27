@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Check, CheckCheck, AlertTriangle, Info, ShieldAlert, ShieldCheck, Link2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Bell, Check, CheckCheck, AlertTriangle, Info, ShieldAlert, ShieldCheck, Link2, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import {
   fetchNotifications,
   markNotificationRead,
@@ -8,6 +8,7 @@ import {
   timeAgo,
   type Notification,
 } from '../api.js';
+import { downloadCsv } from '../utils/csv.js';
 import { BlurFade } from '../components/ui/animations.js';
 
 const PAGE_SIZE = 20;
@@ -114,18 +115,40 @@ export function NotificationsPage() {
               </p>
             </div>
           </div>
-          {unreadCount > 0 && (
+          <div className="flex items-center gap-2">
             <button
-              onClick={handleMarkAllRead}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-              style={{ color: 'var(--text-muted)', background: 'var(--bg-hover)' }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-card-hover)')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+              onClick={() => {
+                const headers = ['Заголовок', 'Сообщение', 'Тип', 'Важность', 'Прочитана', 'Дата'];
+                const rows = notifications.map((n) => [
+                  n.title,
+                  n.message ?? '',
+                  TYPE_LABELS[n.type] ?? n.type,
+                  n.severity,
+                  n.is_read ? 'да' : 'нет',
+                  new Date(n.created_at).toLocaleString('ru-RU'),
+                ]);
+                downloadCsv(`notifications_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+              style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', color: '#818cf8' }}
+              title="Экспорт в CSV"
             >
-              <CheckCheck className="w-3.5 h-3.5" />
-              Прочитать все
+              <Download className="w-3.5 h-3.5" />
+              Скачать CSV
             </button>
-          )}
+            {unreadCount > 0 && (
+              <button
+                onClick={handleMarkAllRead}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                style={{ color: 'var(--text-muted)', background: 'var(--bg-hover)' }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-card-hover)')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+              >
+                <CheckCheck className="w-3.5 h-3.5" />
+                Прочитать все
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Filters */}
