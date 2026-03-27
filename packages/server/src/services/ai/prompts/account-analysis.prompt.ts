@@ -12,6 +12,7 @@ export function buildAccountAnalysisPrompt(
   prediction: PredictionResult | null,
   notifications: Array<{ title: string; category: string }>,
   campaignSummary: { total: number; active: number; paused: number },
+  bestPracticesText?: string,
 ): string {
   return `Проанализируй этот аккаунт Google Ads и оцени риски бана.
 
@@ -56,6 +57,11 @@ ${prediction ? `ML ПРОГНОЗ:
 - Уровень риска: ${prediction.risk_level}
 - Прогноз дней до бана: ${prediction.predicted_days_to_ban ?? 'не определён'}
 - Топ-факторы: ${prediction.top_factors.slice(0, 3).map(f => f.label).join(', ')}` : 'ML прогноз: модель не обучена'}
+
+${bestPracticesText ? `МЕТОДИЧКА КОМАНДЫ:
+Сверь настройки аккаунта с методичкой и укажи нарушения в рекомендациях.
+
+${bestPracticesText}` : ''}
 
 ОТВЕТЬ в формате JSON:
 {

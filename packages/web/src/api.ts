@@ -632,6 +632,40 @@ export const scanDomainContent = (domain: string): Promise<DomainContentAnalysis
 export const scanAllDomainsContent = (): Promise<{ analyzed: number; errors: number }> =>
   apiFetch('/domains/content-analysis/scan', { method: 'POST' });
 
+// --- Best Practices (Методички) ---
+
+export interface BestPractice {
+  id: string;
+  category: string;
+  campaign_type: string | null;
+  offer_vertical: string | null;
+  title: string;
+  content: string;
+  priority: number;
+  is_active: boolean;
+  author_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const fetchBestPractices = (params?: { category?: string; vertical?: string; campaign_type?: string }): Promise<BestPractice[]> => {
+  const qs = new URLSearchParams();
+  if (params?.category) qs.set('category', params.category);
+  if (params?.vertical) qs.set('vertical', params.vertical);
+  if (params?.campaign_type) qs.set('campaign_type', params.campaign_type);
+  const query = qs.toString();
+  return apiFetch(`/best-practices${query ? `?${query}` : ''}`);
+};
+
+export const createBestPractice = (data: { category: string; campaign_type?: string; offer_vertical?: string; title: string; content: string; priority?: number }): Promise<BestPractice> =>
+  apiFetch('/best-practices', { method: 'POST', body: JSON.stringify(data) });
+
+export const updateBestPractice = (id: string, data: Partial<BestPractice>): Promise<BestPractice> =>
+  apiFetch(`/best-practices/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+
+export const deleteBestPractice = (id: string): Promise<{ status: string }> =>
+  apiFetch(`/best-practices/${id}`, { method: 'DELETE' });
+
 // --- CTS Sites ---
 
 export interface CtsSite {

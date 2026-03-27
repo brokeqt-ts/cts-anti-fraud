@@ -12,6 +12,7 @@ import { CtsIntegrationPage } from './pages/cts-integration.js';
 import { AnalyticsPage } from './pages/analytics.js';
 import { AssessmentPage } from './pages/assessment.js';
 import { AIAnalysisPage } from './pages/ai-analysis.js';
+import { BestPracticesPage } from './pages/best-practices.js';
 import { LoginPage } from './pages/login.js';
 import { NotificationsPage } from './pages/notifications.js';
 import { UsersPage } from './pages/users.js';
@@ -88,6 +89,7 @@ export function App() {
         <Route path="/assessment" element={<AssessmentPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/ai-analysis" element={<AIAnalysisPage />} />
+        <Route path="/best-practices" element={<BestPracticesPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route
           path="/users"

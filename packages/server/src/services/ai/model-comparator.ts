@@ -302,7 +302,26 @@ export async function compareModels(
     // optional
   }
 
-  const prompt = buildAccountAnalysisPrompt(features, prediction, notifications, campaignSummary);
+  // Load relevant best practices for prompt injection
+  let bestPracticesText = '';
+  try {
+    const vertical = features.offer_vertical ?? '';
+    const bpResult = await pool.query(
+      `SELECT title, content, category FROM best_practices
+       WHERE is_active = true
+         AND (offer_vertical IS NULL OR offer_vertical = $1)
+       ORDER BY priority DESC LIMIT 5`,
+      [vertical],
+    );
+    if (bpResult.rows.length > 0) {
+      bestPracticesText = bpResult.rows.map((r) => {
+        const row = r as { title: string; content: string; category: string };
+        return `### ${row.title} [${row.category}]\n${row.content}`;
+      }).join('\n\n---\n\n');
+    }
+  } catch { /* optional */ }
+
+  const prompt = buildAccountAnalysisPrompt(features, prediction, notifications, campaignSummary, bestPracticesText);
 
   // Get adapters
   let adapters: ModelAdapter[];
