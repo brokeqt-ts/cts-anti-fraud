@@ -327,8 +327,161 @@ describe.skipIf(!HAS_ANY_KEY)('Scoring validation (real APIs)', () => {
     expect(result.contentRiskScore).toBeLessThanOrEqual(15);
   }, 120_000);
 
-  it('google.com scores 0-5', async () => {
+  it('google.com scores 0-10', async () => {
     const result = await analyzeContent('https://google.com');
     expect(result.contentRiskScore).toBeLessThanOrEqual(10);
   }, 120_000);
+});
+
+// ─── Trusted domain scoring validation ──────────────────────────────────────
+// These tests verify that major legitimate platforms score ≤ 20.
+// They use real API keys and hit live sites — run manually only.
+
+describe('Trusted domain blocklist checks (real)', () => {
+  it('github.com is not blocklisted', async () => {
+    const result = await checkBlocklists('github.com');
+    expect(result.checked).toBe(true);
+    expect(result.lists).toHaveLength(0);
+  }, 30_000);
+
+  it('wikipedia.org is not blocklisted', async () => {
+    const result = await checkBlocklists('wikipedia.org');
+    expect(result.checked).toBe(true);
+    expect(result.lists).toHaveLength(0);
+  }, 30_000);
+
+  it('mozilla.org is not blocklisted', async () => {
+    const result = await checkBlocklists('mozilla.org');
+    expect(result.checked).toBe(true);
+    expect(result.lists).toHaveLength(0);
+  }, 30_000);
+
+  it('stripe.com is not blocklisted', async () => {
+    const result = await checkBlocklists('stripe.com');
+    expect(result.checked).toBe(true);
+    expect(result.lists).toHaveLength(0);
+  }, 30_000);
+});
+
+describe('Trusted domain DNS checks (real)', () => {
+  // Use a hard AbortSignal timeout so slow DNS servers don't hang the test runner.
+  async function dnsWithTimeout(domain: string, ms = 8000) {
+    return Promise.race([
+      analyzeDns(domain),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+    ]);
+  }
+
+  it('github.com has SPF + MX (if DNS reachable within 8s)', async () => {
+    const result = await dnsWithTimeout('github.com');
+    if (!result) return; // DNS timed out on this network — skip
+    if (!result.checked) return;
+    expect(result.hasSpf).toBe(true);
+    expect(result.hasMx).toBe(true);
+  }, 15_000);
+
+  it('wikipedia.org has SPF + MX (if DNS reachable within 8s)', async () => {
+    const result = await dnsWithTimeout('wikipedia.org');
+    if (!result) return;
+    if (!result.checked) return;
+    expect(result.hasSpf).toBe(true);
+    expect(result.hasMx).toBe(true);
+  }, 15_000);
+
+  it('mozilla.org has SPF + DMARC (if DNS reachable within 8s)', async () => {
+    const result = await dnsWithTimeout('mozilla.org');
+    if (!result) return;
+    if (!result.checked) return;
+    expect(result.hasSpf).toBe(true);
+    expect(result.hasDmarc).toBe(true);
+  }, 15_000);
+});
+
+describe('Trusted domain crt.sh checks (real)', () => {
+  it('github.com has many certificates (well-established)', async () => {
+    const result = await checkCrtSh('github.com');
+    if (!result.checked) return; // crt.sh unreachable — skip
+    expect(result.totalCerts).toBeGreaterThan(100);
+  }, 30_000);
+
+  it('wikipedia.org has many certificates', async () => {
+    const result = await checkCrtSh('wikipedia.org');
+    if (!result.checked) return;
+    expect(result.totalCerts).toBeGreaterThan(50);
+  }, 30_000);
+});
+
+describe.skipIf(!HAS_VIRUSTOTAL)('Trusted domain VirusTotal (real)', () => {
+  const domains = ['github.com', 'wikipedia.org', 'mozilla.org', 'stripe.com', 'apple.com'];
+
+  for (const domain of domains) {
+    it(`${domain} is clean on VirusTotal`, async () => {
+      const res = await fetch(`https://www.virustotal.com/api/v3/domains/${domain}`, {
+        headers: { 'x-apikey': process.env['VIRUSTOTAL_API_KEY']! },
+        signal: AbortSignal.timeout(10_000),
+      });
+      expect(res.ok).toBe(true);
+      const data = await res.json() as {
+        data?: { attributes?: { last_analysis_stats?: { malicious?: number }; reputation?: number } };
+      };
+      const stats = data.data?.attributes?.last_analysis_stats;
+      const reputation = data.data?.attributes?.reputation ?? 0;
+      expect(stats?.malicious ?? 0).toBe(0);
+      // Major trusted domains should have positive community reputation
+      expect(reputation).toBeGreaterThanOrEqual(0);
+    }, 15_000);
+  }
+});
+
+describe.skipIf(!HAS_ABUSEIPDB)('Trusted domain AbuseIPDB (real)', () => {
+  // Test known-good IPs used by major platforms
+  const trustedIps: [string, string][] = [
+    ['140.82.114.4', 'github.com IP'],       // GitHub
+    ['208.80.154.224', 'wikipedia.org IP'],   // Wikimedia
+    ['63.245.215.20', 'mozilla.org IP'],      // Mozilla
+  ];
+
+  for (const [ip, label] of trustedIps) {
+    it(`${label} (${ip}) has low abuse score`, async () => {
+      const result = await checkAbuseIpdb(ip);
+      expect(result.checked).toBe(true);
+      // Major platforms' IPs should have very low abuse scores
+      expect(result.abuseScore).toBeLessThan(30);
+    }, 10_000);
+  }
+});
+
+describe.skipIf(!HAS_ANY_KEY)('Full scoring — trusted domains must score ≤ 20', () => {
+  const trustedDomains: [string, string][] = [
+    ['https://github.com', 'github.com'],
+    ['https://wikipedia.org', 'wikipedia.org'],
+    ['https://mozilla.org', 'mozilla.org'],
+    ['https://stripe.com', 'stripe.com'],
+    ['https://apple.com', 'apple.com'],
+    ['https://cloudflare.com', 'cloudflare.com'],
+    ['https://microsoft.com', 'microsoft.com'],
+  ];
+
+  for (const [url, label] of trustedDomains) {
+    it(`${label} scores ≤ 20`, async () => {
+      const result = await analyzeContent(url);
+
+      // Risk must be low for major legitimate platforms
+      expect(result.contentRiskScore).toBeLessThanOrEqual(20);
+
+      // Should never be blocklisted (DNSBL fix validation)
+      const blocklists = result.externalApis?.blocklists;
+      if (blocklists?.checked) {
+        expect(blocklists.lists).toHaveLength(0);
+      }
+
+      // No keyword matches on legitimate content
+      expect(result.keywordRiskScore).toBe(0);
+
+      // TLD must be low-risk
+      expect(result.tldRisk.risk).toBe('low');
+
+      console.log(`[${label}] Risk=${result.contentRiskScore}, Compliance=${result.complianceScore}, RedFlags=${result.redFlags.length}, Blocklists=${JSON.stringify(blocklists?.lists ?? [])}`);
+    }, 180_000);
+  }
 });

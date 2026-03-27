@@ -180,8 +180,20 @@ export interface BlocklistResult {
 
 async function dnsblCheck(query: string): Promise<boolean> {
   try {
-    await dns.resolve4(query);
-    return true; // resolved = listed
+    const addresses = await dns.resolve4(query);
+    // DNSBL listings return 127.0.0.x IPs.
+    // Some lists return 127.0.0.255 (URIBL) or 127.255.255.254 (Spamhaus)
+    // for unauthorized/unregistered queries — these are NOT real listings.
+    return addresses.some((addr) => {
+      const parts = addr.split('.');
+      if (parts[0] !== '127') return false;
+      // 127.0.0.255 = URIBL unauthorized query response
+      // 127.255.255.254 = Spamhaus "not a real query" response
+      if (addr === '127.0.0.255' || addr === '127.255.255.254') return false;
+      const last = parseInt(parts[parts.length - 1], 10);
+      // Real listings are 127.0.0.2 through 127.0.0.127
+      return last >= 2 && last <= 127;
+    });
   } catch {
     return false; // NXDOMAIN = not listed
   }

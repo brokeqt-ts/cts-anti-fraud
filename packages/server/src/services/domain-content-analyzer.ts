@@ -424,11 +424,13 @@ function checkCompliance(html: string, text: string): ComplianceResult {
   const lower = html.toLowerCase();
   const lowerText = text.toLowerCase();
 
-  const hasPrivacyPolicy = /privacy.?policy|политика.?конфиденциальности|privacy-policy|confidentiality/i.test(lower);
-  const hasTermsOfService = /terms.?(?:of.?)?(?:service|use)|пользовательское.?соглашение|terms-of-service|terms-of-use|user.?agreement/i.test(lower);
-  const hasContactInfo = /contact.?us|контакты|связаться|contact-us|support@|info@|(?:\+\d{1,3}[\s-]?\(?\d{2,4}\)?[\s-]?\d{3,4}[\s-]?\d{2,4})/i.test(lower);
-  const hasDisclaimer = /disclaimer|отказ.?от.?ответственности|не является.?(?:медицинской|финансовой)|individual results may vary|результаты могут отличаться/i.test(lowerText);
-  const hasAboutPage = /about.?us|о.?нас|о.?компании|about-us|our.?(?:story|team|company)/i.test(lower);
+  // Check both inline text AND href links in footer/nav — major sites link to these pages
+  // rather than putting the full text on every page.
+  const hasPrivacyPolicy = /href=[^>]*privacy|privacy.?policy|политика.?конфиденциальности|privacy-policy|confidentiality/i.test(lower);
+  const hasTermsOfService = /href=[^>]*(?:terms|tos|legal(?!-?notice))|terms.?(?:of.?)?(?:service|use)|пользовательское.?соглашение|terms-of-service|terms-of-use|user.?agreement/i.test(lower);
+  const hasContactInfo = /href=[^>]*contact|contact.?us|контакты|связаться|contact-us|support@|info@|(?:\+\d{1,3}[\s-]?\(?\d{2,4}\)?[\s-]?\d{3,4}[\s-]?\d{2,4})/i.test(lower);
+  const hasDisclaimer = /href=[^>]*(?:disclaimer|legal)|disclaimer|отказ.?от.?ответственности|не является.?(?:медицинской|финансовой)|individual results may vary|результаты могут отличаться/i.test(lowerText);
+  const hasAboutPage = /href=[^>]*about|about.?us|о.?нас|о.?компании|about-us|our.?(?:story|team|company)/i.test(lower);
   const hasCookieConsent = /cookie.?(?:consent|policy|banner|notice)|gdpr|использование.?cookie/i.test(lower);
   const hasAgeVerification = /(?:18|21)\+|age.?verif|подтвердите.?возраст|are you (?:18|21)|вам.?(?:есть|исполнилось).?(?:18|21)/i.test(lower);
 
@@ -463,8 +465,13 @@ function analyzeStructure(html: string, text: string): StructureResult {
   const lower = html.toLowerCase();
   const flags: RedFlag[] = [];
 
-  // Countdown timer
-  const hasCountdownTimer = /countdown|timer|setInterval.*(?:hour|min|sec)|обратный.?отсчёт|осталось.?\d+.*(?:час|мин|сек)|(?:data-)?countdown/i.test(lower);
+  // Countdown timer — require marketing-specific urgency patterns, not just any JS timer.
+  // `timer` and `setInterval` are ubiquitous in any web app; we need pressure-tactic context.
+  const hasCountdownTimer = (
+    /(?:data-countdown|countdown-timer|countdown-clock|countdown-widget)/i.test(lower)
+    || /(?:offer.?expires?|expires?\s+in|time.?remaining|ends?\s+in|осталось)\s*:?\s*\d/i.test(lower)
+    || /(?:limited.?time|only\s+\d+\s+(?:hour|min|day)|только\s+сегодня).*(?:countdown|timer|\d+:\d{2})/i.test(lower)
+  );
   if (hasCountdownTimer) flags.push({ type: 'countdown_timer', severity: 'warning', detail: 'Countdown timer detected — urgency pressure tactic' });
 
   // Fake reviews patterns
@@ -476,8 +483,19 @@ function analyzeStructure(html: string, text: string): StructureResult {
   const hasBeforeAfter = /before.?(?:&amp;|and|\/|,)?.?after|до.?(?:и|\/|,)?.?после/i.test(text.toLowerCase());
   if (hasBeforeAfter) flags.push({ type: 'before_after', severity: 'warning', detail: 'Before/After content — requires proper disclaimers for Google Ads' });
 
-  // Hidden text (color matching background, display:none with content, font-size:0)
-  const hasHiddenText = /(?:color:\s*(?:white|#fff|#ffffff|transparent)|font-size:\s*0|text-indent:\s*-\d{4}|overflow:\s*hidden.*height:\s*0)/i.test(lower);
+  // Hidden text — tightened to reduce false positives on legitimate accessibility CSS.
+  // `overflow: hidden` is ubiquitous for layout; `font-size: 0` is common for icon fonts;
+  // `text-indent: -9999px` is the classic accessible icon-replacement technique.
+  // Flag only combinations that are clearly adversarial:
+  //   • color:white/transparent WITH !important (aggressive keyword hiding)
+  //   • very large negative text-indent (>= 5 digits, not the classic -9999px which is ≤ 4 digits)
+  //   • display:none on an element that explicitly contains keyword/link text (spammy pattern)
+  // Exclude known accessibility class names (sr-only, visually-hidden, screen-reader-text).
+  const hasHiddenText = !(/sr-only|visually-hidden|screen-reader-text|a11y-hidden/i.test(lower)) && (
+    /color:\s*(?:white|#fff{1,3}|#ffffff|transparent)\s*!important/i.test(lower)
+    || /text-indent:\s*-\d{5,}(?:px|em|rem)/i.test(lower)
+    || /(?:display:\s*none|visibility:\s*hidden)\s*;[^}]{0,60}(?:keyword|seo|hidden.?text)/i.test(lower)
+  );
   if (hasHiddenText) flags.push({ type: 'hidden_text', severity: 'critical', detail: 'Hidden text CSS detected — Google penalizes hidden content' });
 
   // Aggressive CTAs
@@ -485,14 +503,22 @@ function analyzeStructure(html: string, text: string): StructureResult {
     (lower.match(/(?:btn|button|cta)/g) ?? []).length >= 3;
   if (hasAggressiveCta) flags.push({ type: 'aggressive_cta', severity: 'info', detail: 'Multiple aggressive call-to-action buttons' });
 
-  // Popup / overlay
-  const hasPopupOverlay = /(?:modal|popup|overlay|lightbox).*(?:display|show|visible|open)/i.test(lower) &&
-    /(?:position:\s*fixed|z-index:\s*\d{4,})/i.test(lower);
+  // Popup / overlay — every modern web app has modals; only flag intrusive interstitials.
+  // An interstitial is suspicious when it:
+  //   1. Has a fixed/high z-index overlay AND
+  //   2. Contains marketing/conversion language (not just a dialog or cookie banner)
+  //   3. Lacks a standard accessible close mechanism
+  const hasMarketingOverlayContent = /(?:subscribe|claim.?(?:your|offer|prize)|limited.?offer|sign.?up.?(?:now|free)|get.?(?:\d+%\s*off|your\s+free)|popup.?offer)/i.test(lower);
+  const hasPopupOverlay = /(?:position:\s*fixed|z-index:\s*\d{4,})/i.test(lower)
+    && /(?:modal|popup|overlay|lightbox|interstitial)/i.test(lower)
+    && hasMarketingOverlayContent
+    && !/(?:aria-modal|role=["']dialog|cookie-banner|consent|gdpr)/i.test(lower);
   if (hasPopupOverlay) flags.push({ type: 'popup_overlay', severity: 'warning', detail: 'Popup/overlay detected — intrusive interstitials flagged by Google' });
 
-  // Auto-play video
-  const hasAutoPlayVideo = /<video[^>]*autoplay/i.test(lower) || /autoplay.*?(?:true|1|")/i.test(lower);
-  if (hasAutoPlayVideo) flags.push({ type: 'autoplay_video', severity: 'info', detail: 'Auto-playing video detected' });
+  // Auto-play video — autoplay+muted is acceptable (no sound = no user disruption).
+  // Only flag autoplay WITHOUT muted, which plays sound without user consent.
+  const hasAutoPlayVideo = /<video[^>]*autoplay(?![^>]*muted)[^>]*>/i.test(lower);
+  if (hasAutoPlayVideo) flags.push({ type: 'autoplay_video', severity: 'info', detail: 'Auto-playing video with sound detected — may disrupt user experience' });
 
   // External redirect via JS
   const hasExternalRedirect = /(?:window\.location|location\.href|location\.replace)\s*=\s*["'][^"']*(?:https?:\/\/)/i.test(html);
@@ -1413,9 +1439,11 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
       riskPoints += Math.min(15, externalApis.shodan.vulns.length * 3);
     }
 
-    // AbuseIPDB — skip if Cloudflare
-    if (!isBehindCloudflare && externalApis.abuseIpdb.checked && externalApis.abuseIpdb.abuseScore > 0) {
-      riskPoints += Math.min(15, externalApis.abuseIpdb.abuseScore * 0.15);
+    // AbuseIPDB — skip if Cloudflare or explicitly whitelisted (major infra IPs)
+    if (!isBehindCloudflare && externalApis.abuseIpdb.checked) {
+      if (!externalApis.abuseIpdb.isWhitelisted && externalApis.abuseIpdb.abuseScore > 0) {
+        riskPoints += Math.min(15, externalApis.abuseIpdb.abuseScore * 0.15);
+      }
     }
 
     // Malware/Phishing databases (URL-based — always reliable)
@@ -1444,12 +1472,18 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
   if (thirdPartyScripts.analytics.length > 0) bonusPoints -= 2;
   if (pageSpeed.checked && pageSpeed.performanceScore != null && pageSpeed.performanceScore >= 80) bonusPoints -= 3;
   if (virusTotal.checked && virusTotal.malicious === 0 && virusTotal.harmless > 50) bonusPoints -= 5;
+  // High VirusTotal reputation (positive score means the community trusts this domain)
+  if (virusTotal.checked && virusTotal.reputation > 0) bonusPoints -= Math.min(5, Math.floor(virusTotal.reputation / 10));
   if (safeBrowsing.checked && safeBrowsing.safe) bonusPoints -= 5;
   if (structuredData.hasJsonLd) bonusPoints -= 2;
   if (structuredData.hasOrganizationSchema) bonusPoints -= 2;
   if (isLegitSpa && securityHeaders.securityScore >= 70) bonusPoints -= 5;
+  // AbuseIPDB whitelisted = explicitly known good infrastructure (Wikimedia, GitHub, etc.)
+  if (externalApis?.abuseIpdb.checked && externalApis.abuseIpdb.isWhitelisted) bonusPoints -= 5;
+  // Very large crt.sh cert count = well-established domain
+  if (externalApis?.crtSh.checked && externalApis.crtSh.totalCerts > 500) bonusPoints -= 3;
 
-  riskPoints += Math.max(-25, bonusPoints);
+  riskPoints += Math.max(-30, bonusPoints);
 
   const contentRiskScore = Math.min(100, Math.max(0, Math.round(riskPoints)));
 
