@@ -22,7 +22,18 @@
       "Bash(npx saturn:*)",
       "Bash(echo \"exit: $?\")",
       "WebFetch(domain:docs.saturn.ac)",
-      "Bash(railway version:*)"
+      "Bash(railway version:*)",
+      "Bash(find /c/Users/kudri/OneDrive/Документы/GitHub/cts-anti-fraud -name *admin*user* -type f)",
+      "Bash(curl -s \"https://crt.sh/?q=example.com&output=json\")",
+      "Bash(curl -s \"https://urlhaus-api.abuse.ch/v1/url/\" -d \"url=https://example.com\")",
+      "Bash(curl -s \"https://internetdb.shodan.io/8.8.8.8\")",
+      "Bash(curl -s \"https://checkurl.phishtank.com/checkurl/\" -d \"url=https://example.com&format=json\")",
+      "WebSearch",
+      "Bash(npx vitest:*)",
+      "Bash(pkill -f \"vitest\")",
+      "Bash(NODE_TLS_REJECT_UNAUTHORIZED=0 npx vitest run --reporter=verbose packages/server/src/services/domain-analysis-integration.test.ts)",
+      "Bash(find /c/Users/kudri/OneDrive/Документы/GitHub/cts-anti-fraud -name *056* -type f)",
+      "Bash(xargs -I {} basename {})"
     ]
   }
 }
