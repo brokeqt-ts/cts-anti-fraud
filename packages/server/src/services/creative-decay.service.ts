@@ -252,17 +252,7 @@ export async function runDecayScanWithAlerts(pool: pg.Pool): Promise<ScanResult>
   const scan = await detectDecay(pool);
 
   for (const decay of scan.results) {
-    // Check if notification for this campaign was already sent (not yet resolved)
-    const existing = await pool.query(
-      `SELECT id FROM notifications
-       WHERE type = 'creative_decay'
-         AND metadata->>'campaign_id' = $1
-         AND created_at > NOW() - INTERVAL '24 hours'
-       LIMIT 1`,
-      [decay.campaign_id],
-    );
-    if (existing.rows.length > 0) continue; // already notified within 24h
-
+    // Dedup is handled by notification service via dedupKey
     // Find account owner
     const ownerResult = await pool.query(
       `SELECT user_id FROM accounts WHERE google_account_id = $1 LIMIT 1`,

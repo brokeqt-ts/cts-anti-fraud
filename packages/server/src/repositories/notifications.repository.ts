@@ -22,6 +22,7 @@ export interface CreateNotificationParams {
   message?: string | null;
   severity: string;
   metadata?: Record<string, unknown> | null;
+  dedupKey?: string | null;
 }
 
 export interface ListNotificationsParams {
@@ -35,10 +36,23 @@ export interface ListNotificationsParams {
 export async function insertNotification(
   pool: pg.Pool,
   params: CreateNotificationParams,
-): Promise<NotificationRow> {
+): Promise<NotificationRow | null> {
+  const dedupKey = params.dedupKey ?? null;
+
+  // Skip duplicate: same user + dedup_key within 24h
+  if (dedupKey) {
+    const existing = await pool.query(
+      `SELECT id FROM notifications
+       WHERE user_id = $1 AND dedup_key = $2 AND created_at > NOW() - INTERVAL '24 hours'
+       LIMIT 1`,
+      [params.userId, dedupKey],
+    );
+    if (existing.rows.length > 0) return null;
+  }
+
   const result = await pool.query(
-    `INSERT INTO notifications (user_id, type, title, message, severity, metadata)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO notifications (user_id, type, title, message, severity, metadata, dedup_key)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
     [
       params.userId,
@@ -47,6 +61,7 @@ export async function insertNotification(
       params.message ?? null,
       params.severity,
       params.metadata ? JSON.stringify(params.metadata) : null,
+      dedupKey,
     ],
   );
   return result.rows[0] as NotificationRow;
