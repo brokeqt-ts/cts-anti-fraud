@@ -67,6 +67,89 @@ export async function checkCrtSh(domain: string): Promise<CrtShResult> {
   }
 }
 
+// ─── 1b. WHOIS / RDAP ────────────────────────────────────────────────────────
+
+export interface WhoisResult {
+  checked: boolean;
+  registrationDate: string | null;   // ISO date YYYY-MM-DD
+  expirationDate: string | null;
+  lastChanged: string | null;
+  domainAgeDays: number | null;      // days since registration (authoritative)
+  daysUntilExpiry: number | null;    // negative = expired
+  registrar: string | null;
+  status: string[];
+  nameservers: string[];
+  isPrivacyProtected: boolean;
+}
+
+export async function checkWhois(domain: string): Promise<WhoisResult> {
+  const empty: WhoisResult = {
+    checked: false, registrationDate: null, expirationDate: null, lastChanged: null,
+    domainAgeDays: null, daysUntilExpiry: null, registrar: null, status: [], nameservers: [], isPrivacyProtected: false,
+  };
+  try {
+    const res = await safeFetch(`https://rdap.org/domain/${encodeURIComponent(domain)}`, { timeout: 8000 });
+    if (!res?.ok) return empty;
+
+    const data = await res.json() as {
+      events?: Array<{ eventAction: string; eventDate: string }>;
+      entities?: Array<{ roles?: string[]; vcardArray?: [string, Array<[string, unknown, string, string]>]; handle?: string }>;
+      status?: string[];
+      nameservers?: Array<{ ldhName: string }>;
+    };
+
+    let registrationDate: string | null = null;
+    let expirationDate: string | null = null;
+    let lastChanged: string | null = null;
+
+    for (const event of (data.events ?? [])) {
+      const action = event.eventAction.toLowerCase();
+      if (action === 'registration') registrationDate = event.eventDate;
+      else if (action === 'expiration') expirationDate = event.eventDate;
+      else if (action === 'last changed') lastChanged = event.eventDate;
+    }
+
+    const now = Date.now();
+    const domainAgeDays = registrationDate
+      ? Math.floor((now - new Date(registrationDate).getTime()) / 86400000)
+      : null;
+    const daysUntilExpiry = expirationDate
+      ? Math.floor((new Date(expirationDate).getTime() - now) / 86400000)
+      : null;
+
+    let registrar: string | null = null;
+    for (const entity of (data.entities ?? [])) {
+      if (entity.roles?.includes('registrar')) {
+        if (Array.isArray(entity.vcardArray?.[1])) {
+          const fn = entity.vcardArray![1].find((e) => e[0] === 'fn');
+          if (fn?.[3]) { registrar = String(fn[3]); break; }
+        }
+        if (!registrar && entity.handle) { registrar = entity.handle; break; }
+      }
+    }
+
+    const registrant = (data.entities ?? []).find(e => e.roles?.includes('registrant'));
+    const isPrivacyProtected = !registrant
+      || /privacy|protect|redact|proxy|whoisguard/i.test(JSON.stringify(registrant));
+
+    return {
+      checked: true,
+      registrationDate: registrationDate ? new Date(registrationDate).toISOString().slice(0, 10) : null,
+      expirationDate: expirationDate ? new Date(expirationDate).toISOString().slice(0, 10) : null,
+      lastChanged: lastChanged ? new Date(lastChanged).toISOString().slice(0, 10) : null,
+      domainAgeDays,
+      daysUntilExpiry,
+      registrar,
+      status: data.status ?? [],
+      nameservers: (data.nameservers ?? []).map(ns => ns.ldhName.toLowerCase()),
+      isPrivacyProtected,
+    };
+  } catch (err) {
+    console.error('[ext-api] WHOIS/RDAP error:', err instanceof Error ? err.message : err);
+    return empty;
+  }
+}
+
 // ─── 2. Shodan InternetDB ────────────────────────────────────────────────────
 
 export interface ShodanResult {
@@ -426,16 +509,18 @@ export interface AllExternalResults {
   abuseIpdb: AbuseIpdbResult;
   urlhaus: UrlhausResult;
   serpApi: SerpApiResult;
+  whois: WhoisResult;
 }
 
 export async function runAllExternalChecks(domain: string, url: string, ip?: string): Promise<AllExternalResults> {
-  const [crtSh, dnsAnalysis, commonCrawl, openPhish, urlhaus, serpApi] = await Promise.all([
+  const [crtSh, dnsAnalysis, commonCrawl, openPhish, urlhaus, serpApi, whois] = await Promise.all([
     checkCrtSh(domain),
     analyzeDns(domain),
     checkCommonCrawl(domain),
     checkOpenPhish(domain),
     checkUrlhaus(url),
     checkSerpApi(domain),
+    checkWhois(domain),
   ]);
 
   // These need IP — resolve if not provided
@@ -446,5 +531,5 @@ export async function runAllExternalChecks(domain: string, url: string, ip?: str
     resolvedIp ? checkAbuseIpdb(resolvedIp) : Promise.resolve({ checked: false, abuseScore: 0, totalReports: 0, countryCode: null, isp: null, usageType: null, isTor: false, isWhitelisted: false } as AbuseIpdbResult),
   ]);
 
-  return { crtSh, shodan, dnsAnalysis, blocklists, commonCrawl, openPhish, abuseIpdb, urlhaus, serpApi };
+  return { crtSh, shodan, dnsAnalysis, blocklists, commonCrawl, openPhish, abuseIpdb, urlhaus, serpApi, whois };
 }

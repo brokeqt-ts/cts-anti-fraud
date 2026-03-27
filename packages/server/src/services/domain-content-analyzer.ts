@@ -431,7 +431,6 @@ const DOMAIN_ONLY_KEYWORDS: KeywordEntry[] = [
   { keyword: 'roobet', severity: 'critical', vertical: 'gambling' },  // brand
   { keyword: 'rollbit', severity: 'critical', vertical: 'gambling' }, // brand
   { keyword: 'punt', severity: 'critical', vertical: 'gambling' },    // betting term
-  { keyword: 'punt', severity: 'critical', vertical: 'gambling' },
   { keyword: 'odds', severity: 'warning', vertical: 'gambling' },
   { keyword: 'bettor', severity: 'critical', vertical: 'gambling' },
   // ── Pharma/nutra domain patterns ──
@@ -1294,6 +1293,16 @@ function buildLlmContext(result: ContentAnalysisResult): { summary: string; cont
   if (result.wayback.checked && result.wayback.hasHistory) {
     lines.push(`Wayback Machine: first snapshot ${result.wayback.firstSnapshot}, ~${result.wayback.totalSnapshots} snapshots, archive age ${result.wayback.domainAgeFromArchive ?? '?'} days`);
   }
+  if (result.externalApis?.whois?.checked) {
+    const w = result.externalApis.whois;
+    const age = w.domainAgeDays != null ? `${w.domainAgeDays} days old` : 'age unknown';
+    const expiry = w.daysUntilExpiry != null
+      ? (w.daysUntilExpiry < 0 ? '⚠️ EXPIRED' : `expires in ${w.daysUntilExpiry}d`)
+      : '';
+    lines.push(`WHOIS: registered ${w.registrationDate ?? 'unknown'} (${age})${expiry ? ', ' + expiry : ''}, registrar: ${w.registrar ?? 'unknown'}`);
+    if (w.isPrivacyProtected) lines.push('  WHOIS privacy protection active (registrant hidden)');
+    if (w.domainAgeDays !== null && w.domainAgeDays < 90) lines.push(`  ⚠️ YOUNG DOMAIN: ${w.domainAgeDays} days old — elevated risk for paid ads`);
+  }
 
   const summary = lines.join('\n');
 
@@ -1380,6 +1389,15 @@ function buildLlmContext(result: ContentAnalysisResult): { summary: string; cont
       abuse_ipdb: result.externalApis.abuseIpdb.checked ? { score: result.externalApis.abuseIpdb.abuseScore, reports: result.externalApis.abuseIpdb.totalReports } : null,
       urlhaus: result.externalApis.urlhaus.checked ? { malware: result.externalApis.urlhaus.isMalware } : null,
       serp: result.externalApis.serpApi.checked ? { indexed: result.externalApis.serpApi.indexed, pages: result.externalApis.serpApi.totalResults } : null,
+      whois: result.externalApis.whois.checked ? {
+        registration_date: result.externalApis.whois.registrationDate,
+        expiration_date: result.externalApis.whois.expirationDate,
+        domain_age_days: result.externalApis.whois.domainAgeDays,
+        days_until_expiry: result.externalApis.whois.daysUntilExpiry,
+        registrar: result.externalApis.whois.registrar,
+        privacy_protected: result.externalApis.whois.isPrivacyProtected,
+        status: result.externalApis.whois.status,
+      } : null,
     } : null,
   };
 
@@ -1456,12 +1474,20 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
   const isBehindCloudflare = (securityHeaders.serverHeader ?? '').toLowerCase().includes('cloudflare')
     || (headers['cf-ray'] != null);
 
+  // Cloudflare challenge / bot-check pages: cannot assess compliance from HTML.
+  // Detect by: CF-served + very short HTML with challenge markers.
+  const isCloudflareChallenged = isBehindCloudflare && html.length < 10000 && (
+    wordCount < 20
+    || /checking your browser|just a moment|please enable (javascript|cookies)|ray id/i.test(html)
+  );
+
   // Legitimate SPA = low word count + analytics/good security, AND no prohibited
-  // vertical detected. Gambling/nutra SPAs are not "legitimate" in this context.
+  // vertical detected, AND not a bot-check page.
   const isLegitSpa = wordCount < 50
     && detectedVertical === null
+    && !isCloudflareChallenged
     && (thirdPartyScripts.analytics.length > 0 || securityHeaders.securityScore >= 40);
-  const isThinContent = wordCount < 20 && !isLegitSpa;
+  const isThinContent = wordCount < 20 && !isLegitSpa && !isCloudflareChallenged;
 
   const complianceAdjusted = Math.min(100, compliance.score + structuredData.legitimacyBonus);
 
@@ -1473,16 +1499,29 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
   if (kwScore > 60) softRisk += 5;
   if (kwScore > 80) softRisk += 5;
 
-  // Prohibited vertical detected → hard penalty (domain name is itself evidence)
-  if (kwScore >= 20 && detectedVertical !== null) {
-    hardRisk += 30;
+  // Prohibited vertical detected — graduated, not a binary cliff.
+  // Critical keyword in domain/content (e.g. "stake", "casino", "sportsbook") = hard evidence.
+  // Warning-only keywords (e.g. "diet", "win") = soft — can be partially offset by legitimacy.
+  const hasCriticalVerticalKw = detectedVertical !== null
+    && matches.some(m => m.severity === 'critical' && m.vertical === detectedVertical);
+  if (hasCriticalVerticalKw) {
+    hardRisk += 30; // clear prohibited vertical with strong keyword evidence
+  } else if (detectedVertical !== null && kwScore >= 20) {
+    hardRisk += 15; // moderate signal — multiple warning-level hits
+    softRisk += 5;
+  } else if (detectedVertical !== null && kwScore >= 10) {
+    softRisk += 20; // weak vertical signal — only soft penalty
   }
 
   // ── Compliance gaps ────────────────────────────────────────────────────
+  // Challenge pages: Cloudflare blocks HTML parsing → can't assess compliance.
+  //   Do not penalise — rely on domain signals and external APIs only.
   // Full sites with zero compliance → hard risk (not cancellable by DNS bonuses).
   // Full sites with partial compliance → soft risk.
   // Legit SPAs → reduced soft risk (JS app may not embed legal pages in HTML).
-  if (!isLegitSpa) {
+  if (isCloudflareChallenged) {
+    // Cannot assess compliance from a bot-check page — skip penalty
+  } else if (!isLegitSpa) {
     const compliancePenalty = (100 - complianceAdjusted) * 0.20;
     if (complianceAdjusted === 0) {
       hardRisk += compliancePenalty; // complete absence of compliance → hard
@@ -1490,7 +1529,6 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
       softRisk += compliancePenalty;
     }
   } else {
-    // Even for legit SPAs: if ALL compliance items missing, apply a reduced penalty
     softRisk += (100 - complianceAdjusted) * 0.08;
   }
 
@@ -1514,8 +1552,11 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
   if (safeBrowsing.checked && !safeBrowsing.safe) hardRisk += 40;
 
   // VirusTotal: malicious detections are hard; suspicious are soft.
+  // +12 per detection (reduced from +20 to reduce false positives from regional AV engines).
+  // 3+ detections = cross-engine consensus → add an extra +15 (confirmed threat).
   if (virusTotal.checked) {
-    hardRisk += virusTotal.malicious * 20; // was 5 — threat intel must matter
+    hardRisk += virusTotal.malicious * 12;
+    if (virusTotal.malicious >= 3) hardRisk += 15;
     softRisk += virusTotal.suspicious * 3;
   }
 
@@ -1555,6 +1596,22 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
     // Index signals → soft
     if (externalApis.serpApi.checked && !externalApis.serpApi.indexed) softRisk += 10;
     if (externalApis.commonCrawl.checked && !externalApis.commonCrawl.found) softRisk += 5;
+
+    // WHOIS domain age → hard for very new domains, soft for moderately new
+    if (externalApis.whois.checked && externalApis.whois.domainAgeDays !== null) {
+      const ageDays = externalApis.whois.domainAgeDays;
+      if (ageDays < 7) hardRisk += 20;          // brand-new domain — almost certainly fraudulent in paid ads
+      else if (ageDays < 30) hardRisk += 15;     // very new domain
+      else if (ageDays < 90) softRisk += 10;     // relatively new
+      else if (ageDays < 180) softRisk += 5;     // somewhat new
+    }
+    if (externalApis.whois.checked && externalApis.whois.daysUntilExpiry !== null) {
+      if (externalApis.whois.daysUntilExpiry < 0) {
+        hardRisk += 15; // expired domain — major red flag
+      } else if (externalApis.whois.daysUntilExpiry < 30) {
+        softRisk += 8;  // about to expire
+      }
+    }
   }
 
   // ── Legitimacy bonuses ─────────────────────────────────────────────────
@@ -1571,8 +1628,12 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
   if (externalApis?.crtSh.checked && externalApis.crtSh.totalCerts > 10) bonusPoints -= 3;
   if (externalApis?.crtSh.checked && externalApis.crtSh.totalCerts > 50) bonusPoints -= 3;
   if (externalApis?.crtSh.checked && externalApis.crtSh.totalCerts > 500) bonusPoints -= 3;
-  if (wayback.checked && wayback.domainAgeFromArchive != null && wayback.domainAgeFromArchive > 365) bonusPoints -= 5;
-  if (wayback.checked && wayback.domainAgeFromArchive != null && wayback.domainAgeFromArchive > 1825) bonusPoints -= 5;
+  // Domain age bonuses: WHOIS is authoritative, Wayback is fallback
+  const domainAgeDays = externalApis?.whois?.checked && externalApis.whois.domainAgeDays != null
+    ? externalApis.whois.domainAgeDays
+    : (wayback.checked && wayback.domainAgeFromArchive != null ? wayback.domainAgeFromArchive : null);
+  if (domainAgeDays != null && domainAgeDays > 365) bonusPoints -= 5;
+  if (domainAgeDays != null && domainAgeDays > 1825) bonusPoints -= 5;
   if (thirdPartyScripts.analytics.length > 0) bonusPoints -= 2;
   if (pageSpeed.checked && pageSpeed.performanceScore != null && pageSpeed.performanceScore >= 80) bonusPoints -= 3;
   // VirusTotal bonuses ONLY apply when genuinely clean (no malicious AND no suspicious detections)
@@ -1591,11 +1652,16 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
   const bonusCap = hardRisk > 0 ? -10 : -30;
   const effectiveSoftRisk = Math.max(0, softRisk + Math.max(bonusCap, bonusPoints));
 
-  // ── Keyword floor ──────────────────────────────────────────────────────
-  // A confirmed prohibited vertical (gambling / nutra / finance) must always
-  // score ≥ 55 so users can clearly distinguish it from safe domains (0–20).
-  if (kwScore >= 20 && detectedVertical !== null) {
-    hardRisk = Math.max(hardRisk, 55);
+  // ── Keyword floor (graduated) ──────────────────────────────────────────
+  // Prevents bonus-washing from erasing a clear vertical signal.
+  // Floors scale with signal strength — weak warning-only signals get a lower
+  // floor so gray-zone domains can land in the 30–55 range (not forced to 55+).
+  if (hasCriticalVerticalKw) {
+    // Critical brand/keyword in domain or content — strong evidence
+    const critCount = matches.filter(m => m.severity === 'critical' && m.vertical !== 'generic').length;
+    hardRisk = Math.max(hardRisk, critCount >= 3 ? 65 : 55);
+  } else if (detectedVertical !== null && kwScore >= 20) {
+    hardRisk = Math.max(hardRisk, 35); // multiple warning hits — moderate floor
   }
 
   const contentRiskScore = Math.min(100, Math.max(0, Math.round(hardRisk + effectiveSoftRisk)));
