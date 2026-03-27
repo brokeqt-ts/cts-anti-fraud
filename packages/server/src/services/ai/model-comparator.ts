@@ -305,7 +305,7 @@ export async function compareModels(
   // Load relevant best practices for prompt injection
   let bestPracticesText = '';
   try {
-    const vertical = features.offer_vertical ?? '';
+    const vertical = (features as unknown as Record<string, string>).offer_vertical ?? '';
     const bpResult = await pool.query(
       `SELECT title, content, category FROM best_practices
        WHERE is_active = true
