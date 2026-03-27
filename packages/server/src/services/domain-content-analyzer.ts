@@ -1321,29 +1321,42 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
 
   // ─── Composite risk score ─────────────────────────────────────────────────
   // Additive model: risk points for bad signals, bonuses for good signals.
+  // Bonuses capped at -25 to prevent infrastructure whitewashing.
 
   const wordCount = text.split(/\s+/).filter(Boolean).length;
-  const isSpa = wordCount < 50;
   const isBehindCloudflare = (securityHeaders.serverHeader ?? '').toLowerCase().includes('cloudflare')
     || (headers['cf-ray'] != null);
+  // Legitimate SPA = low word count BUT has analytics/good security (React/Vue app)
+  // TDS/empty page = low word count AND no analytics/bad security
+  const isLegitSpa = wordCount < 50
+    && (thirdPartyScripts.analytics.length > 0 || securityHeaders.securityScore >= 40);
+  const isThinContent = wordCount < 20 && !isLegitSpa;
 
   const complianceAdjusted = Math.min(100, compliance.score + structuredData.legitimacyBonus);
   let riskPoints = 0;
 
   // ── Content signals ────────────────────────────────────────────────────
-  // Grey keywords (biggest risk signal)
+  // FIX 4: Non-linear keyword scaling — extra penalty for keyword-saturated pages
   riskPoints += kwScore * 0.20;
+  if (kwScore > 60) riskPoints += 5;
+  if (kwScore > 80) riskPoints += 5;
 
-  // Compliance gaps — skip penalty for SPA sites (content in JS, can't parse)
-  if (!isSpa) {
+  // FIX 2: Compliance gaps — only skip for LEGITIMATE SPAs, not TDS/empty pages
+  if (!isLegitSpa) {
     riskPoints += (100 - complianceAdjusted) * 0.10;
   }
 
   // Structural red flags
   riskPoints += structure.score * 0.15;
 
-  // Redirect risk
-  riskPoints += redirects.score * 0.05;
+  // FIX 1: Redirect risk — increased from 0.05 to 0.15
+  riskPoints += redirects.score * 0.15;
+
+  // FIX 5: Direct URL mismatch penalty (declared ad URL != final URL)
+  if (redirects.mismatch) riskPoints += 15;
+
+  // FIX 3: Thin content penalty (< 20 words, not a legit SPA)
+  if (isThinContent) riskPoints += 10;
 
   // ── Infrastructure signals ─────────────────────────────────────────────
   // TLD risk
@@ -1386,10 +1399,9 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
 
   // ── External API signals ───────────────────────────────────────────────
   if (externalApis) {
-    // Blocklists — SKIP IP-based checks if behind Cloudflare (shared IP = false positives)
+    // Blocklists — skip IP-based if behind Cloudflare
     if (externalApis.blocklists.checked && externalApis.blocklists.lists.length > 0) {
       if (isBehindCloudflare) {
-        // Only count domain-based lists (DBL), not IP-based (ZEN)
         const domainLists = externalApis.blocklists.lists.filter(l => l.includes('DBL') || l.includes('SURBL') || l.includes('URIBL'));
         riskPoints += domainLists.length * 15;
       } else {
@@ -1397,57 +1409,49 @@ export async function analyzeContent(url: string, declaredUrl?: string): Promise
       }
     }
 
-    // Shodan vulnerabilities — skip if Cloudflare (it's CF's IP, not origin)
+    // Shodan vulnerabilities — skip if Cloudflare
     if (!isBehindCloudflare && externalApis.shodan.checked && externalApis.shodan.vulns.length > 0) {
       riskPoints += Math.min(15, externalApis.shodan.vulns.length * 3);
     }
 
-    // AbuseIPDB — skip if Cloudflare (shared IP always has reports)
+    // AbuseIPDB — skip if Cloudflare
     if (!isBehindCloudflare && externalApis.abuseIpdb.checked && externalApis.abuseIpdb.abuseScore > 0) {
       riskPoints += Math.min(15, externalApis.abuseIpdb.abuseScore * 0.15);
     }
 
-    // Malware/Phishing databases (URL-based, not IP — always reliable)
+    // Malware/Phishing databases (URL-based — always reliable)
     if (externalApis.urlhaus.checked && externalApis.urlhaus.isMalware) riskPoints += 25;
     if (externalApis.phishTank.checked && externalApis.phishTank.isPhishing) riskPoints += 25;
     if (externalApis.openPhish.checked && externalApis.openPhish.isPhishing) riskPoints += 25;
-
-    // DNS legitimacy (reduce risk)
-    if (externalApis.dnsAnalysis.checked) {
-      if (externalApis.dnsAnalysis.hasSpf) riskPoints -= 3;
-      if (externalApis.dnsAnalysis.hasDmarc) riskPoints -= 3;
-      if (externalApis.dnsAnalysis.hasMx) riskPoints -= 2;
-    }
 
     // Not in Google index
     if (externalApis.serpApi.checked && !externalApis.serpApi.indexed) riskPoints += 10;
 
     // Not in CommonCrawl
     if (externalApis.commonCrawl.checked && !externalApis.commonCrawl.found) riskPoints += 5;
-
-    // Many SSL certs = established domain
-    if (externalApis.crtSh.checked && externalApis.crtSh.totalCerts > 10) riskPoints -= 3;
-    if (externalApis.crtSh.checked && externalApis.crtSh.totalCerts > 50) riskPoints -= 3;
   }
 
-  // ── Legitimacy bonuses ─────────────────────────────────────────────────
-  if (wayback.checked && wayback.domainAgeFromArchive != null && wayback.domainAgeFromArchive > 365) riskPoints -= 5;
-  if (wayback.checked && wayback.domainAgeFromArchive != null && wayback.domainAgeFromArchive > 1825) riskPoints -= 5;
-  if (thirdPartyScripts.analytics.length > 0) riskPoints -= 2;
-  if (pageSpeed.checked && pageSpeed.performanceScore != null && pageSpeed.performanceScore >= 80) riskPoints -= 3;
+  // ── Legitimacy bonuses (FIX 6: capped at -25) ─────────────────────────
+  let bonusPoints = 0;
 
-  // Clean VirusTotal is a strong positive signal
-  if (virusTotal.checked && virusTotal.malicious === 0 && virusTotal.harmless > 50) riskPoints -= 5;
+  if (externalApis?.dnsAnalysis.checked) {
+    if (externalApis.dnsAnalysis.hasSpf) bonusPoints -= 3;
+    if (externalApis.dnsAnalysis.hasDmarc) bonusPoints -= 3;
+    if (externalApis.dnsAnalysis.hasMx) bonusPoints -= 2;
+  }
+  if (externalApis?.crtSh.checked && externalApis.crtSh.totalCerts > 10) bonusPoints -= 3;
+  if (externalApis?.crtSh.checked && externalApis.crtSh.totalCerts > 50) bonusPoints -= 3;
+  if (wayback.checked && wayback.domainAgeFromArchive != null && wayback.domainAgeFromArchive > 365) bonusPoints -= 5;
+  if (wayback.checked && wayback.domainAgeFromArchive != null && wayback.domainAgeFromArchive > 1825) bonusPoints -= 5;
+  if (thirdPartyScripts.analytics.length > 0) bonusPoints -= 2;
+  if (pageSpeed.checked && pageSpeed.performanceScore != null && pageSpeed.performanceScore >= 80) bonusPoints -= 3;
+  if (virusTotal.checked && virusTotal.malicious === 0 && virusTotal.harmless > 50) bonusPoints -= 5;
+  if (safeBrowsing.checked && safeBrowsing.safe) bonusPoints -= 5;
+  if (structuredData.hasJsonLd) bonusPoints -= 2;
+  if (structuredData.hasOrganizationSchema) bonusPoints -= 2;
+  if (isLegitSpa && securityHeaders.securityScore >= 70) bonusPoints -= 5;
 
-  // Clean Safe Browsing is a strong positive signal
-  if (safeBrowsing.checked && safeBrowsing.safe) riskPoints -= 5;
-
-  // Structured data = legitimate site effort
-  if (structuredData.hasJsonLd) riskPoints -= 2;
-  if (structuredData.hasOrganizationSchema) riskPoints -= 2;
-
-  // SPA with good security = likely legitimate app, not a landing page
-  if (isSpa && securityHeaders.securityScore >= 70) riskPoints -= 5;
+  riskPoints += Math.max(-25, bonusPoints);
 
   const contentRiskScore = Math.min(100, Math.max(0, Math.round(riskPoints)));
 
