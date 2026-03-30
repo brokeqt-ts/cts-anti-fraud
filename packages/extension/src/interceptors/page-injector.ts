@@ -77,36 +77,27 @@
   // Detection now uses chrome.tabs.get(tabId).title in the service worker.
 
   /**
-   * Extract Google Ads Customer ID from the current page URL.
+   * Extract Google Ads CID from the current page context.
    *
-   * Google Ads URL params when accessed via MCC (manager account):
-   *   ?ocid=812465993&__u=327338679&...
-   *   ocid = MCC manager account ID (same for all managed accounts)
-   *   __u  = advertising account ID (the one we need)
-   *   __c  = alternative customer ID param
-   *
-   * Priority: __u (ad account) → __c → ocid (fallback to manager if no __u).
-   * This ensures we track the actual advertising account, not the MCC.
-   *
-   * Sources:
-   *  1. URL query params
-   *  2. URL hash params (SPA routing)
+   * Sources (reliable only):
+   *  1. URL query params: ocid, __c
+   *  2. URL hash params: ocid, __c (SPA routing)
    *  3. Cached CID from previous extraction on this page
+   *
+   * URL path segments are NOT used — they contain campaign_id, ad_id, etc.
+   * which are 7-10 digit numbers indistinguishable from CID by format alone.
+   *
+   * Cache is invalidated when a new CID is found in URL params (account switch).
    */
   let cachedCid: string | null = null;
   const VALID_CID_RE = /^\d{7,10}$/;
 
-  function extractCidFromParams(params: URLSearchParams): string | null {
-    // __u = advertising account (priority), __c = customer ID, ocid = manager fallback
-    const cid = params.get('__u') ?? params.get('__c') ?? params.get('ocid') ?? null;
-    return cid && VALID_CID_RE.test(cid) ? cid : null;
-  }
-
   function extractGoogleCid(): string | null {
     try {
       // 1. Query params (most reliable)
-      const fromParams = extractCidFromParams(new URLSearchParams(window.location.search));
-      if (fromParams) {
+      const params = new URLSearchParams(window.location.search);
+      const fromParams = params.get('ocid') ?? params.get('__c') ?? null;
+      if (fromParams && VALID_CID_RE.test(fromParams)) {
         cachedCid = fromParams;
         return fromParams;
       }
@@ -116,8 +107,9 @@
       if (hash) {
         const hashSearch = hash.includes('?') ? hash.slice(hash.indexOf('?')) : '';
         if (hashSearch) {
-          const fromHash = extractCidFromParams(new URLSearchParams(hashSearch));
-          if (fromHash) {
+          const hashParams = new URLSearchParams(hashSearch);
+          const fromHash = hashParams.get('ocid') ?? hashParams.get('__c') ?? null;
+          if (fromHash && VALID_CID_RE.test(fromHash)) {
             cachedCid = fromHash;
             return fromHash;
           }
