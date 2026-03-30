@@ -1,12 +1,78 @@
 /**
  * Domain Content Analyzer — deep content analysis for Google Ads compliance.
  *
- * Analyzes landing pages for:
- * - Grey keywords that trigger Google Ads policy flags
- * - Compliance (Privacy Policy, ToS, disclaimers, contact info)
- * - Suspicious structural patterns (timers, fake reviews, hidden text)
- * - Redirect chains and URL mismatches
- * - LLM-ready context generation for AI-powered analysis
+ * Purpose: predict ban risk for Google Ads accounts advertising a given domain.
+ * Collects 60+ signals from the landing page and 14 external APIs, then
+ * produces a 0-100 contentRiskScore and an LLM-ready context object.
+ *
+ * ── Signal layers ──────────────────────────────────────────────────────────
+ *
+ * Level 1 — Local HTML analysis (no API keys, instant):
+ *   • Grey keyword detection (9 verticals: gambling, nutra, crypto, finance,
+ *     sweepstakes, dating, pharma, generic, + domain-only keywords)
+ *   • Domain-name token scanning (exact-match DOMAIN_ONLY_KEYWORDS fallback
+ *     when HTML fetch fails / site is an SPA behind Cloudflare)
+ *   • Compliance check (Privacy Policy, ToS, Contact, Disclaimer, About,
+ *     Cookie Consent, Age Verification — both inline text and href links)
+ *   • Structural red flags (countdown timers, fake reviews, before/after,
+ *     hidden text, aggressive CTAs, popup overlays, autoplay video,
+ *     JS redirects, obfuscated JS, excessive iframes)
+ *   • Redirect chain analysis (hop count, domain mismatch, cloaking signals)
+ *   • HTTP security headers (HSTS, CSP, X-Frame-Options, Referrer-Policy, etc.)
+ *   • TLD risk classification (HIGH_RISK / MEDIUM_RISK / LOW_RISK sets)
+ *   • robots.txt analysis (Googlebot blocking, sitemap presence)
+ *   • Form analysis (personal data / payment data collection, external targets)
+ *   • Third-party script cataloging (analytics, advertising, TDS/cloaking, CDN)
+ *   • Outbound link reputation (URL shorteners, affiliate networks, trackers)
+ *   • Schema.org structured data (JSON-LD, Organization, Product, FAQ)
+ *
+ * Level 2 — Free external APIs (no key required):
+ *   • Google Safe Browsing (GOOGLE_SAFE_BROWSING_KEY)
+ *   • Google PageSpeed Insights
+ *   • VirusTotal domain report (VIRUSTOTAL_API_KEY, free 4 req/min)
+ *   • Wayback Machine archive age
+ *
+ * Level 3 — External API suite (14 services, see domain-external-apis.ts):
+ *   • crt.sh (Certificate Transparency — cert count, issuers, subdomains)
+ *   • WHOIS / RDAP (domain age, registrar, expiry, privacy protection)
+ *   • Shodan InternetDB (open ports, vulns, tags)
+ *   • DNS analysis (SPF, DMARC, MX, CAA, NS, A/AAAA records)
+ *   • Spamhaus DBL + SURBL + URIBL (DNS blocklists)
+ *   • CommonCrawl Index (crawl presence)
+ *   • OpenPhish feed (phishing URL check)
+ *   • AbuseIPDB (IP abuse score, ABUSEIPDB_API_KEY)
+ *   • URLhaus (malware URL check)
+ *   • SerpAPI (Google index check, SERPAPI_KEY)
+ *
+ * ── Scoring architecture ───────────────────────────────────────────────────
+ *
+ *   Two-tier model: hardRisk (uncancellable) + softRisk (offset by bonuses).
+ *
+ *   hardRisk sources: Safe Browsing flag, VT malicious detections (×12, +15
+ *     for 3+ consensus), domain blocklists, URLhaus/OpenPhish, confirmed
+ *     prohibited vertical with critical keyword, zero compliance on full site,
+ *     WHOIS domain age < 30 days, expired domain.
+ *
+ *   softRisk sources: keyword score ×0.35, compliance gaps (partial), TLD
+ *     penalty, structure/redirect scores, Shodan vulns, AbuseIPDB, Wayback
+ *     no-history, WHOIS domain age 30-180 days, VT suspicious detections.
+ *
+ *   Legitimacy bonuses (only reduce softRisk, capped at -10 when hardRisk > 0,
+ *     -30 otherwise): SPF, DMARC, MX, crt.sh cert count, domain age > 1yr/5yr,
+ *     analytics scripts, PageSpeed ≥ 80, VT clean + reputation, Safe Browsing
+ *     clean, JSON-LD, Organization schema, AbuseIPDB whitelisted.
+ *
+ *   Keyword floor (graduated): critical vertical keyword → floor 55-65;
+ *     warning-only multiple hits → floor 35. Prevents bonus-washing.
+ *
+ *   Cloudflare challenge detection: bot-check pages skip compliance penalty
+ *     (can't parse) but don't get isLegitSpa benefits either.
+ *
+ * ── Exports ────────────────────────────────────────────────────────────────
+ *
+ *   analyzeContent(url, declaredUrl?) → ContentAnalysisResult
+ *   analyzeAndSave(pool, domainId, url, declaredUrl?) → persists to DB
+ *   analyzePending(pool, limit?) → batch re-analysis of stale domains
  */
 
 import type pg from 'pg';
@@ -236,7 +302,7 @@ export interface ContentAnalysisResult {
   virusTotal: VirusTotalResult;
   wayback: WaybackResult;
 
-  // Level 4: External API suite (13 services)
+  // Level 4: External API suite (14 services, incl. WHOIS/RDAP)
   externalApis: AllExternalResults | null;
 
   // LLM context

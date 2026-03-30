@@ -1,8 +1,7 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Plus, Pencil, Trash2, Loader2, AlertCircle, CheckCircle, Download } from 'lucide-react';
+import { BookOpen, Plus, Pencil, Trash2, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { fetchBestPractices, createBestPractice, updateBestPractice, deleteBestPractice, ApiError, type BestPractice } from '../api.js';
-import { downloadCsv } from '../utils/csv.js';
 import { BlurFade, StaggerContainer, StaggerItem } from '../components/ui/animations.js';
 
 const CATEGORIES = [
@@ -152,28 +151,6 @@ export function BestPracticesPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                const headers = ['Название', 'Категория', 'Вертикаль', 'Тип кампании', 'Приоритет', 'Активна', 'Автор', 'Создана'];
-                const rows = (practices ?? []).map((bp) => [
-                  bp.title,
-                  CATEGORIES.find(c => c.value === bp.category)?.label ?? bp.category,
-                  bp.offer_vertical ?? '',
-                  bp.campaign_type ?? '',
-                  bp.priority,
-                  bp.is_active ? 'да' : 'нет',
-                  bp.author_name ?? '',
-                  new Date(bp.created_at).toLocaleDateString('ru-RU'),
-                ]);
-                downloadCsv(`best_practices_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-              style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', color: '#818cf8' }}
-              title="Экспорт в CSV"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Скачать CSV
-            </button>
             <button onClick={openCreate} className="btn-ghost-green px-3 py-1.5 text-sm flex items-center gap-1.5">
               <Plus className="w-4 h-4" /> Создать
             </button>

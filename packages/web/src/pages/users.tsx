@@ -30,7 +30,7 @@ import {
 } from '../api.js';
 import { useAuth } from '../contexts/auth-context.js';
 import { StaggerContainer, StaggerItem, BlurFade } from '../components/ui/animations.js';
-import { downloadCsv } from '../utils/csv.js';
+
 
 type ModalMode = 'create' | 'edit' | 'password' | null;
 
@@ -243,25 +243,6 @@ export function UsersPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                const headers = ['Имя', 'Email', 'Роль', 'Scope', 'Статус'];
-                const rows = users.map((u) => [
-                  u.name,
-                  u.email,
-                  u.role,
-                  u.api_key_scope,
-                  u.is_active ? 'активен' : 'отключён',
-                ]);
-                downloadCsv(`users_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors"
-              style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', color: '#818cf8' }}
-              title="Экспорт в CSV"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Скачать CSV
-            </button>
             <button onClick={openCreate} className="btn-ghost-green flex items-center gap-2 py-2 px-3 text-sm">
               <Plus className="w-4 h-4" />
               Добавить

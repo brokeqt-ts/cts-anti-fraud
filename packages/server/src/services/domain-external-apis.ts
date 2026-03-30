@@ -1,9 +1,30 @@
 /**
- * Domain External API Analyzers — free third-party API integrations.
+ * Domain External API Analyzers — 14 free third-party API integrations.
  *
- * All APIs are free (some require API keys with generous limits).
+ * All APIs are free (some require API keys with generous free-tier limits).
  * Each function returns a result with `checked: boolean` — false if
- * API key not set or request failed.
+ * API key not set or request failed. All calls are safe to run in parallel.
+ *
+ * ── Services ───────────────────────────────────────────────────────────────
+ *
+ *  #  Service              Key needed?         Rate limit (free)
+ *  ── ──────────────────── ─────────────────── ─────────────────────────────
+ *  1  crt.sh               No                  ~100 req/min (unofficial)
+ *  2  WHOIS / RDAP         No                  Varies by registry
+ *  3  Shodan InternetDB    No                  Unlimited
+ *  4  DNS (SPF/DMARC/MX)   No (node:dns)       N/A
+ *  5  Spamhaus DBL         No (DNS-based)       N/A
+ *  6  SURBL                No (DNS-based)       N/A
+ *  7  URIBL                No (DNS-based)       N/A
+ *  8  CommonCrawl Index    No                  Generous
+ *  9  OpenPhish feed       No                  1 fetch / hour (cached)
+ * 10  AbuseIPDB            ABUSEIPDB_API_KEY   1000 req/day
+ * 11  URLhaus              No                  Unlimited
+ * 12  SerpAPI              SERPAPI_KEY          100 searches/month
+ * 13  (Safe Browsing)      GOOGLE_SAFE_BROWSING_KEY  — runs in content-analyzer
+ * 14  (VirusTotal)         VIRUSTOTAL_API_KEY        — runs in content-analyzer
+ *
+ * Entry point: runAllExternalChecks(domain, url, ip?) → AllExternalResults
  */
 
 import dns from 'node:dns/promises';
