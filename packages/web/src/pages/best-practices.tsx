@@ -25,14 +25,6 @@ const VERTICALS = [
   { value: 'finance', label: 'Finance' },
 ];
 
-const CAMPAIGN_TYPES = [
-  { value: '', label: 'Все типы' },
-  { value: 'pmax', label: 'PMax' },
-  { value: 'search', label: 'Search' },
-  { value: 'demand_gen', label: 'Demand Gen' },
-  { value: 'display', label: 'Display' },
-  { value: 'video', label: 'Video' },
-];
 
 export function BestPracticesPage() {
   const [practices, setPractices] = useState<BestPractice[] | null>(null);
@@ -48,7 +40,7 @@ export function BestPracticesPage() {
   const [formContent, setFormContent] = useState('');
   const [formCategory, setFormCategory] = useState('ban_prevention');
   const [formVertical, setFormVertical] = useState('');
-  const [formCampaignType, setFormCampaignType] = useState('');
+
   const [formPriority, setFormPriority] = useState(5);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -75,7 +67,6 @@ export function BestPracticesPage() {
     setFormContent('');
     setFormCategory('ban_prevention');
     setFormVertical('');
-    setFormCampaignType('');
     setFormPriority(5);
     setFormError(null);
     setShowModal(true);
@@ -87,7 +78,6 @@ export function BestPracticesPage() {
     setFormContent(bp.content);
     setFormCategory(bp.category);
     setFormVertical(bp.offer_vertical ?? '');
-    setFormCampaignType(bp.campaign_type ?? '');
     setFormPriority(bp.priority);
     setFormError(null);
     setShowModal(true);
@@ -101,14 +91,14 @@ export function BestPracticesPage() {
       if (editing) {
         await updateBestPractice(editing.id, {
           title: formTitle, content: formContent, category: formCategory,
-          offer_vertical: formVertical || null, campaign_type: formCampaignType || null,
+          offer_vertical: formVertical || null,
           priority: formPriority,
         });
         setSuccess('Методичка обновлена');
       } else {
         await createBestPractice({
           title: formTitle, content: formContent, category: formCategory,
-          offer_vertical: formVertical || undefined, campaign_type: formCampaignType || undefined,
+          offer_vertical: formVertical || undefined,
           priority: formPriority,
         });
         setSuccess('Методичка создана');
@@ -193,11 +183,6 @@ export function BestPracticesPage() {
                         {bp.offer_vertical}
                       </span>
                     )}
-                    {bp.campaign_type && (
-                      <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(74,222,128,0.1)', color: '#4ade80' }}>
-                        {bp.campaign_type}
-                      </span>
-                    )}
                     <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ color: 'var(--text-muted)' }}>
                       P{bp.priority}
                     </span>
@@ -259,12 +244,6 @@ export function BestPracticesPage() {
                   <label className="block label-xs mb-1">Приоритет</label>
                   <input type="number" min={0} value={formPriority} onChange={e => setFormPriority(Number(e.target.value))} className="w-full px-3 py-2 rounded-lg text-sm" style={selectStyle} />
                 </div>
-              </div>
-              <div>
-                <label className="block label-xs mb-1">Тип кампании</label>
-                <select value={formCampaignType} onChange={e => setFormCampaignType(e.target.value)} className="w-full px-3 py-2 rounded-lg text-sm" style={selectStyle}>
-                  {CAMPAIGN_TYPES.map(t => <option key={t.value} value={t.value}>{t.label || 'Все'}</option>)}
-                </select>
               </div>
               <div>
                 <label className="block label-xs mb-1">Содержимое (Markdown)</label>
