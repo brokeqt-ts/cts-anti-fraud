@@ -5,8 +5,11 @@ const path = require('path');
 const srcDir = path.resolve(__dirname, '../src');
 const distDir = path.resolve(__dirname, '../dist');
 
-// Build-time config — replaced in all entry points via esbuild `define`
-const serverUrl = process.env.EXT_SERVER_URL || 'https://strong-dedication-production.up.railway.app';
+// Build-time config — replaced in all entry points via esbuild `define`.
+// SERVER_URL uses a placeholder so the download handler can swap it at runtime
+// with the server's EXT_SERVER_URL env var (same pattern as API key).
+const SERVER_URL_PLACEHOLDER = '__CTS_SERVER_URL_PLACEHOLDER__';
+const serverUrl = process.env.EXT_SERVER_URL || SERVER_URL_PLACEHOLDER;
 
 // API key uses a placeholder — replaced at download time with the user's personal key.
 // The server reads dist/ as a template and swaps the placeholder before zipping.
