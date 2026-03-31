@@ -18,12 +18,13 @@ export const authPlugin = fp(async function auth(fastify: FastifyInstance): Prom
   const pool = getPool(env.DATABASE_URL);
 
   fastify.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
-    // 1. Try JWT from Authorization: Bearer <token>
+    // 1. Try JWT from Authorization: Bearer <token> OR ?token= query param (for SSE)
     const authHeader = request.headers['authorization'];
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.slice(7);
+    const queryToken = (request.query as Record<string, string | undefined>)['token'];
+    const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : queryToken;
+    if (bearerToken) {
       try {
-        const payload = verifyAccessToken(token);
+        const payload = verifyAccessToken(bearerToken);
         request.user = { id: payload.sub, role: payload.role, name: payload.name };
         return; // JWT users have no scope restriction
       } catch {

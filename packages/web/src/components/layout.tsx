@@ -5,6 +5,8 @@ import { useCallback } from 'react';
 import { AnimatedThemeToggler } from './ui/animated-theme-toggler.js';
 import { NotificationBell } from './notification-bell.js';
 import { CommandPalette, openCommandPalette } from './command-palette.js';
+import { ToastNotifications } from './toast-notifications.js';
+import { useNotificationStream } from '../hooks/use-notification-stream.js';
 import { useAuth } from '../contexts/auth-context.js';
 
 const baseNavItems = [
@@ -25,6 +27,7 @@ export function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { lastNotification } = useNotificationStream();
 
   const navItems = user?.role === 'admin'
     ? [...baseNavItems.slice(0, -1), { to: '/users', label: 'Пользователи', icon: UserCog }, { to: '/admin/notifications', label: 'Упр. уведомлениями', icon: BellRing }, baseNavItems[baseNavItems.length - 1]]
@@ -205,6 +208,7 @@ export function Layout() {
         </div>
       </main>
       <CommandPalette />
+      <ToastNotifications notification={lastNotification} />
     </div>
   );
 }

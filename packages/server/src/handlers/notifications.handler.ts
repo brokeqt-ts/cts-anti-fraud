@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { getPool } from '../config/database.js';
 import { env } from '../config/env.js';
 import * as notificationService from '../services/notification.service.js';
+import { addSseClient } from '../services/sse-bus.js';
 
 export async function listNotificationsHandler(
   request: FastifyRequest,
@@ -63,6 +64,37 @@ export async function markReadHandler(
   }
 
   await reply.send({ success: true });
+}
+
+/** SSE stream — pushes real-time notification events to the connected client. */
+export async function notificationStreamHandler(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const userId = request.user!.id;
+
+  reply.raw.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no', // Disable nginx buffering
+  });
+
+  // Send initial unread count
+  const pool = getPool(env.DATABASE_URL);
+  const count = await notificationService.getUnreadCount(pool, userId);
+  reply.raw.write(`event: unread_count\ndata: ${JSON.stringify({ count })}\n\n`);
+
+  // Keep-alive ping every 30s
+  const keepAlive = setInterval(() => {
+    try { reply.raw.write(': ping\n\n'); } catch { clearInterval(keepAlive); }
+  }, 30_000);
+
+  addSseClient(userId, reply);
+
+  request.raw.on('close', () => {
+    clearInterval(keepAlive);
+  });
 }
 
 export async function markAllReadHandler(

@@ -4,6 +4,7 @@ import {
   unreadCountHandler,
   markReadHandler,
   markAllReadHandler,
+  notificationStreamHandler,
 } from '../handlers/notifications.handler.js';
 
 export async function notificationsRoutes(fastify: FastifyInstance): Promise<void> {
@@ -52,5 +53,12 @@ export async function notificationsRoutes(fastify: FastifyInstance): Promise<voi
     '/notifications/read-all',
     { preHandler: [fastify.authenticate] },
     markAllReadHandler,
+  );
+
+  // SSE doesn't support Authorization headers, so we accept token as query param
+  fastify.get(
+    '/notifications/stream',
+    { preHandler: [fastify.authenticate] },
+    notificationStreamHandler,
   );
 }

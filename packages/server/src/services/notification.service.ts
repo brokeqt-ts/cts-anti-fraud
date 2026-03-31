@@ -3,6 +3,7 @@ import * as notificationsRepo from '../repositories/notifications.repository.js'
 import type { CreateNotificationParams, ListNotificationsParams, NotificationRow } from '../repositories/notifications.repository.js';
 import { getSettingCached, isCooldownActive } from './notification-settings.service.js';
 import * as telegram from './telegram-bot.service.js';
+import { broadcastToUser } from './sse-bus.js';
 
 export type { CreateNotificationParams, NotificationRow };
 
@@ -32,7 +33,21 @@ export async function createNotification(
   pool: pg.Pool,
   params: CreateNotificationParams,
 ): Promise<NotificationRow | null> {
-  return notificationsRepo.insertNotification(pool, params);
+  const row = await notificationsRepo.insertNotification(pool, params);
+  if (row) {
+    // Push to SSE clients in real-time
+    broadcastToUser(params.userId, 'notification', {
+      id: row.id,
+      title: row.title,
+      message: row.message,
+      type: row.type,
+      severity: row.severity,
+    });
+    // Also push updated unread count
+    const count = await notificationsRepo.countUnread(pool, params.userId);
+    broadcastToUser(params.userId, 'unread_count', { count });
+  }
+  return row;
 }
 
 export async function getUserNotifications(
