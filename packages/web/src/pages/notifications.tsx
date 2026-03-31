@@ -9,6 +9,7 @@ import {
   type Notification,
 } from '../api.js';
 import { downloadCsv } from '../utils/csv.js';
+import { DateRangePicker, type DateRange } from '../components/date-range-picker.js';
 import { BlurFade } from '../components/ui/animations.js';
 
 const PAGE_SIZE = 20;
@@ -41,6 +42,7 @@ export function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [filter, setFilter] = useState<FilterMode>('all');
+  const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null });
   const navigate = useNavigate();
 
   const load = useCallback(() => {
@@ -49,6 +51,8 @@ export function NotificationsPage() {
       limit: PAGE_SIZE,
       offset: page * PAGE_SIZE,
       unread_only: filter === 'unread',
+      from_date: dateRange.from ?? undefined,
+      to_date: dateRange.to ?? undefined,
     })
       .then((r) => {
         let filtered = r.notifications;
@@ -61,7 +65,7 @@ export function NotificationsPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [page, filter]);
+  }, [page, filter, dateRange]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -152,7 +156,7 @@ export function NotificationsPage() {
         </div>
 
         {/* Filters */}
-        <div className="flex gap-1 mb-4 flex-wrap">
+        <div className="flex items-center gap-1 mb-4 flex-wrap">
           {filters.map((f) => (
             <button
               key={f.key}
@@ -172,6 +176,9 @@ export function NotificationsPage() {
               {f.label}
             </button>
           ))}
+          <div className="ml-auto">
+            <DateRangePicker value={dateRange} onChange={(r) => { setDateRange(r); setPage(0); }} />
+          </div>
         </div>
 
         {/* List */}

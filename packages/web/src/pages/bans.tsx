@@ -5,6 +5,7 @@ import { fetchBans, fetchOverview, generatePostMortemAll, ApiError, type BanSumm
 import { downloadCsv } from '../utils/csv.js';
 import { VerticalBadge, TargetBadge } from '../components/badge.js';
 import { TableSkeleton } from '../components/skeleton.js';
+import { DateRangePicker, type DateRange } from '../components/date-range-picker.js';
 import {
   BlurFade,
   StaggerContainer,
@@ -21,6 +22,7 @@ export function BansPage() {
   const [stats, setStats] = useState<OverviewStats | null>(null);
   const [verticalFilter, setVerticalFilter] = useState('');
   const [targetFilter, setTargetFilter] = useState('');
+  const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [pmBulk, setPmBulk] = useState<string | null>(null);
@@ -35,6 +37,8 @@ export function BansPage() {
     const params: Record<string, string> = {};
     if (verticalFilter) params['offer_vertical'] = verticalFilter;
     if (targetFilter) params['ban_target'] = targetFilter;
+    if (dateRange.from) params['from_date'] = dateRange.from;
+    if (dateRange.to) params['to_date'] = dateRange.to;
     fetchBans(params)
       .then((data) => { setBans(data.bans); setTotal(data.total); })
       .catch((e: unknown) => {
@@ -42,7 +46,7 @@ export function BansPage() {
         setError(e instanceof Error ? e.message : 'Неизвестная ошибка');
       })
       .finally(() => setLoading(false));
-  }, [verticalFilter, targetFilter, navigate]);
+  }, [verticalFilter, targetFilter, dateRange, navigate]);
 
   // Computed analytics
   const now = Date.now();
@@ -167,11 +171,14 @@ export function BansPage() {
         </div>
       </BlurFade>
       <BlurFade delay={0.1}>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <FilterPill active={!targetFilter} onClick={() => setTargetFilter('')}>Все цели</FilterPill>
           {TARGETS.map((t) => (
             <FilterPill key={t} active={targetFilter === t} onClick={() => setTargetFilter(t)}>{t}</FilterPill>
           ))}
+          <div className="ml-auto">
+            <DateRangePicker value={dateRange} onChange={setDateRange} />
+          </div>
         </div>
       </BlurFade>
 

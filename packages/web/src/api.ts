@@ -1386,11 +1386,15 @@ export const fetchNotifications = (params?: {
   limit?: number;
   offset?: number;
   unread_only?: boolean;
+  from_date?: string;
+  to_date?: string;
 }): Promise<NotificationsResponse> => {
   const q = new URLSearchParams();
   if (params?.limit != null) q.set('limit', String(params.limit));
   if (params?.offset != null) q.set('offset', String(params.offset));
   if (params?.unread_only) q.set('unread_only', 'true');
+  if (params?.from_date) q.set('from_date', params.from_date);
+  if (params?.to_date) q.set('to_date', params.to_date);
   const qs = q.toString();
   return apiFetch(`/notifications${qs ? `?${qs}` : ''}`);
 };

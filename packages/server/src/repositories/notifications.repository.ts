@@ -29,6 +29,8 @@ export interface ListNotificationsParams {
   limit: number;
   offset: number;
   unreadOnly: boolean;
+  fromDate?: string;
+  toDate?: string;
 }
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
@@ -74,9 +76,18 @@ export async function findByUser(
 ): Promise<{ notifications: NotificationRow[]; total: number }> {
   const conditions = ['user_id = $1'];
   const values: unknown[] = [userId];
+  let paramIdx = 2;
 
   if (params.unreadOnly) {
     conditions.push('is_read = false');
+  }
+  if (params.fromDate) {
+    conditions.push(`created_at >= $${paramIdx++}::date`);
+    values.push(params.fromDate);
+  }
+  if (params.toDate) {
+    conditions.push(`created_at < ($${paramIdx++}::date + interval '1 day')`);
+    values.push(params.toDate);
   }
 
   const where = conditions.join(' AND ');

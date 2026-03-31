@@ -13,6 +13,8 @@ export async function listNotificationsHandler(
     limit?: string;
     offset?: string;
     unread_only?: string;
+    from_date?: string;
+    to_date?: string;
   };
 
   const limit = Math.min(Math.max(parseInt(query.limit ?? '20', 10) || 20, 1), 100);
@@ -22,7 +24,7 @@ export async function listNotificationsHandler(
   const { notifications, total } = await notificationService.getUserNotifications(
     pool,
     userId,
-    { limit, offset, unreadOnly },
+    { limit, offset, unreadOnly, fromDate: query.from_date, toDate: query.to_date },
   );
 
   const unreadCount = await notificationService.getUnreadCount(pool, userId);

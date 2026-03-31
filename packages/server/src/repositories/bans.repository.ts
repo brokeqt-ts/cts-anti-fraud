@@ -30,6 +30,8 @@ export interface BanListFilters {
   account_google_id?: string;
   offer_vertical?: string;
   ban_target?: string;
+  from_date?: string;
+  to_date?: string;
   limit: number;
   offset: number;
   userId?: string;
@@ -217,6 +219,14 @@ export async function listBans(
   if (filters.ban_target) {
     conditions.push(`bl.ban_target = $${paramIdx++}`);
     params.push(filters.ban_target);
+  }
+  if (filters.from_date) {
+    conditions.push(`bl.banned_at >= $${paramIdx++}::date`);
+    params.push(filters.from_date);
+  }
+  if (filters.to_date) {
+    conditions.push(`bl.banned_at < ($${paramIdx++}::date + interval '1 day')`);
+    params.push(filters.to_date);
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';

@@ -136,6 +136,8 @@ export async function listBansHandler(
   const account_google_id = query['account_google_id'];
   const offer_vertical = query['offer_vertical'];
   const ban_target = query['ban_target'];
+  const from_date = query['from_date'];
+  const to_date = query['to_date'];
   const limit = query['limit'] ?? '50';
   const offset = query['offset'] ?? '0';
 
@@ -143,6 +145,8 @@ export async function listBansHandler(
     account_google_id,
     offer_vertical,
     ban_target,
+    from_date,
+    to_date,
     limit: parseInt(limit, 10),
     offset: parseInt(offset, 10),
     userId: getUserIdFilter(request),
