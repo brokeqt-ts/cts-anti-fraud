@@ -88,8 +88,8 @@ export function DateRangePicker({ value, onChange }: Props) {
 
       {open && (
         <div
-          className="absolute top-full mt-1 right-0 z-50 rounded-xl p-3 shadow-xl min-w-[240px]"
-          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-medium)' }}
+          className="absolute top-full mt-1 right-0 z-[100] rounded-xl p-3 shadow-2xl min-w-[240px]"
+          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-medium)', boxShadow: '0 10px 40px rgba(0,0,0,0.4)' }}
         >
           {/* Presets */}
           <div className="space-y-0.5 mb-3">
