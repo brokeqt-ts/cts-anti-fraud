@@ -170,17 +170,17 @@ export function BansPage() {
           ))}
         </div>
       </BlurFade>
-      <BlurFade delay={0.1}>
-        <div className="flex flex-wrap items-center gap-2 relative" style={{ overflow: 'visible' }}>
+      <div className="flex flex-wrap items-center gap-2">
+        <BlurFade delay={0.1} className="flex flex-wrap items-center gap-2">
           <FilterPill active={!targetFilter} onClick={() => setTargetFilter('')}>Все цели</FilterPill>
           {TARGETS.map((t) => (
             <FilterPill key={t} active={targetFilter === t} onClick={() => setTargetFilter(t)}>{t}</FilterPill>
           ))}
-          <div className="ml-auto relative" style={{ zIndex: 60 }}>
-            <DateRangePicker value={dateRange} onChange={setDateRange} />
-          </div>
+        </BlurFade>
+        <div className="ml-auto" style={{ position: 'relative', zIndex: 50 }}>
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
         </div>
-      </BlurFade>
+      </div>
 
       {error && (
         <div className="p-4 text-sm" style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 10, color: '#f87171' }}>

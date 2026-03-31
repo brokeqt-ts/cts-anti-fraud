@@ -88,8 +88,14 @@ export function DateRangePicker({ value, onChange }: Props) {
 
       {open && (
         <div
-          className="absolute top-full mt-1 right-0 z-[100] rounded-xl p-3 shadow-2xl min-w-[240px]"
-          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-medium)', boxShadow: '0 10px 40px rgba(0,0,0,0.4)' }}
+          className="absolute top-full mt-1 right-0 z-[100] rounded-xl p-3 min-w-[240px]"
+          style={{
+            background: 'var(--bg-base)',
+            border: '1px solid var(--border-medium)',
+            boxShadow: '0 10px 40px rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(20px)',
+            isolation: 'isolate',
+          }}
         >
           {/* Presets */}
           <div className="space-y-0.5 mb-3">
