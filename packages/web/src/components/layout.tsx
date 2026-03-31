@@ -174,12 +174,17 @@ export function Layout() {
           )}
           <button
             onClick={openCommandPalette}
-            className="flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs transition-colors"
-            style={{ color: 'var(--text-muted)', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-subtle)' }}
+            className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all hover:scale-[1.02]"
+            style={{
+              color: '#e2e8f0',
+              background: 'rgba(99,102,241,0.12)',
+              border: '1px solid rgba(99,102,241,0.3)',
+              minWidth: 160,
+            }}
             title="Поиск"
           >
-            <Search className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Поиск</span>
+            <Search className="w-4 h-4" style={{ color: '#818cf8' }} />
+            <span>Поиск...</span>
           </button>
           <NotificationBell />
           <AnimatedThemeToggler />
