@@ -154,14 +154,30 @@ export async function buildApp(options?: BuildAppOptions) {
   if (fs.existsSync(indexHtmlPath)) {
     const indexHtml = fs.readFileSync(indexHtmlPath, 'utf-8');
 
+    // wildcard: true (default) — registers GET /* and serves files recursively,
+    // including /assets/*.js. wildcard: false only served root-level files.
     await fastify.register(fastifyStatic, {
       root: webDistPath,
       prefix: '/',
-      wildcard: false,
       decorateReply: true,
     });
 
-    // SPA fallback — only for non-API routes; API 404s get JSON
+    // SPA fallback via onSend hook: when @fastify/static returns 404 for a
+    // non-API, non-asset URL (e.g. /accounts, /bans), serve index.html instead.
+    fastify.addHook('onSend', async (request, reply, payload) => {
+      if (
+        reply.statusCode === 404 &&
+        !request.url.startsWith('/api/') &&
+        !/\.[a-zA-Z0-9]{1,8}$/.test(request.url.split('?')[0])
+      ) {
+        reply.statusCode = 200;
+        reply.header('content-type', 'text/html; charset=utf-8');
+        return indexHtml;
+      }
+      return payload;
+    });
+
+    // API 404s still get JSON
     fastify.setNotFoundHandler(async (request, reply) => {
       if (request.url.startsWith('/api/')) {
         return reply.status(404).send({ error: 'Not found', code: 'NOT_FOUND' });
