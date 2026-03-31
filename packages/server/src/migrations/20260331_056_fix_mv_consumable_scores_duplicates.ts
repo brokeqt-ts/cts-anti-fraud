@@ -7,8 +7,12 @@ import type { Knex } from 'knex';
  * as consumable_value. Two proxies with the same ip_address (but different ids) would produce
  * duplicate (consumable_type, consumable_value) pairs, breaking REFRESH on the unique index.
  *
- * Fix: group proxy section by the computed label itself, not by p.id.
- * Also filter out NULL consumable_value rows in all sections to be safe.
+ * Fix 1: group proxy section by the computed label itself, not by p.id.
+ * Fix 2: COUNT(DISTINCT a.google_account_id) in proxy outer SELECT → px.google_account_id
+ *         (table "a" is inside the subquery, not visible to outer scope).
+ * Fix 3: replace regexp_replace(url, '^https?://') with SPLIT_PART + POSITION to avoid
+ *         knex.raw treating "?" as a parameter placeholder (which mangled it to "$1").
+ * Fix 4: filter NULL consumable_value rows in all sections.
  */
 export async function up(knex: Knex): Promise<void> {
   await knex.raw('DROP MATERIALIZED VIEW IF EXISTS mv_consumable_scores CASCADE');
@@ -35,6 +39,8 @@ export async function up(knex: Knex): Promise<void> {
     UNION ALL
 
     -- Domain scoring (via ads.final_urls)
+    -- Use SPLIT_PART + POSITION instead of regexp_replace('^https?://') to avoid
+    -- knex.raw treating '?' as a parameter placeholder.
     SELECT
       'domain'::text AS consumable_type,
       ad_d.domain AS consumable_value,
@@ -48,7 +54,14 @@ export async function up(knex: Knex): Promise<void> {
     FROM (
       SELECT DISTINCT
         a.account_google_id,
-        regexp_replace(regexp_replace(url, '^https?://', ''), '/.*$', '') AS domain
+        SPLIT_PART(
+          CASE
+            WHEN url LIKE 'http://%' OR url LIKE 'https://%'
+              THEN SUBSTR(url, POSITION('://' IN url) + 3)
+            ELSE url
+          END,
+          '/', 1
+        ) AS domain
       FROM ads a,
       LATERAL (SELECT jsonb_array_elements_text(a.final_urls) AS url
                WHERE a.final_urls IS NOT NULL AND jsonb_typeof(a.final_urls) = 'array') u
@@ -60,20 +73,20 @@ export async function up(knex: Knex): Promise<void> {
     UNION ALL
 
     -- Proxy scoring — group by computed label to avoid duplicates from proxies
-    -- with the same ip_address but different ids
+    -- with the same ip_address but different ids.
+    -- Outer SELECT uses px.google_account_id (not a.google_account_id — "a" is inside subquery).
     SELECT
       'proxy'::text AS consumable_type,
-      proxy_label AS consumable_value,
-      COUNT(DISTINCT a.google_account_id)::int AS total_accounts,
+      px.proxy_label AS consumable_value,
+      COUNT(DISTINCT px.google_account_id)::int AS total_accounts,
       COUNT(DISTINCT bl.account_google_id)::int AS banned_accounts,
       ROUND(
         COUNT(DISTINCT bl.account_google_id)::numeric /
-        NULLIF(COUNT(DISTINCT a.google_account_id), 0) * 100, 1
+        NULLIF(COUNT(DISTINCT px.google_account_id), 0) * 100, 1
       ) AS ban_rate,
       ROUND(COALESCE(AVG(bl.lifetime_hours / 24.0), 0)::numeric, 1) AS avg_lifetime_days
     FROM (
       SELECT
-        p.id,
         a.google_account_id,
         COALESCE(
           NULLIF(TRIM(COALESCE(p.provider, '') || ' / ' || COALESCE(p.geo, '')), ' / '),
