@@ -1517,3 +1517,16 @@ export const changeMyPassword = (
     method: 'PATCH',
     body: JSON.stringify({ current_password, new_password }),
   });
+
+// --- Global Search ---
+
+export interface SearchResult {
+  type: 'account' | 'domain' | 'ban';
+  id: string;
+  title: string;
+  subtitle: string | null;
+  url: string;
+}
+
+export const globalSearch = (q: string): Promise<{ results: SearchResult[] }> =>
+  apiFetch(`/search?q=${encodeURIComponent(q)}`);

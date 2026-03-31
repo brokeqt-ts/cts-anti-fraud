@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useCallback } from 'react';
 import { AnimatedThemeToggler } from './ui/animated-theme-toggler.js';
 import { NotificationBell } from './notification-bell.js';
+import { CommandPalette } from './command-palette.js';
 import { useAuth } from '../contexts/auth-context.js';
 
 const baseNavItems = [
@@ -189,6 +190,7 @@ export function Layout() {
           </AnimatePresence>
         </div>
       </main>
+      <CommandPalette />
     </div>
   );
 }

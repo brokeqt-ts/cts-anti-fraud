@@ -28,6 +28,7 @@ import { extensionRoutes } from './routes/extension.js';
 import { notificationsRoutes } from './routes/notifications.js';
 import { telegramRoutes } from './routes/telegram.js';
 import { bestPracticesRoutes } from './routes/best-practices.js';
+import { searchRoutes } from './routes/search.js';
 import { CollectService } from './services/collect.service.js';
 import { runDomainEnrichmentCycle } from './services/domain-enrichment.service.js';
 import { analyzeAllDomains } from './services/domain-content-analyzer.js';
@@ -140,6 +141,7 @@ export async function buildApp(options?: BuildAppOptions) {
       await instance.register(notificationsRoutes);
       await instance.register(telegramRoutes);
       await instance.register(bestPracticesRoutes);
+      await instance.register(searchRoutes);
     },
     { prefix: API_PREFIX },
   );
