@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, Bell, BellRing, Copy, MapPin, Database, Shield, LayoutList, Wallet, ExternalLink, Megaphone, Search, BarChart3, Tag, Eye, Star, Clock, Calendar, ShieldOff, AlertCircle, AlertTriangle, Bot, Link2, Globe, Loader2, Zap } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Bell, BellRing, Copy, MapPin, Database, Shield, LayoutList, Wallet, ExternalLink, Megaphone, Search, BarChart3, Tag, Eye, Star, Clock, Calendar, ShieldOff, AlertCircle, AlertTriangle, Bot, Link2, Globe, Loader2, Zap, Info } from 'lucide-react';
 import { fetchAccount, patchAccount, analyzeAccount, fetchBanChain, fetchDomainDetail, generatePostMortem, fetchAccountCompetitiveIntelligence, fetchQualityDistribution, fetchLowQualityKeywords, fetchQualityHistory, ApiError, type AccountDetail, type AccountSummary, type AccountCompetitorRow, type PostMortemData, type CampaignRow, type CampaignMetric, type BillingRow, type AdRow, type KeywordRow, type KeywordDailyStat, type QualityDistributionEntry, type KeywordQualityRow, type QualityScoreSnapshot, type AiAnalyzeResponse, type BanChainData, type DomainContentAnalysis, timeAgo, formatDateRu, formatCid, riskLevel, effectiveStatus, isSuspendedFromSignal } from '../api.js';
 import { StatusBadge } from '../components/badge.js';
 import { TableSkeleton } from '../components/skeleton.js';
@@ -537,7 +537,7 @@ export function AccountDetailPage() {
 
 // ── Event Timeline ────────────────────────────────────────
 
-type EventKind = 'created' | 'campaign' | 'ban' | 'suspended' | 'restored' | 'critical' | 'warning';
+type EventKind = 'created' | 'campaign' | 'ban' | 'ban_resolved' | 'suspended' | 'restored' | 'critical' | 'warning' | 'info';
 
 interface LifeEvent {
   id: string;
@@ -547,25 +547,37 @@ interface LifeEvent {
   detail?: string;
 }
 
-const EVENT_STYLE: Record<EventKind, { color: string; bg: string }> = {
-  created:   { color: '#4ade80', bg: 'rgba(34,197,94,0.12)' },
-  campaign:  { color: '#60a5fa', bg: 'rgba(59,130,246,0.12)' },
-  ban:       { color: '#f87171', bg: 'rgba(239,68,68,0.14)' },
-  suspended: { color: '#fbbf24', bg: 'rgba(245,158,11,0.12)' },
-  restored:  { color: '#4ade80', bg: 'rgba(34,197,94,0.12)' },
-  critical:  { color: '#f87171', bg: 'rgba(239,68,68,0.10)' },
-  warning:   { color: '#fbbf24', bg: 'rgba(245,158,11,0.10)' },
+const EVENT_STYLE: Record<EventKind, { color: string; bg: string; label: string }> = {
+  created:      { color: '#4ade80', bg: 'rgba(34,197,94,0.12)', label: 'Создание' },
+  campaign:     { color: '#60a5fa', bg: 'rgba(59,130,246,0.12)', label: 'Кампании' },
+  ban:          { color: '#f87171', bg: 'rgba(239,68,68,0.14)', label: 'Баны' },
+  ban_resolved: { color: '#4ade80', bg: 'rgba(34,197,94,0.10)', label: 'Баны' },
+  suspended:    { color: '#fbbf24', bg: 'rgba(245,158,11,0.12)', label: 'Сигналы' },
+  restored:     { color: '#4ade80', bg: 'rgba(34,197,94,0.12)', label: 'Сигналы' },
+  critical:     { color: '#f87171', bg: 'rgba(239,68,68,0.10)', label: 'Уведомления' },
+  warning:      { color: '#fbbf24', bg: 'rgba(245,158,11,0.10)', label: 'Уведомления' },
+  info:         { color: '#94a3b8', bg: 'rgba(148,163,184,0.08)', label: 'Уведомления' },
 };
+
+const TIMELINE_FILTER_GROUPS = [
+  { key: 'all', label: 'Все' },
+  { key: 'bans', label: 'Баны', kinds: new Set<EventKind>(['ban', 'ban_resolved']) },
+  { key: 'signals', label: 'Сигналы', kinds: new Set<EventKind>(['suspended', 'restored']) },
+  { key: 'notifications', label: 'Уведомления', kinds: new Set<EventKind>(['critical', 'warning', 'info']) },
+  { key: 'campaigns', label: 'Кампании', kinds: new Set<EventKind>(['campaign']) },
+];
 
 function EventIcon({ kind, size = 14 }: { kind: EventKind; size?: number }) {
   const s = size;
   const props = { style: { width: s, height: s }, strokeWidth: 1.8 };
-  if (kind === 'created')   return <Calendar {...props} />;
-  if (kind === 'campaign')  return <LayoutList {...props} />;
-  if (kind === 'ban')       return <ShieldOff {...props} />;
-  if (kind === 'suspended') return <AlertCircle {...props} />;
-  if (kind === 'restored')  return <CheckCircle {...props} />;
-  if (kind === 'critical')  return <AlertCircle {...props} />;
+  if (kind === 'created')      return <Calendar {...props} />;
+  if (kind === 'campaign')     return <LayoutList {...props} />;
+  if (kind === 'ban')          return <ShieldOff {...props} />;
+  if (kind === 'ban_resolved') return <CheckCircle {...props} />;
+  if (kind === 'suspended')    return <AlertCircle {...props} />;
+  if (kind === 'restored')     return <CheckCircle {...props} />;
+  if (kind === 'critical')     return <AlertCircle {...props} />;
+  if (kind === 'info')         return <Info {...props} />;
   return <AlertTriangle {...props} />;
 }
 
@@ -605,7 +617,7 @@ function buildLifeEvents(
     }
   }
 
-  // Bans
+  // Bans + ban resolutions
   for (const b of bans) {
     if (!b.banned_at) continue;
     events.push({
@@ -615,6 +627,15 @@ function buildLifeEvents(
       title: 'Аккаунт забанен',
       detail: [b.ban_reason ?? b.ban_reason_internal, b.lifetime_hours != null ? `${b.lifetime_hours}ч lifetime` : null].filter(Boolean).join(' · ') || undefined,
     });
+    if (b.resolved_at) {
+      events.push({
+        id: `ban-resolved-${b.id}`,
+        ts: new Date(b.resolved_at),
+        kind: 'ban_resolved',
+        title: 'Бан снят',
+        detail: b.ban_reason ?? undefined,
+      });
+    }
   }
 
   // Suspension / restoration signals
@@ -628,25 +649,13 @@ function buildLifeEvents(
     });
   }
 
-  // Critical notifications (up to 8 most recent)
-  const crits = notifCards.filter(c => c.category === 'CRITICAL').slice(0, 8);
-  for (const c of crits) {
+  // All notifications — no limits
+  for (const c of notifCards) {
+    const kind: EventKind = c.category === 'CRITICAL' ? 'critical' : c.category === 'WARNING' ? 'warning' : 'info';
     events.push({
-      id: `notif-crit-${c.id}`,
+      id: `notif-${kind}-${c.id}`,
       ts: new Date(c.captured_at),
-      kind: 'critical',
-      title: c.title,
-      detail: c.description || undefined,
-    });
-  }
-
-  // Warning notifications (up to 5)
-  const warns = notifCards.filter(c => c.category === 'WARNING').slice(0, 5);
-  for (const c of warns) {
-    events.push({
-      id: `notif-warn-${c.id}`,
-      ts: new Date(c.captured_at),
-      kind: 'warning',
+      kind,
       title: c.title,
       detail: c.description || undefined,
     });
@@ -670,20 +679,43 @@ function EventTimeline({
   campaigns: CampaignRow[];
 }) {
   const [expanded, setExpanded] = useState(false);
-  const LIMIT = 7;
+  const [filterKey, setFilterKey] = useState('all');
+  const LIMIT = 10;
 
-  const events = buildLifeEvents(account, bans, signals, notifCards, campaigns);
-  if (events.length === 0) return null;
+  const allEvents = buildLifeEvents(account, bans, signals, notifCards, campaigns);
+  if (allEvents.length === 0) return null;
+
+  const activeFilter = TIMELINE_FILTER_GROUPS.find(g => g.key === filterKey);
+  const events = filterKey === 'all'
+    ? allEvents
+    : allEvents.filter(e => activeFilter?.kinds?.has(e.kind));
 
   const shown = expanded ? events : events.slice(0, LIMIT);
   const hidden = events.length - LIMIT;
 
   return (
     <div className="card-static p-[12px_14px]">
-      <h2 className="text-xs font-medium mb-3" style={{ color: 'var(--text-secondary)' }}>
-        <Clock className="w-4 h-4 inline-block mr-1.5" strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />
-        Timeline событий ({events.length})
-      </h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+          <Clock className="w-4 h-4 inline-block mr-1.5" strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />
+          Timeline ({events.length}{filterKey !== 'all' ? ` из ${allEvents.length}` : ''})
+        </h2>
+        <div className="flex gap-1">
+          {TIMELINE_FILTER_GROUPS.map(g => (
+            <button
+              key={g.key}
+              onClick={() => { setFilterKey(g.key); setExpanded(false); }}
+              className="px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors"
+              style={{
+                background: filterKey === g.key ? 'var(--border-medium)' : 'transparent',
+                color: filterKey === g.key ? 'var(--text-primary)' : 'var(--text-muted)',
+              }}
+            >
+              {g.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="relative pl-7">
         {/* Vertical connector line */}
