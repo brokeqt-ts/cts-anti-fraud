@@ -12,13 +12,14 @@ interface SearchResult {
 }
 
 /**
- * Parse search operators: "vertical:nutra", "status:banned", "bin:411111", "domain:casino.xyz"
- * Returns { operator, value } or null for plain text queries.
+ * Parse search operators: "status:banned 812", "vertical:nutra casino"
+ * Returns { field, value, text } where text is the free-text part after operator value.
+ * Supports: "status:banned" (filter only) or "status:banned 812" (filter + text search).
  */
-function parseOperator(q: string): { field: string; value: string } | null {
-  const m = /^(vertical|status|bin|domain|type|reason|country):(.+)$/i.exec(q);
+function parseOperator(q: string): { field: string; value: string; text: string } | null {
+  const m = /^(vertical|status|bin|domain|type|reason|country):(\S+)(?:\s+(.+))?$/i.exec(q);
   if (!m) return null;
-  return { field: m[1].toLowerCase(), value: m[2].trim() };
+  return { field: m[1].toLowerCase(), value: m[2].trim(), text: (m[3] ?? '').trim() };
 }
 
 export async function searchHandler(
@@ -39,12 +40,27 @@ export async function searchHandler(
     if (operator) {
       // ── Operator-based search ──────────────────────────────────────────
       const pattern = `%${operator.value}%`;
+      // text = свободная часть после оператора, например "status:banned 812" → text="812"
+      const tp = operator.text ? `%${operator.text}%` : null;
+
+      // AND-фильтр по свободному тексту внутри выборки оператора
+      const accTextAnd = tp
+        ? `AND (google_account_id ILIKE $2 OR display_name ILIKE $2 OR offer_vertical ILIKE $2 OR country ILIKE $2 OR payment_bin ILIKE $2)`
+        : '';
+      const banTextAnd = tp
+        ? `AND (account_google_id ILIKE $2 OR domain ILIKE $2 OR offer_vertical ILIKE $2 OR ban_reason ILIKE $2)`
+        : '';
+      const domTextAnd = tp ? `AND domain_name ILIKE $2` : '';
+
+      const accParams = (base: string[]) => tp ? [...base, tp] : base;
+      const banParams = (base: string[]) => tp ? [...base, tp] : base;
+      const domParams = (base: string[]) => tp ? [...base, tp] : base;
 
       if (operator.field === 'status') {
         const accs = await pool.query(
           `SELECT google_account_id, display_name, status::text, offer_vertical, account_type
-           FROM accounts WHERE status::text ILIKE $1 ORDER BY updated_at DESC LIMIT 15`,
-          [pattern],
+           FROM accounts WHERE status::text ILIKE $1 ${accTextAnd} ORDER BY updated_at DESC LIMIT 15`,
+          accParams([pattern]),
         );
         for (const r of accs.rows as Array<Record<string, string | null>>) {
           results.push({
@@ -58,8 +74,8 @@ export async function searchHandler(
         // Accounts by vertical
         const accs = await pool.query(
           `SELECT google_account_id, display_name, status::text, offer_vertical
-           FROM accounts WHERE offer_vertical ILIKE $1 ORDER BY updated_at DESC LIMIT 10`,
-          [pattern],
+           FROM accounts WHERE offer_vertical ILIKE $1 ${accTextAnd} ORDER BY updated_at DESC LIMIT 10`,
+          accParams([pattern]),
         );
         for (const r of accs.rows as Array<Record<string, string | null>>) {
           results.push({
@@ -72,8 +88,8 @@ export async function searchHandler(
         // Bans by vertical
         const bans = await pool.query(
           `SELECT id, account_google_id, ban_reason, offer_vertical, domain, banned_at
-           FROM ban_logs WHERE offer_vertical ILIKE $1 ORDER BY banned_at DESC LIMIT 10`,
-          [pattern],
+           FROM ban_logs WHERE offer_vertical ILIKE $1 ${banTextAnd} ORDER BY banned_at DESC LIMIT 10`,
+          banParams([pattern]),
         );
         for (const r of bans.rows as Array<Record<string, string | null>>) {
           results.push({
@@ -86,8 +102,8 @@ export async function searchHandler(
       } else if (operator.field === 'bin') {
         const accs = await pool.query(
           `SELECT google_account_id, display_name, status::text, payment_bin, payment_bank
-           FROM accounts WHERE payment_bin ILIKE $1 ORDER BY updated_at DESC LIMIT 10`,
-          [pattern],
+           FROM accounts WHERE payment_bin ILIKE $1 ${accTextAnd} ORDER BY updated_at DESC LIMIT 10`,
+          accParams([pattern]),
         );
         for (const r of accs.rows as Array<Record<string, string | null>>) {
           results.push({
@@ -99,8 +115,8 @@ export async function searchHandler(
         }
       } else if (operator.field === 'domain') {
         const doms = await pool.query(
-          `SELECT id, domain_name FROM domains WHERE domain_name ILIKE $1 ORDER BY created_at DESC LIMIT 10`,
-          [pattern],
+          `SELECT id, domain_name FROM domains WHERE domain_name ILIKE $1 ${domTextAnd} ORDER BY created_at DESC LIMIT 10`,
+          domParams([pattern]),
         );
         for (const r of doms.rows as Array<Record<string, string>>) {
           results.push({
@@ -111,8 +127,8 @@ export async function searchHandler(
         // Bans with this domain
         const bans = await pool.query(
           `SELECT id, account_google_id, ban_reason, offer_vertical, domain, banned_at
-           FROM ban_logs WHERE domain ILIKE $1 ORDER BY banned_at DESC LIMIT 5`,
-          [pattern],
+           FROM ban_logs WHERE domain ILIKE $1 ${banTextAnd} ORDER BY banned_at DESC LIMIT 5`,
+          banParams([pattern]),
         );
         for (const r of bans.rows as Array<Record<string, string | null>>) {
           results.push({
@@ -125,8 +141,8 @@ export async function searchHandler(
       } else if (operator.field === 'type') {
         const accs = await pool.query(
           `SELECT google_account_id, display_name, status::text, account_type
-           FROM accounts WHERE account_type ILIKE $1 ORDER BY updated_at DESC LIMIT 15`,
-          [pattern],
+           FROM accounts WHERE account_type ILIKE $1 ${accTextAnd} ORDER BY updated_at DESC LIMIT 15`,
+          accParams([pattern]),
         );
         for (const r of accs.rows as Array<Record<string, string | null>>) {
           results.push({
@@ -139,9 +155,9 @@ export async function searchHandler(
       } else if (operator.field === 'reason') {
         const bans = await pool.query(
           `SELECT id, account_google_id, ban_reason, offer_vertical, domain, banned_at
-           FROM ban_logs WHERE ban_reason ILIKE $1 OR ban_reason_internal ILIKE $1
+           FROM ban_logs WHERE (ban_reason ILIKE $1 OR ban_reason_internal ILIKE $1) ${banTextAnd}
            ORDER BY banned_at DESC LIMIT 10`,
-          [pattern],
+          banParams([pattern]),
         );
         for (const r of bans.rows as Array<Record<string, string | null>>) {
           results.push({
@@ -154,8 +170,8 @@ export async function searchHandler(
       } else if (operator.field === 'country') {
         const accs = await pool.query(
           `SELECT google_account_id, display_name, status::text, country
-           FROM accounts WHERE country ILIKE $1 ORDER BY updated_at DESC LIMIT 15`,
-          [pattern],
+           FROM accounts WHERE country ILIKE $1 ${accTextAnd} ORDER BY updated_at DESC LIMIT 15`,
+          accParams([pattern]),
         );
         for (const r of accs.rows as Array<Record<string, string | null>>) {
           results.push({
