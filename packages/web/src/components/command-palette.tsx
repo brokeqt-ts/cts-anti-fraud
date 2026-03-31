@@ -88,7 +88,7 @@ function getAutocompleteSuggestions(query: string): Array<{ display: string; fil
     const matching = OPERATORS.filter(op => op.prefix.startsWith(lower) || op.label.toLowerCase().startsWith(lower));
     if (matching.length > 0 && matching.length < OPERATORS.length) {
       return matching.map(op => ({
-        display: `${op.prefix}  — ${op.label}`,
+        display: op.label,
         fill: op.prefix,
       }));
     }
@@ -392,22 +392,14 @@ export function CommandPalette() {
               <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
                 Операторы поиска
               </div>
-              {[
-                { op: 'vertical:nutra', desc: 'Аккаунты и баны по вертикали' },
-                { op: 'status:banned', desc: 'Аккаунты по статусу' },
-                { op: 'bin:411111', desc: 'Аккаунты по BIN карты' },
-                { op: 'domain:casino.xyz', desc: 'Домены и связанные баны' },
-                { op: 'type:farm', desc: 'Аккаунты по типу' },
-                { op: 'reason:policy', desc: 'Баны по причине' },
-                { op: 'country:US', desc: 'Аккаунты по стране' },
-              ].map(h => (
+              {OPERATORS.map(op => (
                 <button
-                  key={h.op}
+                  key={op.prefix}
                   className="w-full flex items-center gap-3 px-2 py-1.5 rounded-lg text-left transition-colors hover:bg-white/5"
-                  onClick={() => { setQuery(h.op); doSearch(h.op); }}
+                  onClick={() => { setQuery(op.prefix); inputRef.current?.focus(); }}
                 >
-                  <code className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,197,94,0.1)', color: '#4ade80' }}>{h.op}</code>
-                  <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{h.desc}</span>
+                  <code className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,197,94,0.1)', color: '#4ade80' }}>{op.prefix}</code>
+                  <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{op.label}</span>
                 </button>
               ))}
             </div>
