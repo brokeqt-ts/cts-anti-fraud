@@ -54,6 +54,47 @@ export async function parseNotifications(ctx: RpcContext): Promise<void> {
 }
 
 /**
+ * Blacklist of Google Ads UI notification types that are irrelevant for anti-fraud.
+ * These are feature flags, promotional banners, and UI chrome — not policy signals.
+ */
+const NOTIFICATION_TYPE_BLACKLIST = new Set([
+  'L2_MENU_EXPAND_COLLAPSE',
+  'HALO_SCOPING_FEATURE',
+  'PARENT_CHILD_REPORT_PROMO',
+  'AWN_DS_FORECASTING_INGREDIENTS',
+  'CREATIVE_BRIEF_AIMAX',
+  'CREATIVE_BRIEF',
+  'DATA_MANAGER_LAUNCH_IN_SA360',
+  'ASSET_SUGGESTIONS_PROMO',
+  'CONVERSION_TRACKING_PROMO',
+  'SMART_CAMPAIGN_PROMO',
+  'RECOMMENDATION_PROMO',
+  'PERFORMANCE_INSIGHTS_PROMO',
+  'AUDIENCE_SIGNAL_PROMO',
+  'BROAD_MATCH_PROMO',
+  'VALUE_BASED_BIDDING_PROMO',
+  'INSIGHTS_PAGE_PROMO',
+  'EXPERIMENTS_PROMO',
+  'AUTO_APPLY_PROMO',
+  'SEARCH_THEMES_PROMO',
+  'DEMAND_GEN_PROMO',
+  'PMAX_PROMO',
+  'BRAND_RESTRICTIONS_PROMO',
+  'OPTIMIZATION_SCORE_PROMO',
+  'GOOGLE_ANALYTICS_LINK_PROMO',
+]);
+
+/** Returns true if the notification should be filtered out (noise). */
+function isBlacklisted(notificationType: string | null, label: string | null, title: string | null): boolean {
+  if (notificationType && NOTIFICATION_TYPE_BLACKLIST.has(notificationType)) return true;
+  if (label && NOTIFICATION_TYPE_BLACKLIST.has(label)) return true;
+  // Also filter generic promo patterns
+  const text = `${notificationType ?? ''} ${label ?? ''} ${title ?? ''}`;
+  if (/_PROMO$/i.test(text)) return true;
+  return false;
+}
+
+/**
  * Parse individual notification items from the body and insert into notification_details.
  *
  * The notification body has field "2" which is an array of items. Each item:
@@ -160,6 +201,9 @@ async function parseNotificationDetails(
     }
 
     if (!title && !description && !label && !notificationId) continue;
+
+    // Filter out Google Ads UI noise (feature flags, promos, chrome)
+    if (isBlacklisted(notificationType, label ?? null, title ?? null)) continue;
 
     try {
       await pool.query(

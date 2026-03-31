@@ -263,7 +263,11 @@ export function AccountDetailPage() {
   const dedupedCampaigns = deduplicateCampaigns(data.campaigns ?? []);
 
   // Use parsed notification_details from API when available, fallback to client-side parsing
-  const parsedNotifDetails = data.notification_details ?? [];
+  // Filter out Google Ads UI noise (feature flags, promos) that may already be in DB
+  const UI_NOISE_RE = /_PROMO$|EXPAND_COLLAPSE|HALO_|CREATIVE_BRIEF|FORECASTING|DATA_MANAGER|SEARCH_THEMES/;
+  const parsedNotifDetails = (data.notification_details ?? []).filter(
+    nd => !UI_NOISE_RE.test(nd.notification_type ?? '') && !UI_NOISE_RE.test(nd.label ?? ''),
+  );
   const allNotifCards: Array<NotifCard & { id: string; captured_at: string }> = [];
   if (parsedNotifDetails.length > 0) {
     for (const nd of parsedNotifDetails) {
