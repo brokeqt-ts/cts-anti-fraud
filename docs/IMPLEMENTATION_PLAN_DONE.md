@@ -97,6 +97,14 @@
 - Extension: server URL now replaced at download time (not just build time)
 - 40-domain benchmark test (20 trusted avg=0, 20 suspicious avg=64, gap=64pts)
 
+### UX-3: Account Health Score (автоматический) ✅
+- Миграция 064: `health_score` колонка в accounts
+- Сервис `health-score.service.ts`: расчёт 0-100 на основе 9 факторов
+  (статус, баны, сигналы, policy violations, возраст, вертикаль, верификация, кампании)
+- Обновляется при каждом collect через `updateAccountHealthScore()`
+- Цветной HealthBadge в списке аккаунтов (зелёный ≥80, жёлтый ≥50, оранжевый ≥25, красный <25)
+- Fallback на старый risk level если score ещё не рассчитан
+
 ### UX-2: Фильтр по датам (DateRangePicker) ✅
 - Компонент DateRangePicker: пресеты (Сегодня / 7д / 30д / 90д) + произвольный диапазон
 - Бэкенд: from_date/to_date на bans и notifications эндпоинтах

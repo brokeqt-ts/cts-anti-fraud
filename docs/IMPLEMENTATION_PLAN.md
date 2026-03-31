@@ -16,13 +16,7 @@
 
 #### ~~UX-2: Фильтр по датам на всех страницах~~ ✅ Перенесена в DONE
 
-#### UX-3: Account Health Score (автоматический)
-**Оценка:** 1-2 дня
-**Зависимости:** нет
-
-Автоматический health score 0-100 на основе: дней активности, policy violations,
-spend velocity, domain risk, quality score, ban history.
-Цветной индикатор в списке аккаунтов. Обновляется при каждом collect.
+#### ~~UX-3: Account Health Score (автоматический)~~ ✅ Перенесена в DONE
 
 #### UX-4: Real-time уведомления (SSE/WebSocket)
 **Оценка:** 2 дня
