@@ -319,7 +319,21 @@ export function AccountDetailPage() {
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <StatusBadge status={derivedStatus} />
-          <span className={`risk-badge-${risk} inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium`}>{RISK_LABELS[risk]}</span>
+          {acc['health_score'] != null ? (
+            <span
+              className="inline-flex items-center justify-center rounded-full font-mono text-xs font-semibold"
+              style={{
+                minWidth: 38, height: 24, padding: '0 8px',
+                background: Number(acc['health_score']) >= 80 ? 'rgba(34,197,94,0.12)' : Number(acc['health_score']) >= 50 ? 'rgba(234,179,8,0.12)' : Number(acc['health_score']) >= 25 ? 'rgba(249,115,22,0.12)' : 'rgba(239,68,68,0.12)',
+                color: Number(acc['health_score']) >= 80 ? '#22c55e' : Number(acc['health_score']) >= 50 ? '#eab308' : Number(acc['health_score']) >= 25 ? '#f97316' : '#ef4444',
+              }}
+              title={`Health Score: ${acc['health_score']}/100`}
+            >
+              {String(acc['health_score'])}
+            </span>
+          ) : (
+            <span className={`risk-badge-${risk} inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium`}>{RISK_LABELS[risk]}</span>
+          )}
           <Link to={`/assessment?account=${id}`} className="btn-ghost-green text-xs" style={{ padding: '4px 10px' }}>Оценить риск</Link>
           <Link to={`/bans/new?account=${id}`} className="btn-ghost-red">Записать бан</Link>
         </div>
@@ -334,9 +348,14 @@ export function AccountDetailPage() {
         <MetricPill label="Кампании" value={String(dedupedCampaigns.length)} />
         <MetricPill label="Уведомления" value={String(allNotifCards.length || data.notifications.length)} />
         <MetricPill label="Баны" value={String(data.bans.length)} />
+        {acc['health_score'] != null && <MetricPill label="Health" value={`${acc['health_score']}/100`} />}
         {acc['total_spend'] != null && (
           <MetricPill label="Расход" value={`${(acc['currency'] as string) === 'EUR' ? '€' : (acc['currency'] as string) === 'USD' ? '$' : (acc['currency'] as string) === 'GBP' ? '£' : ((acc['currency'] as string) ?? '') + ' '}${Number(acc['total_spend']).toLocaleString()}`} />
         )}
+        {acc['account_type'] != null && <MetricPill label="Тип" value={String(acc['account_type'])} />}
+        {acc['offer_vertical'] != null && <MetricPill label="Вертикаль" value={String(acc['offer_vertical'])} />}
+        {acc['country'] != null && <MetricPill label="Страна" value={String(acc['country'])} />}
+        {acc['verification_status'] != null && String(acc['verification_status']) !== 'not_started' && <MetricPill label="Верификация" value={String(acc['verification_status'])} />}
       </div>
     </div>
   );
