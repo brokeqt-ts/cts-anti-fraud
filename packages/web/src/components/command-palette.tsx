@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, User, Globe, AlertTriangle, X } from 'lucide-react';
+import { Search, User, Globe, AlertTriangle } from 'lucide-react';
 import { globalSearch, type SearchResult } from '../api.js';
 
 const TYPE_ICONS: Record<string, typeof User> = {
@@ -21,6 +21,12 @@ const TYPE_COLORS: Record<string, string> = {
   ban: '#f87171',
 };
 
+// Custom event for opening the palette from anywhere (e.g. top bar button)
+const OPEN_EVENT = 'cts:open-search';
+export function openCommandPalette() {
+  window.dispatchEvent(new Event(OPEN_EVENT));
+}
+
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -31,7 +37,7 @@ export function CommandPalette() {
   const navigate = useNavigate();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
-  // Open/close with Ctrl+K / Cmd+K
+  // Open via Ctrl+K / Cmd+K or custom event (from search button)
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -40,8 +46,15 @@ export function CommandPalette() {
       }
       if (e.key === 'Escape') setOpen(false);
     }
+    function onOpenEvent() {
+      setOpen(true);
+    }
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener(OPEN_EVENT, onOpenEvent);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener(OPEN_EVENT, onOpenEvent);
+    };
   }, []);
 
   // Focus input when opened
