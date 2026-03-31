@@ -97,6 +97,12 @@
 - Extension: server URL now replaced at download time (not just build time)
 - 40-domain benchmark test (20 trusted avg=0, 20 suspicious avg=64, gap=64pts)
 
+### UX-2: Фильтр по датам (DateRangePicker) ✅
+- Компонент DateRangePicker: пресеты (Сегодня / 7д / 30д / 90д) + произвольный диапазон
+- Бэкенд: from_date/to_date на bans и notifications эндпоинтах
+- Фронтенд: добавлен на страницы банов и уведомлений
+- Подсветка активного фильтра, кнопка "Сбросить"
+
 ### UX-1: Глобальный поиск (Cmd+K / Ctrl+K) ✅
 - `GET /api/v1/search?q=...` — поиск по accounts (google_id, display_name), domains, bans (reason, account, domain)
 - `CommandPalette` компонент: Ctrl+K / Cmd+K, debounce 250ms, keyboard nav (↑↓ Enter Esc)
