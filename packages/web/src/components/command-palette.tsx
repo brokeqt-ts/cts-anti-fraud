@@ -79,7 +79,8 @@ export function CommandPalette() {
       const data = await globalSearch(q);
       setResults(data.results);
       setSelected(0);
-    } catch {
+    } catch (err) {
+      console.error('[search] error:', err);
       setResults([]);
     } finally {
       setLoading(false);

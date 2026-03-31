@@ -24,12 +24,13 @@ export async function searchHandler(
   const pattern = `%${q}%`;
   const results: SearchResult[] = [];
 
+  try {
   // Search accounts (by google_id or display_name)
   const accounts = await pool.query(
-    `SELECT google_account_id, display_name, status
+    `SELECT google_account_id, display_name, status::text
      FROM accounts
      WHERE google_account_id ILIKE $1 OR display_name ILIKE $1
-     ORDER BY last_seen_at DESC NULLS LAST
+     ORDER BY updated_at DESC NULLS LAST
      LIMIT 5`,
     [pattern],
   );
@@ -86,4 +87,8 @@ export async function searchHandler(
   }
 
   await reply.send({ results });
+  } catch (err) {
+    request.log.error({ err, query: q }, 'Search handler error');
+    await reply.status(500).send({ error: 'Search failed', code: 'SEARCH_ERROR' });
+  }
 }
