@@ -176,7 +176,7 @@ export function Layout() {
             onClick={openCommandPalette}
             className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all hover:scale-[1.02]"
             style={{
-              color: '#e2e8f0',
+              color: 'var(--text-primary)',
               background: 'rgba(99,102,241,0.12)',
               border: '1px solid rgba(99,102,241,0.3)',
               minWidth: 160,
