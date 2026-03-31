@@ -380,7 +380,7 @@ export function CommandPalette() {
 
           {/* Recent searches */}
           {!loading && showRecent && (
-            <div className="py-2">
+            <div className="py-2" style={{ borderBottom: '1px solid var(--border-medium)' }}>
               <div className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                 Последние запросы
               </div>
@@ -397,8 +397,8 @@ export function CommandPalette() {
             </div>
           )}
 
-          {/* Operator hints when empty */}
-          {!loading && query.length < 2 && !showRecent && (
+          {/* Operator hints — always visible when query is empty */}
+          {!loading && query.length < 2 && (
             <div className="px-4 py-4 space-y-1.5">
               <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
                 Операторы поиска
