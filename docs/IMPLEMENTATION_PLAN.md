@@ -20,13 +20,7 @@
 
 #### ~~UX-4: Real-time уведомления (SSE)~~ ✅ Перенесена в DONE
 
-#### UX-5: Фильтрация мусорных уведомлений расширения
-**Оценка:** 0.5 дня
-**Зависимости:** нет
-
-Whitelist полезных уведомлений (policy violations, suspensions, billing).
-Blacklist шума Google Ads UI (L2_MENU_EXPAND_COLLAPSE, HALO_SCOPING_FEATURE и т.д.).
-Фильтр на сервере в collect handler.
+#### ~~UX-5: Фильтрация мусорных уведомлений~~ ✅ Перенесена в DONE
 
 ---
 

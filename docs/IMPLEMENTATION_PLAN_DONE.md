@@ -97,6 +97,13 @@
 - Extension: server URL now replaced at download time (not just build time)
 - 40-domain benchmark test (20 trusted avg=0, 20 suspicious avg=64, gap=64pts)
 
+### UX-5: Фильтрация мусорных уведомлений ✅
+- Blacklist 25 типов Google Ads UI шума в `notifications-parser.ts`
+- `isBlacklisted()` проверяет type, label, паттерн `_PROMO$`
+- Фильтрация до записи в БД — шум не попадает в `notification_details`
+- Client-side regex фильтр для уже существующих записей в БД
+- Покрывает: feature flags, промо баннеры, UI chrome
+
 ### UX-4: Real-time уведомления (SSE) ✅
 - SSE bus (`sse-bus.ts`): управление подключёнными клиентами, broadcast по userId
 - `GET /api/v1/notifications/stream` — SSE endpoint с keep-alive пингами
