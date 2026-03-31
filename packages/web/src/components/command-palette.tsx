@@ -230,10 +230,21 @@ export function CommandPalette() {
   }
 
   function handleAcceptSuggestion(fill: string) {
-    setQuery(fill);
-    inputRef.current?.focus();
-    // If fill ends with ":" it's an operator prefix — don't search yet
-    if (!fill.endsWith(':')) {
+    if (fill.endsWith(':')) {
+      // Operator prefix selected — wait for user to type/pick a value
+      setQuery(fill);
+      inputRef.current?.focus();
+    } else {
+      // Value selected — append space so user can immediately narrow with free text
+      const withSpace = fill + ' ';
+      setQuery(withSpace);
+      // Place cursor at end after React re-renders
+      requestAnimationFrame(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          inputRef.current.setSelectionRange(withSpace.length, withSpace.length);
+        }
+      });
       doSearch(fill);
     }
   }
