@@ -1521,11 +1521,12 @@ export const changeMyPassword = (
 // --- Global Search ---
 
 export interface SearchResult {
-  type: 'account' | 'domain' | 'ban';
+  type: 'account' | 'domain' | 'ban' | 'practice' | 'notification';
   id: string;
   title: string;
   subtitle: string | null;
   url: string;
+  matchField: string | null;
 }
 
 export const globalSearch = (q: string): Promise<{ results: SearchResult[] }> =>
