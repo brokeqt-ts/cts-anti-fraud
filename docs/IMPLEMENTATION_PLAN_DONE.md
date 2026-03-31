@@ -97,6 +97,14 @@
 - Extension: server URL now replaced at download time (not just build time)
 - 40-domain benchmark test (20 trusted avg=0, 20 suspicious avg=64, gap=64pts)
 
+### UX-11: Timeline аккаунта (Activity Log) ✅
+- Расширенный timeline: 9 типов событий (created, campaign, ban, ban_resolved, suspended, restored, critical, warning, info)
+- Фильтры: Все / Баны / Сигналы / Уведомления / Кампании
+- Ban resolved события (когда бан снят)
+- Все уведомления без лимитов (убраны ограничения 8/5)
+- INFO уведомления включены в ленту
+- Лимит по умолчанию 10, expand показывает все
+
 ### UX-5: Фильтрация мусорных уведомлений ✅
 - Blacklist 25 типов Google Ads UI шума в `notifications-parser.ts`
 - `isBlacklisted()` проверяет type, label, паттерн `_PROMO$`
