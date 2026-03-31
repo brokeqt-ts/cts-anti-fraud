@@ -1,8 +1,8 @@
 # CTS Anti-Fraud — Реализованные задачи
 
 > Дата составления: 2026-03-24
-> Обновлено: 2026-03-26
-> Статус: Phase 1 + Phase 2 завершены полностью
+> Обновлено: 2026-03-31
+> Статус: Phase 1 + Phase 2 + Phase 2.5 (Методички) завершены
 
 ---
 
@@ -20,7 +20,7 @@
 | ML Ban Predictor | 100% | Logistic regression, 26 фичей, explainability |
 | Leaderboard | 100% | Composite scoring, period filtering |
 | Notification System | 100% | Inbox + admin panel + Telegram |
-| Domain Enrichment | 100% | WHOIS, DNS, SSL, cloaking, PageSpeed |
+| Domain Enrichment | 100% | 14 external APIs, WHOIS/RDAP, hard/soft scoring |
 | Auth (JWT + API Key) | 100% | Роли, refresh tokens, extension download |
 | CI/CD + Docker | 100% | GitHub Actions, 4-job pipeline |
 | Dashboard (16 страниц) | 100% | Все страницы реализованы |
@@ -72,6 +72,30 @@
 - `MockCTSAdapter` — для development без реального CTS
 - `createCTSAdapter()` — фабрика по CTS_API_URL + CTS_API_KEY env vars
 - Auto-sync cron
+
+---
+
+## PHASE 2.5: Выполнено
+
+### ЗАДАЧА 1: Методички → AI ✅
+- Миграция 055 — таблица best_practices (category, offer_vertical, title, content, priority)
+- CRUD: GET/POST/PATCH/DELETE /api/v1/best-practices
+- Фильтры по категории и вертикали
+- Frontend — страница best-practices.tsx (список, создание, редактирование, удаление)
+- Интеграция с AI промптом — загрузка relevant best practices по вертикали
+- 6 категорий: ban_prevention, domain_selection, budget_strategy, creative_guidelines, campaign_setup, appeal_strategy
+- Поле campaign_type удалено (не использовалось командой)
+- Кнопки CSV удалены из users и best-practices страниц
+
+### Domain Analyzer improvements (2026-03-31) ✅
+- 14 external APIs: crt.sh, WHOIS/RDAP, Shodan, DNS, Spamhaus/SURBL/URIBL, CommonCrawl, OpenPhish, AbuseIPDB, URLhaus, SerpAPI, Safe Browsing, VirusTotal
+- Hard/soft risk scoring architecture (hardRisk uncancellable by bonuses)
+- Graduated keyword floor (65/55/35 based on signal strength)
+- Cloudflare challenge detection (skip compliance for bot-check pages)
+- WHOIS domain age penalties (<7d hard +20, <30d hard +15, <90d soft +10)
+- Domain-name keyword scanning fallback for blocked/SPA sites
+- Extension: server URL now replaced at download time (not just build time)
+- 40-domain benchmark test (20 trusted avg=0, 20 suspicious avg=64, gap=64pts)
 
 ---
 

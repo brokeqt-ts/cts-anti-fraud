@@ -1,83 +1,15 @@
 # CTS Anti-Fraud — План реализации Phase 3+
 
 > Дата составления: 2026-03-26
-> Текущее состояние: Phase 2 завершена полностью
-> Последняя миграция: 054 (create_creative_snapshots)
+> Текущее состояние: Phase 2.5 частично завершена (Методички ✅)
+> Последняя миграция: 055 (create_best_practices)
 > Выполненные задачи: [IMPLEMENTATION_PLAN_DONE.md](IMPLEMENTATION_PLAN_DONE.md)
 
 ---
 
 ## PHASE 2.5: Средний приоритет
 
-### ЗАДАЧА 1: Методички → AI
-**Приоритет:** P2
-**Оценка:** 3-4 дня
-**Зависимости:** нет
-
-#### Шаг 1.1: Миграция — таблица best practices
-**Файл:** `packages/server/src/migrations/20260326_055_create_best_practices.ts`
-
-```sql
-CREATE TABLE best_practices (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  category TEXT NOT NULL,
-    -- 'campaign_setup', 'domain_selection', 'budget_strategy',
-    -- 'creative_guidelines', 'ban_prevention', 'appeal_strategy'
-  campaign_type TEXT,
-    -- NULL = general, 'pmax', 'search', 'demand_gen', etc.
-  offer_vertical TEXT,
-    -- NULL = general, 'gambling', 'nutra', etc.
-  title TEXT NOT NULL,
-  content TEXT NOT NULL,
-  priority INTEGER DEFAULT 0,
-  is_active BOOLEAN DEFAULT true,
-  created_by UUID REFERENCES users(id),
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE INDEX idx_best_practices_category ON best_practices(category);
-CREATE INDEX idx_best_practices_type ON best_practices(campaign_type);
-CREATE INDEX idx_best_practices_vertical ON best_practices(offer_vertical);
-```
-
-**СТОП-ТОЧКА:** Миграция накатывается и откатывается чисто.
-
-#### Шаг 1.2: CRUD для методичек
-**Файлы:** repository, handler, route (стандартный CRUD)
-
-```
-GET    /api/v1/best-practices?category=...&vertical=...&campaign_type=...
-POST   /api/v1/best-practices (admin)
-PATCH  /api/v1/best-practices/:id (admin)
-DELETE /api/v1/best-practices/:id (admin)
-```
-
-#### Шаг 1.3: Интеграция с AI промптом
-**Файл:** `packages/server/src/services/ai/prompts/account-analysis.prompt.ts`
-
-```
-Модифицировать промпт:
-- Загрузить relevant best_practices по campaign_type + offer_vertical
-- Добавить секцию в промпт:
-  "Методичка команды для данного типа кампании: ..."
-- AI должен сверять настройки аккаунта с best practices
-- В ответе: отдельная секция "Соответствие методичке" с оценкой 0-100%
-```
-
-#### Шаг 1.4: Frontend — страница методичек
-**Файл:** `packages/web/src/pages/best-practices.tsx`
-
-```
-- Список методичек с фильтрами (категория, вертикаль, тип кампании)
-- Admin: кнопки создать/редактировать/удалить
-- Markdown рендеринг контента
-- В AI Analysis: показывать какие правила нарушены
-```
-
-**Файл:** `packages/web/src/components/layout.tsx` — добавить пункт "Методички" в навигацию
-
-**СТОП-ТОЧКА:** Создай методичку, запусти AI анализ — проверь что AI учитывает правила.
+### ~~ЗАДАЧА 1: Методички → AI~~ ✅ Перенесена в DONE
 
 ---
 
