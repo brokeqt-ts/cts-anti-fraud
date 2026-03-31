@@ -378,20 +378,18 @@ export function CommandPalette() {
             <div className="px-4 py-6 text-center text-xs" style={{ color: 'var(--text-muted)' }}>Поиск...</div>
           )}
 
-          {/* Recent searches */}
+          {/* Recent searches — compact chip row */}
           {!loading && showRecent && (
-            <div className="py-2" style={{ borderBottom: '1px solid var(--border-medium)' }}>
-              <div className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                Последние запросы
-              </div>
+            <div className="px-4 py-2.5 flex items-center gap-2 flex-wrap" style={{ borderBottom: '1px solid var(--border-medium)' }}>
+              <Clock className="w-3 h-3 shrink-0" style={{ color: 'var(--text-ghost)' }} />
               {recentSearches.map(q => (
                 <button
                   key={q}
-                  className="w-full flex items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-white/5"
+                  className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] transition-colors hover:bg-white/10"
+                  style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', border: '1px solid var(--border-medium)' }}
                   onClick={() => handleRecentClick(q)}
                 >
-                  <Clock className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
-                  <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{q}</span>
+                  {q}
                 </button>
               ))}
             </div>
