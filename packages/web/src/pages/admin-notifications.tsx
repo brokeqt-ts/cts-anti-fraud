@@ -16,6 +16,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import {
   fetchNotificationSettings,
   updateNotificationSetting,
@@ -23,6 +24,7 @@ import {
   sendTelegramTest,
   fetchNotificationHistory,
   fetchUsers,
+  fetchTelegramConnectStatus,
   timeAgo,
   type NotificationSettingRow,
   type NotificationHistoryEntry,
@@ -50,11 +52,25 @@ function SettingsTab() {
   const [saving, setSaving] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [testingTelegram, setTestingTelegram] = useState<string | null>(null);
+  const [defaultChatId, setDefaultChatId] = useState<string | null>(null);
+  const [customChatKeys, setCustomChatKeys] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     try {
-      const data = await fetchNotificationSettings();
+      const [data, tgStatus] = await Promise.all([
+        fetchNotificationSettings(),
+        fetchTelegramConnectStatus().catch(() => ({ connected: false, telegram_chat_id: null, pending: false })),
+      ]);
       setSettings(data.settings);
+      setDefaultChatId(tgStatus.telegram_chat_id);
+      // Mark settings that have a custom (non-default) chat ID
+      const custom = new Set<string>();
+      for (const s of data.settings) {
+        if (s.telegram_chat_id && s.telegram_chat_id !== tgStatus.telegram_chat_id) {
+          custom.add(s.key);
+        }
+      }
+      setCustomChatKeys(custom);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка загрузки');
     } finally {
@@ -247,7 +263,13 @@ function SettingsTab() {
           {/* Telegram row */}
           <div className="flex flex-wrap items-center gap-3 pt-2 text-xs" style={{ borderTop: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
             <button
-              onClick={() => handleUpdate(s.key, 'telegram_enabled', !s.telegram_enabled)}
+              onClick={() => {
+                // When enabling Telegram, auto-fill with default chat ID if available
+                if (!s.telegram_enabled && defaultChatId && !s.telegram_chat_id) {
+                  handleUpdate(s.key, 'telegram_chat_id', defaultChatId);
+                }
+                handleUpdate(s.key, 'telegram_enabled', !s.telegram_enabled);
+              }}
               disabled={saving === s.key}
               className="flex items-center gap-1.5 px-2 py-0.5 rounded-md transition-colors"
               style={{
@@ -261,14 +283,59 @@ function SettingsTab() {
 
             {s.telegram_enabled && (
               <>
-                <input
-                  type="text"
-                  value={s.telegram_chat_id ?? ''}
-                  onChange={(e) => handleUpdate(s.key, 'telegram_chat_id', e.target.value || null)}
-                  placeholder="Chat ID (напр. -100123456)"
-                  className="input-field text-xs py-0.5 px-2"
-                  style={{ minWidth: 180 }}
-                />
+                {/* Default chat mode */}
+                {!customChatKeys.has(s.key) ? (
+                  <span className="flex items-center gap-2">
+                    {defaultChatId ? (
+                      <>
+                        <span style={{ color: 'var(--text-muted)' }}>
+                          Чат из настроек: <code className="font-mono" style={{ color: '#60a5fa' }}>{defaultChatId}</code>
+                        </span>
+                        <button
+                          onClick={() => {
+                            setCustomChatKeys(prev => new Set(prev).add(s.key));
+                          }}
+                          className="px-2 py-0.5 rounded-md transition-colors"
+                          style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-subtle)' }}
+                        >
+                          Отдельный чат
+                        </button>
+                      </>
+                    ) : (
+                      <span className="flex items-center gap-2" style={{ color: '#f59e0b' }}>
+                        Telegram не подключён.{' '}
+                        <Link to="/settings" className="underline" style={{ color: '#60a5fa' }}>
+                          Подключить в настройках
+                        </Link>
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  /* Custom chat mode */
+                  <span className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={s.telegram_chat_id ?? ''}
+                      onChange={(e) => handleUpdate(s.key, 'telegram_chat_id', e.target.value || null)}
+                      placeholder="Chat ID (напр. -100123456)"
+                      className="input-field text-xs py-0.5 px-2"
+                      style={{ minWidth: 180 }}
+                    />
+                    {defaultChatId && (
+                      <button
+                        onClick={() => {
+                          handleUpdate(s.key, 'telegram_chat_id', defaultChatId);
+                          setCustomChatKeys(prev => { const n = new Set(prev); n.delete(s.key); return n; });
+                        }}
+                        className="px-2 py-0.5 rounded-md transition-colors whitespace-nowrap"
+                        style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-subtle)' }}
+                      >
+                        Из настроек
+                      </button>
+                    )}
+                  </span>
+                )}
+
                 <button
                   onClick={() => handleTestTelegram(s.key)}
                   disabled={testingTelegram === s.key}
