@@ -176,11 +176,10 @@ export function Layout() {
             onClick={openCommandPalette}
             className="flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs transition-colors"
             style={{ color: 'var(--text-muted)', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-subtle)' }}
-            title="Поиск (Ctrl+K)"
+            title="Поиск"
           >
             <Search className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Поиск</span>
-            <kbd className="text-[10px] px-1 py-0.5 rounded ml-1 hidden sm:inline" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-subtle)' }}>Ctrl+K</kbd>
           </button>
           <NotificationBell />
           <AnimatedThemeToggler />
