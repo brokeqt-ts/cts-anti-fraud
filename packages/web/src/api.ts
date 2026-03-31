@@ -286,6 +286,7 @@ export interface AccountSummary {
   first_seen?: string | null;
   account_type?: string | null;
   account_type_source?: string | null;
+  health_score?: number | null;
 }
 
 export interface CampaignRow {

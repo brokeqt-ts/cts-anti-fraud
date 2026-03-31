@@ -8,6 +8,7 @@ import { checkAndCreateBan } from './auto-ban-detector.js';
 import { classifyAndUpdateVertical } from './offer-vertical-classifier.js';
 import { autoPopulateAccount } from './account-auto-populate.js';
 import { ensureAccountExists } from './ensure-account.js';
+import { updateAccountHealthScore } from './health-score.service.js';
 
 export class CollectService {
   constructor(private pool: pg.Pool) {}
@@ -77,6 +78,7 @@ export class CollectService {
       classifyAndUpdateAccountType(this.pool, accountId).catch(() => {});
       classifyAndUpdateVertical(this.pool, accountId).catch(() => {});
       autoPopulateAccount(this.pool, accountId).catch(() => {});
+      updateAccountHealthScore(this.pool, accountId).catch(() => {});
     }
 
     return processed;

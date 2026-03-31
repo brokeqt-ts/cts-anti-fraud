@@ -81,13 +81,13 @@ export function AccountsPage() {
           <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Аккаунты</h1>
           <button
             onClick={() => {
-              const headers = ['Google ID', 'Название', 'Статус', 'Тип', 'Риск', 'Валюта', 'Карта', 'Домен', 'Профиль', 'Баны', 'Уведомления', 'Первый визит', 'Последний визит'];
+              const headers = ['Google ID', 'Название', 'Статус', 'Тип', 'Health', 'Валюта', 'Карта', 'Домен', 'Профиль', 'Баны', 'Уведомления', 'Первый визит', 'Последний визит'];
               const rows = filteredAccounts.map((acc) => [
                 acc.google_account_id,
                 acc.display_name,
                 effectiveStatus(acc),
                 acc.account_type,
-                riskLevel(acc),
+                acc.health_score ?? riskLevel(acc),
                 acc.currency,
                 acc.card_info,
                 acc.domain,
@@ -173,7 +173,7 @@ export function AccountsPage() {
                   <th className="px-3.5 py-[7px] text-left font-medium label-xs">Название</th>
                   <th className="px-3.5 py-[7px] text-left font-medium label-xs">Статус</th>
                   <th className="px-3.5 py-[7px] text-left font-medium label-xs">Тип</th>
-                  <th className="px-3.5 py-[7px] text-left font-medium label-xs">Риск</th>
+                  <th className="px-3.5 py-[7px] text-center font-medium label-xs">Health</th>
                   <th className="px-3.5 py-[7px] text-left font-medium label-xs">Валюта</th>
                   <th className="px-3.5 py-[7px] text-left font-medium label-xs">Карта</th>
                   <th className="px-3.5 py-[7px] text-left font-medium label-xs">Домен</th>
@@ -237,8 +237,8 @@ export function AccountsPage() {
                             <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>-</span>
                           )}
                         </td>
-                        <td className="px-3.5 py-[7px]">
-                          <span className={`risk-badge-${risk} inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium`}>{RISK_LABELS[risk]}</span>
+                        <td className="px-3.5 py-[7px] text-center">
+                          <HealthBadge score={acc.health_score} risk={risk} />
                         </td>
                         <td className="px-3.5 py-[7px] text-xs" style={{ color: 'var(--text-muted)' }}>{acc.currency ?? '-'}</td>
                         <td className="px-3.5 py-[7px] text-xs font-mono" style={{ color: acc.card_info ? 'var(--text-secondary)' : 'var(--text-muted)' }}>{acc.card_info ?? '-'}</td>
@@ -289,6 +289,25 @@ function accountAge(firstSeen: string | null | undefined): string {
   if (months < 12) return remDays > 0 ? `${months}м ${remDays}д` : `${months}м`;
   const years = Math.floor(days / 365);
   return `${years}г`;
+}
+
+function HealthBadge({ score, risk }: { score?: number | null; risk: string }) {
+  if (score == null) {
+    // Fallback to old risk badge if no health score calculated yet
+    const RISK_LABELS: Record<string, string> = { high: 'Высокий', medium: 'Средний', low: 'Низкий', unknown: '—' };
+    return <span className={`risk-badge-${risk} inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium`}>{RISK_LABELS[risk] ?? '—'}</span>;
+  }
+  const color = score >= 80 ? '#22c55e' : score >= 50 ? '#eab308' : score >= 25 ? '#f97316' : '#ef4444';
+  const bg = score >= 80 ? 'rgba(34,197,94,0.12)' : score >= 50 ? 'rgba(234,179,8,0.12)' : score >= 25 ? 'rgba(249,115,22,0.12)' : 'rgba(239,68,68,0.12)';
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-full font-mono text-[11px] font-semibold"
+      style={{ background: bg, color, minWidth: 36, height: 22, padding: '0 6px' }}
+      title={`Health Score: ${score}/100`}
+    >
+      {score}
+    </span>
+  );
 }
 
 function FilterPill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
