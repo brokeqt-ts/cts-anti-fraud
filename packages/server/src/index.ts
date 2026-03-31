@@ -154,30 +154,16 @@ export async function buildApp(options?: BuildAppOptions) {
   if (fs.existsSync(indexHtmlPath)) {
     const indexHtml = fs.readFileSync(indexHtmlPath, 'utf-8');
 
-    // wildcard: true (default) — registers GET /* and serves files recursively,
-    // including /assets/*.js. wildcard: false only served root-level files.
+    // Serve /assets/* explicitly from dist/assets/ — Vite puts all JS/CSS chunks here.
+    // Using a dedicated prefix instead of a root wildcard guarantees correct MIME types
+    // regardless of platform proxy behaviour.
     await fastify.register(fastifyStatic, {
-      root: webDistPath,
-      prefix: '/',
+      root: path.join(webDistPath, 'assets'),
+      prefix: '/assets/',
       decorateReply: true,
     });
 
-    // SPA fallback via onSend hook: when @fastify/static returns 404 for a
-    // non-API, non-asset URL (e.g. /accounts, /bans), serve index.html instead.
-    fastify.addHook('onSend', async (request, reply, payload) => {
-      if (
-        reply.statusCode === 404 &&
-        !request.url.startsWith('/api/') &&
-        !/\.[a-zA-Z0-9]{1,8}$/.test(request.url.split('?')[0])
-      ) {
-        reply.statusCode = 200;
-        reply.header('content-type', 'text/html; charset=utf-8');
-        return indexHtml;
-      }
-      return payload;
-    });
-
-    // API 404s still get JSON
+    // SPA fallback — everything else that is not an API route gets index.html
     fastify.setNotFoundHandler(async (request, reply) => {
       if (request.url.startsWith('/api/')) {
         return reply.status(404).send({ error: 'Not found', code: 'NOT_FOUND' });
