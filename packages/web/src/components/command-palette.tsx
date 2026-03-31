@@ -31,6 +31,87 @@ const TYPE_COLORS: Record<string, string> = {
 
 const TYPE_ORDER: string[] = ['account', 'domain', 'ban', 'practice', 'notification'];
 
+// ── Operator autocomplete values ────────────────────────────────────────────
+
+interface OperatorDef {
+  prefix: string;
+  label: string;
+  values: Array<{ value: string; label: string }>;
+}
+
+const OPERATORS: OperatorDef[] = [
+  { prefix: 'vertical:', label: 'Вертикаль', values: [
+    { value: 'gambling', label: 'Gambling' },
+    { value: 'nutra', label: 'Nutra' },
+    { value: 'crypto', label: 'Crypto' },
+    { value: 'dating', label: 'Dating' },
+    { value: 'sweepstakes', label: 'Sweepstakes' },
+    { value: 'finance', label: 'Finance' },
+    { value: 'ecom', label: 'E-commerce' },
+  ]},
+  { prefix: 'status:', label: 'Статус', values: [
+    { value: 'active', label: 'Active' },
+    { value: 'suspended', label: 'Suspended' },
+    { value: 'banned', label: 'Banned' },
+    { value: 'under_review', label: 'Under Review' },
+  ]},
+  { prefix: 'type:', label: 'Тип аккаунта', values: [
+    { value: 'farm', label: 'Farm' },
+    { value: 'bought', label: 'Bought' },
+    { value: 'rent', label: 'Rent' },
+    { value: 'agency', label: 'Agency' },
+    { value: 'restored', label: 'Restored' },
+  ]},
+  { prefix: 'country:', label: 'Страна', values: [
+    { value: 'US', label: 'US' }, { value: 'UK', label: 'UK' }, { value: 'DE', label: 'DE' },
+    { value: 'FR', label: 'FR' }, { value: 'PL', label: 'PL' }, { value: 'UA', label: 'UA' },
+    { value: 'RU', label: 'RU' }, { value: 'BR', label: 'BR' }, { value: 'IN', label: 'IN' },
+    { value: 'AU', label: 'AU' }, { value: 'CA', label: 'CA' }, { value: 'JP', label: 'JP' },
+  ]},
+  { prefix: 'bin:', label: 'BIN карты', values: [] },
+  { prefix: 'domain:', label: 'Домен', values: [] },
+  { prefix: 'reason:', label: 'Причина бана', values: [
+    { value: 'policy', label: 'Policy violation' },
+    { value: 'circumventing', label: 'Circumventing systems' },
+    { value: 'misrepresentation', label: 'Misrepresentation' },
+    { value: 'suspicious', label: 'Suspicious activity' },
+    { value: 'billing', label: 'Billing issue' },
+  ]},
+];
+
+function getAutocompleteSuggestions(query: string): Array<{ display: string; fill: string }> | null {
+  const lower = query.toLowerCase();
+
+  // Show operator list when user types just a letter or two without ":"
+  // e.g. "v" → suggest "vertical:", "s" → suggest "status:"
+  if (!lower.includes(':') && lower.length >= 1 && lower.length <= 8) {
+    const matching = OPERATORS.filter(op => op.prefix.startsWith(lower) || op.label.toLowerCase().startsWith(lower));
+    if (matching.length > 0 && matching.length < OPERATORS.length) {
+      return matching.map(op => ({
+        display: `${op.prefix}  — ${op.label}`,
+        fill: op.prefix,
+      }));
+    }
+  }
+
+  // Show values when user typed "operator:" or "operator:partial"
+  for (const op of OPERATORS) {
+    if (!lower.startsWith(op.prefix)) continue;
+    const partial = query.slice(op.prefix.length).toLowerCase();
+    if (op.values.length === 0) return null; // free-text operators (bin, domain)
+    const filtered = partial
+      ? op.values.filter(v => v.value.toLowerCase().includes(partial) || v.label.toLowerCase().includes(partial))
+      : op.values;
+    if (filtered.length === 0) return null;
+    return filtered.map(v => ({
+      display: v.label,
+      fill: `${op.prefix}${v.value}`,
+    }));
+  }
+
+  return null;
+}
+
 // ── Recent searches (localStorage) ──────────────────────────────────────────
 
 const RECENT_KEY = 'cts:recent-searches';
@@ -129,10 +210,32 @@ export function CommandPalette() {
     }
   }, []);
 
+  // ── Autocomplete state ──────────────────────────────────────────────────
+
+  const suggestions = useMemo(() => getAutocompleteSuggestions(query), [query]);
+  const [acSelected, setAcSelected] = useState(0);
+
+  // Reset autocomplete selection when suggestions change
+  useEffect(() => { setAcSelected(0); }, [suggestions]);
+
   function handleInputChange(value: string) {
     setQuery(value);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => doSearch(value), 250);
+    // Don't search while showing autocomplete suggestions — wait for selection
+    if (!getAutocompleteSuggestions(value)) {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => doSearch(value), 250);
+    } else {
+      setResults([]);
+    }
+  }
+
+  function handleAcceptSuggestion(fill: string) {
+    setQuery(fill);
+    inputRef.current?.focus();
+    // If fill ends with ":" it's an operator prefix — don't search yet
+    if (!fill.endsWith(':')) {
+      doSearch(fill);
+    }
   }
 
   function handleSelect(result: SearchResult) {
@@ -169,6 +272,22 @@ export function CommandPalette() {
   const flatResults = useMemo(() => grouped.groups.flatMap(g => g.items), [grouped]);
 
   function handleKeyDown(e: React.KeyboardEvent) {
+    // When autocomplete is showing, navigate/select suggestions
+    if (suggestions && suggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setAcSelected(prev => Math.min(prev + 1, suggestions.length - 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setAcSelected(prev => Math.max(prev - 1, 0));
+      } else if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        handleAcceptSuggestion(suggestions[acSelected].fill);
+      }
+      return;
+    }
+
+    // Normal result navigation
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setSelected(prev => Math.min(prev + 1, flatResults.length - 1));
@@ -218,6 +337,32 @@ export function CommandPalette() {
 
         {/* Results area */}
         <div className="max-h-[400px] overflow-y-auto">
+          {/* Autocomplete suggestions (Discord-style) */}
+          {suggestions && suggestions.length > 0 && (
+            <div className="py-1" style={{ borderBottom: '1px solid var(--border-medium)' }}>
+              <div className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                Выберите значение <span style={{ color: 'var(--text-ghost)', fontWeight: 400 }}>Tab / Enter</span>
+              </div>
+              {suggestions.map((s, i) => (
+                <button
+                  key={s.fill}
+                  className="w-full flex items-center gap-3 px-4 py-1.5 text-left transition-colors"
+                  style={{ background: i === acSelected ? 'rgba(99,102,241,0.12)' : 'transparent' }}
+                  onMouseEnter={() => setAcSelected(i)}
+                  onClick={() => handleAcceptSuggestion(s.fill)}
+                >
+                  <code className="text-[11px] px-1.5 py-0.5 rounded"
+                    style={{ background: 'rgba(34,197,94,0.08)', color: '#4ade80' }}>
+                    {s.fill}
+                  </code>
+                  {s.display !== s.fill && (
+                    <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{s.display}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
           {loading && (
             <div className="px-4 py-6 text-center text-xs" style={{ color: 'var(--text-muted)' }}>Поиск...</div>
           )}
@@ -323,7 +468,11 @@ export function CommandPalette() {
           style={{ borderTop: '1px solid var(--border-medium)', color: 'var(--text-muted)' }}>
           <div className="flex items-center gap-3">
             <span><kbd className="px-1 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.06)' }}>↑↓</kbd> навигация</span>
-            <span><kbd className="px-1 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.06)' }}>Enter</kbd> открыть</span>
+            {suggestions ? (
+              <span><kbd className="px-1 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.06)' }}>Tab</kbd> выбрать</span>
+            ) : (
+              <span><kbd className="px-1 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.06)' }}>Enter</kbd> открыть</span>
+            )}
           </div>
           <span><kbd className="px-1 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.06)' }}>Ctrl+K</kbd> поиск</span>
         </div>
