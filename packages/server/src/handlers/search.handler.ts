@@ -63,10 +63,10 @@ export async function searchHandler(
     });
   }
 
-  // Search bans (by reason or account id)
+  // Search ban_logs (by reason or account id)
   const bans = await pool.query(
     `SELECT b.id, b.account_google_id, b.ban_reason, b.offer_vertical, b.banned_at
-     FROM bans b
+     FROM ban_logs b
      WHERE b.account_google_id ILIKE $1
         OR b.ban_reason ILIKE $1
         OR b.ban_reason_internal ILIKE $1
