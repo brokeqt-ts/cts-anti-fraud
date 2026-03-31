@@ -378,26 +378,9 @@ export function CommandPalette() {
             <div className="px-4 py-6 text-center text-xs" style={{ color: 'var(--text-muted)' }}>Поиск...</div>
           )}
 
-          {/* Recent searches — compact chip row */}
-          {!loading && showRecent && (
-            <div className="px-4 py-2.5 flex items-center gap-2 flex-wrap" style={{ borderBottom: '1px solid var(--border-medium)' }}>
-              <Clock className="w-3 h-3 shrink-0" style={{ color: 'var(--text-ghost)' }} />
-              {recentSearches.map(q => (
-                <button
-                  key={q}
-                  className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] transition-colors hover:bg-white/10"
-                  style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', border: '1px solid var(--border-medium)' }}
-                  onClick={() => handleRecentClick(q)}
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
-          )}
-
           {/* Operator hints — always visible when query is empty */}
           {!loading && query.length < 2 && (
-            <div className="px-4 py-4 space-y-1.5">
+            <div className="px-4 py-4 space-y-1.5" style={{ borderBottom: showRecent ? '1px solid var(--border-medium)' : undefined }}>
               <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
                 Операторы поиска
               </div>
@@ -409,6 +392,25 @@ export function CommandPalette() {
                 >
                   <code className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,197,94,0.1)', color: '#4ade80' }}>{op.prefix}</code>
                   <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{op.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Recent searches */}
+          {!loading && showRecent && (
+            <div className="py-2">
+              <div className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                Последние запросы
+              </div>
+              {recentSearches.map(q => (
+                <button
+                  key={q}
+                  className="w-full flex items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-white/5"
+                  onClick={() => handleRecentClick(q)}
+                >
+                  <Clock className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
+                  <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{q}</span>
                 </button>
               ))}
             </div>
