@@ -168,7 +168,7 @@ export function CommandPalette() {
   const navigate = useNavigate();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
-  // Open via Ctrl+K / Cmd+K or custom event
+  // Open via hotkey or custom event (from search button)
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -466,7 +466,7 @@ export function CommandPalette() {
               <span><kbd className="px-1 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.06)' }}>Enter</kbd> открыть</span>
             )}
           </div>
-          <span><kbd className="px-1 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.06)' }}>Ctrl+K</kbd> поиск</span>
+          <span><kbd className="px-1 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.06)' }}>ESC</kbd> закрыть</span>
         </div>
       </div>
     </div>
