@@ -18,13 +18,7 @@
 
 #### ~~UX-3: Account Health Score (автоматический)~~ ✅ Перенесена в DONE
 
-#### UX-4: Real-time уведомления (SSE/WebSocket)
-**Оценка:** 2 дня
-**Зависимости:** нет
-
-Toast-уведомления при бане или critical alert без перезагрузки.
-Badge с unread count в навигации обновляется в реальном времени.
-SSE endpoint: `GET /api/v1/notifications/stream`.
+#### ~~UX-4: Real-time уведомления (SSE)~~ ✅ Перенесена в DONE
 
 #### UX-5: Фильтрация мусорных уведомлений расширения
 **Оценка:** 0.5 дня

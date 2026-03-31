@@ -97,6 +97,15 @@
 - Extension: server URL now replaced at download time (not just build time)
 - 40-domain benchmark test (20 trusted avg=0, 20 suspicious avg=64, gap=64pts)
 
+### UX-4: Real-time уведомления (SSE) ✅
+- SSE bus (`sse-bus.ts`): управление подключёнными клиентами, broadcast по userId
+- `GET /api/v1/notifications/stream` — SSE endpoint с keep-alive пингами
+- Auth через `?token=` query param (EventSource не поддерживает заголовки)
+- `notification.service` пушит в SSE при каждом `createNotification()`
+- `useNotificationStream` hook: auto-reconnect, unread count, last notification
+- `ToastNotifications` компонент: анимированные тосты с auto-dismiss 6с
+- Интеграция в Layout — тосты появляются на любой странице
+
 ### UX-3: Account Health Score (автоматический) ✅
 - Миграция 064: `health_score` колонка в accounts
 - Сервис `health-score.service.ts`: расчёт 0-100 на основе 9 факторов
