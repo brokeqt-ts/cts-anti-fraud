@@ -1,8 +1,8 @@
 # CTS Anti-Fraud — Реализованные задачи
 
 > Дата составления: 2026-03-24
-> Обновлено: 2026-03-31
-> Статус: Phase 1 + Phase 2 + Phase 2.5 (Методички) завершены
+> Обновлено: 2026-04-01
+> Статус: Phase 1 + Phase 2 + Phase 2.5 + UX P1/P2 завершены
 
 ---
 
@@ -24,6 +24,7 @@
 | Auth (JWT + API Key) | 100% | Роли, refresh tokens, extension download |
 | CI/CD + Docker | 100% | GitHub Actions, 4-job pipeline |
 | Dashboard (16 страниц) | 100% | Все страницы реализованы |
+| UX-6 Account Tags | 100% | Теги, конструктор, фильтр, assign/unassign |
 | Telegram Bot | 100% | Алерты банов, creative decay, команды |
 | AI Feedback Loop | 100% | Like/dislike, corrections, leaderboard влияние |
 | Creative Decay Alerts | 100% | Снэпшоты, cron сканирование, Telegram |
@@ -140,6 +141,24 @@
 - `CommandPalette` компонент: Ctrl+K / Cmd+K, debounce 250ms, keyboard nav (↑↓ Enter Esc)
 - Результаты по типам с иконками (User/Globe/AlertTriangle), клик → навигация
 - Подключён в Layout — доступен с любой страницы
+- Операторы поиска: vertical:, status:, bin:, domain:, type:, reason:, country:
+- Поддержка оператор + свободный текст (status:banned 812)
+- Автопробел после выбора значения оператора
+
+### UX-6: Группировка аккаунтов (теги/проекты) ✅
+- Миграция 058: таблицы `tags` (name, color) + `account_tags` (many-to-many)
+- Миграция 059: удалена колонка `health_score`, заменена на Risk Score badge
+- CRUD API: GET/POST/PATCH/DELETE `/api/v1/tags`
+- Assign/unassign: POST/DELETE `/api/v1/accounts/:id/tags/:tag_id`
+- Bulk assign: POST `/api/v1/tags/bulk-assign`
+- Server-side фильтр `?tag_id=` на списке аккаунтов
+- Теги в ответе accounts list (batch query)
+- Конструктор тегов из пресетов (Вертикаль/ГЕО/Статус/Проект) + текстовый ввод
+- Tag filter pills с кнопками удаления (X)
+- Колонка "Теги" в таблице с бейджами + кнопка "+" для assign/unassign
+- Optimistic updates через page-level `tagOverrides` state
+- Все dropdown через React Portal (`createPortal`) для корректного z-index
+- Risk Score badge (Высокий/Средний/Низкий) вместо Health Score
 
 ---
 
