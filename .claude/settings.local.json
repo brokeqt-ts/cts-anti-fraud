@@ -33,7 +33,24 @@
       "Bash(pkill -f \"vitest\")",
       "Bash(NODE_TLS_REJECT_UNAUTHORIZED=0 npx vitest run --reporter=verbose packages/server/src/services/domain-analysis-integration.test.ts)",
       "Bash(find /c/Users/kudri/OneDrive/Документы/GitHub/cts-anti-fraud -name *056* -type f)",
-      "Bash(xargs -I {} basename {})"
+      "Bash(xargs -I {} basename {})",
+      "Bash(find c:UserskudriOneDriveДокументыGitHubcts-anti-fraudpackagesserversrcroutes -type f -name *.ts)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//c/Users/kudri/OneDrive/Документы/GitHub/cts-anti-fraud/**)",
+      "Bash(done)",
+      "Bash(do)",
+      "Bash(echo \"=== $f.tsx \\(first 60 lines\\) ===\")",
+      "Read(//c/Users/kudri/OneDrive/Документы/GitHub/cts-anti-fraud/packages/web/src/**)",
+      "Bash(find /c/Users/kudri/OneDrive/Документы/GitHub/cts-anti-fraud/packages/web/src -type f -name *.tsx -o -name *.ts)",
+      "Bash(grep -r \"export async function\" /c/Users/kudri/OneDrive/Документы/GitHub/cts-anti-fraud/packages/server/src/handlers/*.ts)",
+      "Bash(find c:/Users/kudri/OneDrive/Документы/GitHub/cts-anti-fraud/packages/server/src -type f -name *score* -o -name *health*)",
+      "Bash(grep -l \"ban_logs\\\\|CREATE TABLE\" c:/Users/kudri/OneDrive/Документы/GitHub/cts-anti-fraud/packages/server/src/migrations/*.ts)",
+      "Bash(grep -n \"notification_details\\\\|account_signals\" c:/Users/kudri/OneDrive/Документы/GitHub/cts-anti-fraud/packages/server/src/migrations/*.ts)",
+      "Bash(grep -l 'CREATE TABLE' c:/Users/kudri/OneDrive/Документы/GitHub/cts-anti-fraud/packages/server/src/migrations/*.ts)",
+      "Bash(grep -n user_id c:/Users/kudri/OneDrive/Документы/GitHub/cts-anti-fraud/packages/server/src/migrations/*.ts)",
+      "Bash(grep -E \"\\\\.\\(prisma|ts\\)$\")",
+      "Bash(npm uninstall:*)"
     ]
   }
 }

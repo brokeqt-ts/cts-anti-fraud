@@ -18,7 +18,6 @@ import { NotificationsPage } from './pages/notifications.js';
 import { UsersPage } from './pages/users.js';
 import { AdminNotificationsPage } from './pages/admin-notifications.js';
 import { AuditLogPage } from './pages/audit-log.js';
-import { BanChainGraphPage } from './pages/ban-chain-graph.js';
 import { useAuth } from './contexts/auth-context.js';
 import { Loader2 } from 'lucide-react';
 
@@ -90,7 +89,6 @@ export function App() {
         <Route path="/cts" element={<CtsIntegrationPage />} />
         <Route path="/assessment" element={<AssessmentPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
-        <Route path="/ban-chain" element={<BanChainGraphPage />} />
         <Route path="/ai-analysis" element={<AIAnalysisPage />} />
         <Route path="/best-practices" element={<BestPracticesPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />

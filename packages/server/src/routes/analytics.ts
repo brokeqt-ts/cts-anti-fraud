@@ -15,7 +15,6 @@ import {
   competitiveIntelligenceHandler,
   mvFreshnessHandler,
   accountRiskSummaryHandler,
-  banChainGraphHandler,
 } from '../handlers/analytics.handler.js';
 
 export async function analyticsRoutes(fastify: FastifyInstance): Promise<void> {
@@ -53,12 +52,6 @@ export async function analyticsRoutes(fastify: FastifyInstance): Promise<void> {
     '/analytics/ban-chain-all',
     { preHandler: [fastify.authenticate] },
     banChainAllHandler,
-  );
-
-  fastify.get(
-    '/analytics/ban-chain-graph',
-    { preHandler: [fastify.authenticate] },
-    banChainGraphHandler,
   );
 
   fastify.get(

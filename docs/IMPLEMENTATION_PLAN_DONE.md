@@ -160,19 +160,6 @@
 - Все dropdown через React Portal (`createPortal`) для корректного z-index
 - Risk Score badge (Высокий/Средний/Низкий) вместо Health Score
 
-### UX-7: Ban Chain граф-визуализация ✅
-- GET `/api/v1/analytics/ban-chain-graph` — возвращает nodes (аккаунты) + edges (связи)
-- 3 типа связей: shared domain (ban_logs + ads.final_urls), shared BIN, shared proxy
-- Только связанные аккаунты (изолированные отфильтрованы)
-- `react-force-graph-2d` — интерактивный 2D граф с физической симуляцией
-- Цвета узлов: зелёный (active), оранжевый (suspended), красный (banned)
-- Цвета рёбер: зелёный (домен), жёлтый (BIN), синий (прокси)
-- Фильтры по типу связи (Все / Домен / BIN / Прокси)
-- Hover tooltip с информацией об аккаунте
-- Клик по узлу → переход на страницу аккаунта
-- Лейблы отображаются при приближении (zoom)
-- Страница `/ban-chain`, пункт "Ban Chain" в sidebar
-
 ### UX-16: Audit Log ✅
 - Миграция 060: таблица `audit_log` (user_id, user_name, action, entity_type, entity_id, details JSONB, ip_address)
 - Сервис `audit.service.ts`: `logAudit()` + helper `audit(pool, request, action, opts)`

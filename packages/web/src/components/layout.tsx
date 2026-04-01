@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, ShieldBan, Globe, Settings, Plus, Shield, Link2, BarChart3, ShieldCheck, Brain, LogOut, UserCog, Bell, BellRing, BookOpen, Search, ClipboardList, GitBranch } from 'lucide-react';
+import { LayoutDashboard, Users, ShieldBan, Globe, Settings, Plus, Shield, Link2, BarChart3, ShieldCheck, Brain, LogOut, UserCog, Bell, BellRing, BookOpen, Search, ClipboardList } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useCallback } from 'react';
 import { AnimatedThemeToggler } from './ui/animated-theme-toggler.js';
@@ -14,7 +14,6 @@ const baseNavItems = [
   { to: '/accounts', label: 'Аккаунты', icon: Users },
   { to: '/assessment', label: 'Оценка рисков', icon: ShieldCheck },
   { to: '/analytics', label: 'Аналитика', icon: BarChart3 },
-  { to: '/ban-chain', label: 'Ban Chain', icon: GitBranch },
   { to: '/ai-analysis', label: 'AI Анализ', icon: Brain },
   { to: '/best-practices', label: 'Методички', icon: BookOpen },
   { to: '/bans', label: 'Баны', icon: ShieldBan },
