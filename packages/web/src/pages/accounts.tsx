@@ -287,7 +287,7 @@ export function AccountsPage() {
                           )}
                         </td>
                         <td className="px-2.5 py-[7px]">
-                          <AccountTagCell account={acc} allTags={tags} setAccounts={setAccounts} onTagsChange={loadTags} />
+                          <AccountTagCell account={acc} allTags={tags} setAccounts={setAccounts} />
                         </td>
                         <td className="px-2.5 py-[7px] text-center">
                           <RiskBadge risk={risk} />
@@ -588,11 +588,10 @@ function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: 
 
 // ── AccountTagCell — show tags + assign/unassign popover ────────────────────
 
-function AccountTagCell({ account, allTags, setAccounts, onTagsChange }: {
+function AccountTagCell({ account, allTags, setAccounts }: {
   account: AccountSummary;
   allTags: TagSummary[];
   setAccounts: React.Dispatch<React.SetStateAction<AccountSummary[]>>;
-  onTagsChange: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
@@ -619,26 +618,21 @@ function AccountTagCell({ account, allTags, setAccounts, onTagsChange }: {
   };
 
   const handleAssign = async (tag: { id: string; name: string; color: string }) => {
-    // Optimistic: add tag immediately
     updateAccountTags([...accTags, tag]);
     try {
       await assignTag(account.google_account_id, tag.id);
-      onTagsChange();
     } catch {
-      // Revert on error
       updateAccountTags(accTags);
     }
   };
 
   const handleUnassign = async (tagId: string) => {
-    // Optimistic: remove tag immediately
+    const prev = accTags;
     updateAccountTags(accTags.filter(t => t.id !== tagId));
     try {
       await unassignTag(account.google_account_id, tagId);
-      onTagsChange();
     } catch {
-      // Revert on error
-      updateAccountTags(accTags);
+      updateAccountTags(prev);
     }
   };
 
