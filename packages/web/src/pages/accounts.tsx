@@ -610,29 +610,40 @@ function AccountTagCell({ account, allTags, setAccounts }: {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open]);
 
-  // Optimistic update helper
-  const updateAccountTags = (newTags: Array<{ id: string; name: string; color: string }>) => {
-    setAccounts(prev => prev.map(a =>
-      a.id === account.id ? { ...a, tags: newTags } : a,
-    ));
-  };
-
   const handleAssign = async (tag: { id: string; name: string; color: string }) => {
-    updateAccountTags([...accTags, tag]);
+    setAccounts(prev => prev.map(a =>
+      a.id === account.id
+        ? { ...a, tags: [...(a.tags ?? []), tag] }
+        : a,
+    ));
     try {
       await assignTag(account.google_account_id, tag.id);
     } catch {
-      updateAccountTags(accTags);
+      setAccounts(prev => prev.map(a =>
+        a.id === account.id
+          ? { ...a, tags: (a.tags ?? []).filter(t => t.id !== tag.id) }
+          : a,
+      ));
     }
   };
 
   const handleUnassign = async (tagId: string) => {
-    const prev = accTags;
-    updateAccountTags(accTags.filter(t => t.id !== tagId));
+    let removed: { id: string; name: string; color: string } | undefined;
+    setAccounts(prev => prev.map(a => {
+      if (a.id !== account.id) return a;
+      removed = (a.tags ?? []).find(t => t.id === tagId);
+      return { ...a, tags: (a.tags ?? []).filter(t => t.id !== tagId) };
+    }));
     try {
       await unassignTag(account.google_account_id, tagId);
     } catch {
-      updateAccountTags(prev);
+      if (removed) {
+        setAccounts(prev => prev.map(a =>
+          a.id === account.id
+            ? { ...a, tags: [...(a.tags ?? []), removed!] }
+            : a,
+        ));
+      }
     }
   };
 
