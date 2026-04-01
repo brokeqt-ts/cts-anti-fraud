@@ -104,6 +104,8 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     const body = await res.json().catch(() => ({}));
     throw new ApiError(res.status, (body as Record<string, string>).error ?? `HTTP ${res.status}`);
   }
+  // 204 No Content has no body — don't try to parse JSON
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
