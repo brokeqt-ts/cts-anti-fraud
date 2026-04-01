@@ -205,31 +205,28 @@ export function AccountsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                  <th className="px-3.5 py-[7px] text-left font-medium label-xs">Google ID</th>
-                  <th className="px-3.5 py-[7px] text-left font-medium label-xs">Профиль</th>
-                  <th className="px-3.5 py-[7px] text-left font-medium label-xs">Название</th>
-                  <th className="px-3.5 py-[7px] text-left font-medium label-xs">Статус</th>
-                  <th className="px-3.5 py-[7px] text-left font-medium label-xs">Тип</th>
-                  <th className="px-3.5 py-[7px] text-left font-medium label-xs">Теги</th>
-                  <th className="px-3.5 py-[7px] text-center font-medium label-xs">Health</th>
-                  <th className="px-3.5 py-[7px] text-left font-medium label-xs">Валюта</th>
-                  <th className="px-3.5 py-[7px] text-left font-medium label-xs">Карта</th>
-                  <th className="px-3.5 py-[7px] text-left font-medium label-xs">Домен</th>
-                  <th className="px-3.5 py-[7px] text-center font-medium label-xs">Баны</th>
-                  <th className="px-3.5 py-[7px] text-center font-medium label-xs">Увед.</th>
-                  <th className="px-3.5 py-[7px] text-right font-medium label-xs">Возраст</th>
-                  <th className="px-3.5 py-[7px] text-right font-medium label-xs">Посл. визит</th>
-                  <th className="px-3.5 py-[7px] w-8"></th>
+                  <th className="px-2.5 py-[7px] text-left font-medium label-xs">Google ID</th>
+                  <th className="px-2.5 py-[7px] text-left font-medium label-xs">Профиль</th>
+                  <th className="px-2.5 py-[7px] text-left font-medium label-xs">Статус</th>
+                  <th className="px-2.5 py-[7px] text-left font-medium label-xs">Тип</th>
+                  <th className="px-2.5 py-[7px] text-left font-medium label-xs">Теги</th>
+                  <th className="px-2.5 py-[7px] text-center font-medium label-xs">Health</th>
+                  <th className="px-2.5 py-[7px] text-left font-medium label-xs">Карта</th>
+                  <th className="px-2.5 py-[7px] text-left font-medium label-xs">Домен</th>
+                  <th className="px-2.5 py-[7px] text-center font-medium label-xs">Баны</th>
+                  <th className="px-2.5 py-[7px] text-right font-medium label-xs">Возраст</th>
+                  <th className="px-2.5 py-[7px] text-right font-medium label-xs">Посл. визит</th>
+                  <th className="px-2.5 py-[7px] w-6"></th>
                 </tr>
               </thead>
               {loading ? (
                 <tbody>
-                  <tr><td colSpan={15}><TableSkeleton rows={6} cols={8} /></td></tr>
+                  <tr><td colSpan={12}><TableSkeleton rows={6} cols={8} /></td></tr>
                 </tbody>
               ) : filteredAccounts.length === 0 ? (
                 <tbody>
                   <tr>
-                    <td colSpan={15}>
+                    <td colSpan={12}>
                       <div className="relative py-16 flex flex-col items-center justify-center gap-3 overflow-hidden">
                         <DotPattern />
                         <Users className="w-8 h-8" style={{ color: 'var(--border-strong)' }} />
@@ -244,10 +241,10 @@ export function AccountsPage() {
                     const risk = riskLevel(acc);
                     return (
                       <AnimatedRow key={acc.id} className="cursor-pointer group" onClick={() => navigate(`/accounts/${acc.google_account_id}`)}>
-                        <td className="px-3.5 py-[7px]">
+                        <td className="px-2.5 py-[7px]">
                           <span className={`font-mono whitespace-nowrap ${acc.profile_name ? 'text-[10px]' : 'text-xs'}`} style={{ color: acc.profile_name ? 'var(--text-muted)' : 'var(--text-secondary)' }}>{formatCid(acc.google_account_id)}</span>
                         </td>
-                        <td className="px-3.5 py-[7px]">
+                        <td className="px-2.5 py-[7px]">
                           {acc.profile_name ? (
                             <div className="flex flex-col">
                               <span className="text-xs font-semibold whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>{acc.profile_name}</span>
@@ -259,15 +256,10 @@ export function AccountsPage() {
                             <span className="text-[10px] italic" style={{ color: 'var(--text-muted)', opacity: 0.6 }}>не подключен</span>
                           )}
                         </td>
-                        <td className="px-3.5 py-[7px] max-w-[160px]">
-                          <span className="text-xs truncate block whitespace-nowrap overflow-hidden" style={{ color: 'var(--text-secondary)' }}>
-                            {acc.display_name && /^Google Ads \d{3}-\d{3}-\d{4}$/.test(acc.display_name) ? '-' : (acc.display_name ?? formatCid(acc.google_account_id))}
-                          </span>
-                        </td>
-                        <td className="px-3.5 py-[7px]"><StatusBadge status={effectiveStatus(acc)} /></td>
-                        <td className="px-3.5 py-[7px]">
+                        <td className="px-2.5 py-[7px]"><StatusBadge status={effectiveStatus(acc)} /></td>
+                        <td className="px-2.5 py-[7px]">
                           {acc.account_type ? (
-                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-subtle)' }}>
+                            <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium" style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-subtle)' }}>
                               {ACCOUNT_TYPE_LABELS[acc.account_type] ?? acc.account_type}
                               {acc.account_type_source === 'manual' && <span style={{ color: 'var(--accent-green)', fontSize: 8 }}>M</span>}
                             </span>
@@ -275,9 +267,8 @@ export function AccountsPage() {
                             <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>-</span>
                           )}
                         </td>
-                        <td className="px-3.5 py-[7px]">
+                        <td className="px-2.5 py-[7px]">
                           <AccountTagCell account={acc} allTags={tags} onUpdate={() => {
-                            // Refetch accounts + tags
                             const params: Record<string, string> = {};
                             if (search) params['search'] = search;
                             if (statusFilter) params['status'] = statusFilter;
@@ -287,29 +278,21 @@ export function AccountsPage() {
                             loadTags();
                           }} />
                         </td>
-                        <td className="px-3.5 py-[7px] text-center">
+                        <td className="px-2.5 py-[7px] text-center">
                           <HealthBadge score={acc.health_score} risk={risk} />
                         </td>
-                        <td className="px-3.5 py-[7px] text-xs" style={{ color: 'var(--text-muted)' }}>{acc.currency ?? '-'}</td>
-                        <td className="px-3.5 py-[7px] text-xs font-mono" style={{ color: acc.card_info ? 'var(--text-secondary)' : 'var(--text-muted)' }}>{acc.card_info ?? '-'}</td>
-                        <td className="px-3.5 py-[7px] text-xs max-w-[140px] truncate" style={{ color: acc.domain ? 'var(--accent-green)' : 'var(--text-muted)' }}>{acc.domain ? <a href={acc.domain.startsWith('http') ? acc.domain : `https://${acc.domain}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="hover:underline">{acc.domain.replace(/^https?:\/\//, '').replace(/\/$/, '')}</a> : '-'}</td>
-                        <td className="px-3.5 py-[7px] text-center">
+                        <td className="px-2.5 py-[7px] text-xs font-mono" style={{ color: acc.card_info ? 'var(--text-secondary)' : 'var(--text-muted)' }}>{acc.card_info ?? '-'}</td>
+                        <td className="px-2.5 py-[7px] text-xs max-w-[120px] truncate" style={{ color: acc.domain ? 'var(--accent-green)' : 'var(--text-muted)' }}>{acc.domain ? <a href={acc.domain.startsWith('http') ? acc.domain : `https://${acc.domain}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="hover:underline">{acc.domain.replace(/^https?:\/\//, '').replace(/\/$/, '')}</a> : '-'}</td>
+                        <td className="px-2.5 py-[7px] text-center">
                           {parseInt(acc.ban_count, 10) > 0 ? (
                             <span className="font-mono text-xs text-red-400">{acc.ban_count}</span>
                           ) : (
                             <span style={{ color: 'var(--text-muted)' }}>0</span>
                           )}
                         </td>
-                        <td className="px-3.5 py-[7px] text-center">
-                          {(acc.notifications_count ?? 0) > 0 ? (
-                            <span className="inline-flex items-center justify-center rounded-full text-xs font-mono" style={{ width: 22, height: 22, background: 'rgba(59,130,246,0.1)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.2)' }}>{acc.notifications_count}</span>
-                          ) : (
-                            <span style={{ color: 'var(--text-muted)' }}>-</span>
-                          )}
-                        </td>
-                        <td className="px-3.5 py-[7px] text-right text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{accountAge(acc.first_seen)}</td>
-                        <td className="px-3.5 py-[7px] text-right text-xs" style={{ color: 'var(--text-muted)' }}>{timeAgo(acc.last_seen)}</td>
-                        <td className="px-3.5 py-[7px]">
+                        <td className="px-2.5 py-[7px] text-right text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{accountAge(acc.first_seen)}</td>
+                        <td className="px-2.5 py-[7px] text-right text-xs" style={{ color: 'var(--text-muted)' }}>{timeAgo(acc.last_seen)}</td>
+                        <td className="px-2.5 py-[7px]">
                           <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: 'var(--text-muted)' }} />
                         </td>
                       </AnimatedRow>
