@@ -197,6 +197,11 @@ export function AccountsPage() {
                       e.stopPropagation();
                       if (tagFilter === t.id) setTagFilter('');
                       setTags(prev => prev.filter(x => x.id !== t.id));
+                      setTagOverrides(prev => {
+                        const next: typeof prev = {};
+                        for (const [k, v] of Object.entries(prev)) next[k] = v.filter(tag => tag.id !== t.id);
+                        return next;
+                      });
                       await deleteTag(t.id);
                       loadTags();
                     }}
@@ -207,11 +212,11 @@ export function AccountsPage() {
                   </button>
                 </span>
               ))}
-              <TagManager tags={tags} setTags={setTags} onUpdate={loadTags} />
+              <TagManager tags={tags} setTags={setTags} setTagOverrides={setTagOverrides} onUpdate={loadTags} />
             </div>
           )}
           {tags.length === 0 && (
-            <TagManager tags={tags} setTags={setTags} onUpdate={loadTags} />
+            <TagManager tags={tags} setTags={setTags} setTagOverrides={setTagOverrides} onUpdate={loadTags} />
           )}
         </div>
       </BlurFade>
@@ -422,7 +427,12 @@ const TAG_PRESETS: TagCategory[] = [
 
 // ── TagManager — constructor with presets ────────────────────────────────────
 
-function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: React.Dispatch<React.SetStateAction<TagSummary[]>>; onUpdate: () => void }) {
+function TagManager({ tags, setTags, setTagOverrides, onUpdate }: {
+  tags: TagSummary[];
+  setTags: React.Dispatch<React.SetStateAction<TagSummary[]>>;
+  setTagOverrides: React.Dispatch<React.SetStateAction<Record<string, Array<{ id: string; name: string; color: string }>>>>;
+  onUpdate: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const [customName, setCustomName] = useState('');
@@ -469,6 +479,11 @@ function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: 
 
   const handleDelete = async (id: string) => {
     setTags(prev => prev.filter(x => x.id !== id));
+    setTagOverrides(prev => {
+      const next: typeof prev = {};
+      for (const [k, v] of Object.entries(prev)) next[k] = v.filter(t => t.id !== id);
+      return next;
+    });
     await deleteTag(id);
     onUpdate();
   };
