@@ -52,6 +52,8 @@ export function AccountsPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
 
   const loadTags = useCallback(() => {
     fetchTags().then((d) => setTags(d.tags)).catch(() => {});
@@ -72,11 +74,12 @@ export function AccountsPage() {
     fetchAccounts(params)
       .then((data) => { setAccounts(data.accounts); setTotal(data.total); })
       .catch((e: unknown) => {
-        if (e instanceof ApiError && e.status === 401) { navigate('/settings'); return; }
+        if (e instanceof ApiError && e.status === 401) { navigateRef.current('/settings'); return; }
         setError(e instanceof Error ? e.message : 'Неизвестная ошибка');
       })
       .finally(() => setLoading(false));
-  }, [search, statusFilter, currencyFilter, tagFilter, navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, statusFilter, currencyFilter, tagFilter]);
 
   const suspended = stats?.suspended_accounts ?? 0;
 
