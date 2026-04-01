@@ -211,6 +211,7 @@ export function AccountsPage() {
                   <th className="px-2.5 py-[7px] text-left font-medium label-xs">Тип</th>
                   <th className="px-2.5 py-[7px] text-left font-medium label-xs">Теги</th>
                   <th className="px-2.5 py-[7px] text-center font-medium label-xs">Health</th>
+                  <th className="px-2.5 py-[7px] text-left font-medium label-xs">Валюта</th>
                   <th className="px-2.5 py-[7px] text-left font-medium label-xs">Карта</th>
                   <th className="px-2.5 py-[7px] text-left font-medium label-xs">Домен</th>
                   <th className="px-2.5 py-[7px] text-center font-medium label-xs">Баны</th>
@@ -221,12 +222,12 @@ export function AccountsPage() {
               </thead>
               {loading ? (
                 <tbody>
-                  <tr><td colSpan={12}><TableSkeleton rows={6} cols={8} /></td></tr>
+                  <tr><td colSpan={13}><TableSkeleton rows={6} cols={8} /></td></tr>
                 </tbody>
               ) : filteredAccounts.length === 0 ? (
                 <tbody>
                   <tr>
-                    <td colSpan={12}>
+                    <td colSpan={13}>
                       <div className="relative py-16 flex flex-col items-center justify-center gap-3 overflow-hidden">
                         <DotPattern />
                         <Users className="w-8 h-8" style={{ color: 'var(--border-strong)' }} />
@@ -281,6 +282,7 @@ export function AccountsPage() {
                         <td className="px-2.5 py-[7px] text-center">
                           <HealthBadge score={acc.health_score} risk={risk} />
                         </td>
+                        <td className="px-2.5 py-[7px] text-xs" style={{ color: 'var(--text-muted)' }}>{acc.currency ?? '-'}</td>
                         <td className="px-2.5 py-[7px] text-xs font-mono" style={{ color: acc.card_info ? 'var(--text-secondary)' : 'var(--text-muted)' }}>{acc.card_info ?? '-'}</td>
                         <td className="px-2.5 py-[7px] text-xs max-w-[120px] truncate" style={{ color: acc.domain ? 'var(--accent-green)' : 'var(--text-muted)' }}>{acc.domain ? <a href={acc.domain.startsWith('http') ? acc.domain : `https://${acc.domain}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="hover:underline">{acc.domain.replace(/^https?:\/\//, '').replace(/\/$/, '')}</a> : '-'}</td>
                         <td className="px-2.5 py-[7px] text-center">
