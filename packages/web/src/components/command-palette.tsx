@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, User, Globe, AlertTriangle, BookOpen, Bell, Clock } from 'lucide-react';
-import { globalSearch, type SearchResult } from '../api.js';
+import { globalSearch, fetchTags, type SearchResult } from '../api.js';
 
 // ── Type config ──────────────────────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ interface OperatorDef {
   values: Array<{ value: string; label: string }>;
 }
 
-const OPERATORS: OperatorDef[] = [
+const STATIC_OPERATORS: OperatorDef[] = [
   { prefix: 'vertical:', label: 'Вертикаль', values: [
     { value: 'gambling', label: 'Gambling' },
     { value: 'nutra', label: 'Nutra' },
@@ -62,6 +62,7 @@ const OPERATORS: OperatorDef[] = [
     { value: 'agency', label: 'Agency' },
     { value: 'restored', label: 'Restored' },
   ]},
+  { prefix: 'tag:', label: 'Тег', values: [] }, // dynamic — filled at runtime
   { prefix: 'country:', label: 'Страна', values: [
     { value: 'US', label: 'US' }, { value: 'UK', label: 'UK' }, { value: 'DE', label: 'DE' },
     { value: 'FR', label: 'FR' }, { value: 'PL', label: 'PL' }, { value: 'UA', label: 'UA' },
@@ -79,14 +80,12 @@ const OPERATORS: OperatorDef[] = [
   ]},
 ];
 
-function getAutocompleteSuggestions(query: string): Array<{ display: string; fill: string }> | null {
+function getAutocompleteSuggestions(query: string, operators: OperatorDef[]): Array<{ display: string; fill: string }> | null {
   const lower = query.toLowerCase();
 
-  // Show operator list when user types just a letter or two without ":"
-  // e.g. "v" → suggest "vertical:", "s" → suggest "status:"
   if (!lower.includes(':') && lower.length >= 1 && lower.length <= 8) {
-    const matching = OPERATORS.filter(op => op.prefix.startsWith(lower) || op.label.toLowerCase().startsWith(lower));
-    if (matching.length > 0 && matching.length < OPERATORS.length) {
+    const matching = operators.filter(op => op.prefix.startsWith(lower) || op.label.toLowerCase().startsWith(lower));
+    if (matching.length > 0 && matching.length < operators.length) {
       return matching.map(op => ({
         display: op.label,
         fill: op.prefix,
@@ -94,11 +93,10 @@ function getAutocompleteSuggestions(query: string): Array<{ display: string; fil
     }
   }
 
-  // Show values when user typed "operator:" or "operator:partial"
-  for (const op of OPERATORS) {
+  for (const op of operators) {
     if (!lower.startsWith(op.prefix)) continue;
     const partial = query.slice(op.prefix.length).toLowerCase();
-    if (op.values.length === 0) return null; // free-text operators (bin, domain)
+    if (op.values.length === 0) return null;
     const filtered = partial
       ? op.values.filter(v => v.value.toLowerCase().includes(partial) || v.label.toLowerCase().includes(partial))
       : op.values;
@@ -164,9 +162,17 @@ export function CommandPalette() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [selected, setSelected] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [tagValues, setTagValues] = useState<Array<{ value: string; label: string }>>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Build operators with dynamic tag values
+  const operators = useMemo(() =>
+    STATIC_OPERATORS.map(op =>
+      op.prefix === 'tag:' ? { ...op, values: tagValues } : op,
+    ),
+  [tagValues]);
 
   // Open via hotkey or custom event (from search button)
   useEffect(() => {
@@ -186,12 +192,16 @@ export function CommandPalette() {
     };
   }, []);
 
+  // Load tags every time palette opens
   useEffect(() => {
     if (open) {
       setQuery('');
       setResults([]);
       setSelected(0);
       setTimeout(() => inputRef.current?.focus(), 50);
+      fetchTags()
+        .then(d => setTagValues(d.tags.map(t => ({ value: t.name, label: t.name }))))
+        .catch(() => {});
     }
   }, [open]);
 
@@ -212,7 +222,7 @@ export function CommandPalette() {
 
   // ── Autocomplete state ──────────────────────────────────────────────────
 
-  const suggestions = useMemo(() => getAutocompleteSuggestions(query), [query]);
+  const suggestions = useMemo(() => getAutocompleteSuggestions(query, operators), [query, operators]);
   const [acSelected, setAcSelected] = useState(0);
 
   // Reset autocomplete selection when suggestions change
@@ -221,7 +231,7 @@ export function CommandPalette() {
   function handleInputChange(value: string) {
     setQuery(value);
     // Don't search while showing autocomplete suggestions — wait for selection
-    if (!getAutocompleteSuggestions(value)) {
+    if (!getAutocompleteSuggestions(value, operators)) {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => doSearch(value), 250);
     } else {
@@ -384,7 +394,7 @@ export function CommandPalette() {
               <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
                 Операторы поиска
               </div>
-              {OPERATORS.map(op => (
+              {operators.map(op => (
                 <button
                   key={op.prefix}
                   className="w-full flex items-center gap-3 px-2 py-1.5 rounded-lg text-left transition-colors hover:bg-white/5"

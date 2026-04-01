@@ -17,7 +17,7 @@ interface SearchResult {
  * Supports: "status:banned" (filter only) or "status:banned 812" (filter + text search).
  */
 function parseOperator(q: string): { field: string; value: string; text: string } | null {
-  const m = /^(vertical|status|bin|domain|type|reason|country):(\S+)(?:\s+(.+))?$/i.exec(q);
+  const m = /^(vertical|status|bin|domain|type|reason|country|tag):(\S+)(?:\s+(.+))?$/i.exec(q);
   if (!m) return null;
   return { field: m[1].toLowerCase(), value: m[2].trim(), text: (m[3] ?? '').trim() };
 }
@@ -178,6 +178,24 @@ export async function searchHandler(
             type: 'account', id: r.google_account_id!, matchField: 'country',
             title: r.display_name || r.google_account_id!,
             subtitle: [r.google_account_id, r.status, r.country].filter(Boolean).join(' · '),
+            url: `/accounts/${r.google_account_id}`,
+          });
+        }
+      } else if (operator.field === 'tag') {
+        const accs = await pool.query(
+          `SELECT a.google_account_id, a.display_name, a.status::text, t.name AS tag_name
+           FROM accounts a
+           JOIN account_tags at ON at.account_id = a.id
+           JOIN tags t ON t.id = at.tag_id
+           WHERE t.name ILIKE $1 ${tp ? `AND (a.google_account_id ILIKE $2 OR a.display_name ILIKE $2)` : ''}
+           ORDER BY a.updated_at DESC LIMIT 15`,
+          tp ? [pattern, tp] : [pattern],
+        );
+        for (const r of accs.rows as Array<Record<string, string | null>>) {
+          results.push({
+            type: 'account', id: r.google_account_id!, matchField: 'tag',
+            title: r.display_name || r.google_account_id!,
+            subtitle: [r.google_account_id, r.status, `#${r.tag_name}`].filter(Boolean).join(' · '),
             url: `/accounts/${r.google_account_id}`,
           });
         }
