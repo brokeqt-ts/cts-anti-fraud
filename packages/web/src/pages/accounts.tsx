@@ -190,7 +190,6 @@ export function AccountsPage() {
                     className="pl-2.5 py-1"
                   >
                     {t.name}
-                    <span className="ml-1 opacity-60">{t.account_count}</span>
                   </button>
                   <button
                     onClick={async (e) => {
@@ -576,7 +575,6 @@ function TagManager({ tags, setTags, setTagOverrides, onUpdate }: {
                 <span className="flex items-center gap-1.5 text-xs" style={{ color: t.color }}>
                   <span className="w-2 h-2 rounded-full shrink-0" style={{ background: t.color }} />
                   {t.name}
-                  <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{t.account_count}</span>
                 </span>
                 <button
                   onClick={() => handleDelete(t.id)}
