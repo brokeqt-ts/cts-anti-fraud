@@ -477,7 +477,7 @@ function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: 
     >
       {TAG_PRESETS.map((cat) => (
         <div key={cat.label}>
-          <div className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>
+          <div className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-secondary)' }}>
             {cat.label}
           </div>
           <div className="flex flex-wrap gap-1">
@@ -490,9 +490,8 @@ function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: 
                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-all"
                   style={{
                     background: exists ? preset.color + '20' : 'transparent',
-                    color: exists ? preset.color : 'var(--text-muted)',
-                    border: `1px solid ${exists ? preset.color + '40' : 'var(--border-subtle)'}`,
-                    opacity: exists ? 1 : 0.7,
+                    color: exists ? preset.color : 'var(--text-secondary)',
+                    border: `1px solid ${exists ? preset.color + '40' : 'var(--border-strong)'}`,
                     cursor: exists ? 'default' : 'pointer',
                   }}
                 >
@@ -507,7 +506,7 @@ function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: 
 
       {tags.length > 0 && (
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wider mb-1.5 pt-1" style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
+          <div className="text-[10px] font-semibold uppercase tracking-wider mb-1.5 pt-1" style={{ color: 'var(--text-secondary)', borderTop: '1px solid var(--border-medium)', paddingTop: 8 }}>
             Активные теги
           </div>
           <div className="space-y-0.5">
@@ -516,12 +515,12 @@ function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: 
                 <span className="flex items-center gap-1.5 text-xs" style={{ color: t.color }}>
                   <span className="w-2 h-2 rounded-full shrink-0" style={{ background: t.color }} />
                   {t.name}
-                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{t.account_count}</span>
+                  <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{t.account_count}</span>
                 </span>
                 <button
                   onClick={() => handleDelete(t.id)}
                   className="p-0.5 rounded hover:bg-red-500/10 transition-colors"
-                  style={{ color: 'var(--text-muted)' }}
+                  style={{ color: 'var(--text-secondary)' }}
                   title="Удалить тег"
                 >
                   <X className="w-3 h-3" />
@@ -585,7 +584,12 @@ function AccountTagCell({ account, allTags, onUpdate }: { account: AccountSummar
     e.stopPropagation();
     if (!open && btnRef.current) {
       const rect = btnRef.current.getBoundingClientRect();
-      setPos({ top: rect.bottom + 4, left: rect.left });
+      const dropH = 200;
+      const fitsBelow = rect.bottom + dropH < window.innerHeight;
+      setPos({
+        top: fitsBelow ? rect.bottom + 4 : rect.top - dropH - 4,
+        left: Math.min(rect.left, window.innerWidth - 170),
+      });
     }
     setOpen(!open);
   };
@@ -612,7 +616,7 @@ function AccountTagCell({ account, allTags, onUpdate }: { account: AccountSummar
             key={t.id}
             onClick={() => handleToggle(t.id, assigned)}
             className="w-full flex items-center gap-2 px-2 py-1 rounded text-xs text-left transition-colors hover:bg-white/5"
-            style={{ color: assigned ? t.color : 'var(--text-muted)' }}
+            style={{ color: assigned ? t.color : 'var(--text-secondary)' }}
           >
             <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: t.color, opacity: assigned ? 1 : 0.3 }} />
             {t.name}
@@ -638,8 +642,8 @@ function AccountTagCell({ account, allTags, onUpdate }: { account: AccountSummar
       <button
         ref={btnRef}
         onClick={handleOpen}
-        className="inline-flex items-center justify-center w-4 h-4 rounded-full transition-colors hover:bg-white/10"
-        style={{ color: 'var(--text-muted)', opacity: accTags.length > 0 ? 0.5 : 0.3 }}
+        className="inline-flex items-center justify-center w-5 h-5 rounded transition-colors hover:bg-white/10"
+        style={{ color: 'var(--text-secondary)', border: '1px solid var(--border-strong)' }}
         title="Управление тегами"
       >
         <Plus className="w-3 h-3" />
