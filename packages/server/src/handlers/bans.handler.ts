@@ -4,7 +4,6 @@ import { env } from '../config/env.js';
 import * as bansRepo from '../repositories/bans.repository.js';
 import * as accountsRepo from '../repositories/accounts.repository.js';
 import { getUserIdFilter } from '../utils/user-scope.js';
-import { updateAccountHealthScore } from '../services/health-score.service.js';
 
 export async function createBanHandler(
   request: FastifyRequest,
@@ -68,9 +67,6 @@ export async function createBanHandler(
     domain: domain ?? null,
     ban_reason_internal: ban_reason_internal ?? null,
   });
-
-  // Recalculate health score after ban
-  updateAccountHealthScore(pool, account_google_id).catch(() => {});
 
   await reply.status(201).send(ban);
 }

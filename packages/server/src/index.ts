@@ -36,7 +36,7 @@ import { analyzeAllDomains } from './services/domain-content-analyzer.js';
 import { scanAllSuspendedAccounts } from './services/auto-ban-detector.js';
 import { MaterializedViewService } from './services/materialized-view.service.js';
 import { batchPredictAll } from './services/ai/auto-scoring.service.js';
-import { updateAllHealthScores } from './services/health-score.service.js';
+
 import { scoreSurvivedAccounts } from './services/ai/leaderboard.service.js';
 import { deleteOldNotifications } from './services/notification.service.js';
 import { startBotPolling, stopBotPolling, registerBotCommands } from './services/telegram-bot.service.js';
@@ -286,11 +286,6 @@ async function start() {
 
   // АВТОМАТИЗАЦИЯ ML: Batch prediction — score all accounts every 6 hours
   timers.push(setTimeout(() => {
-    app.log.info('[cron] Initial health score calculation starting...');
-    updateAllHealthScores(pool)
-      .then((n) => app.log.info(`[cron] Health scores updated: ${n} accounts`))
-      .catch((err) => app.log.error('[cron] Health score calc failed: %s', err instanceof Error ? err.message : err));
-
     app.log.info('[cron] Initial batch prediction starting...');
     batchPredictAll(pool)
       .then((r) => {

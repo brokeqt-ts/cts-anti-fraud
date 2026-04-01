@@ -97,8 +97,7 @@ export async function listAccounts(pool: pg.Pool, params: ListAccountsParams): P
        (SELECT COUNT(*) FROM notification_details nd
         WHERE nd.account_google_id = a.google_account_id) AS notifications_count,
        a.account_type,
-       a.account_type_source,
-       a.health_score
+       a.account_type_source
      FROM accounts a
      LEFT JOIN LATERAL (
        SELECT ap2.profile_name, ap2.browser_type

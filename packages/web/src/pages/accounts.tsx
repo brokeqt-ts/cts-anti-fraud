@@ -99,7 +99,7 @@ export function AccountsPage() {
                 acc.display_name,
                 effectiveStatus(acc),
                 acc.account_type,
-                acc.health_score ?? riskLevel(acc),
+                riskLevel(acc),
                 acc.currency,
                 acc.card_info,
                 acc.domain,
@@ -226,7 +226,7 @@ export function AccountsPage() {
                   <th className="px-2.5 py-[7px] text-left font-medium label-xs">Статус</th>
                   <th className="px-2.5 py-[7px] text-left font-medium label-xs">Тип</th>
                   <th className="px-2.5 py-[7px] text-left font-medium label-xs">Теги</th>
-                  <th className="px-2.5 py-[7px] text-center font-medium label-xs">Health</th>
+                  <th className="px-2.5 py-[7px] text-center font-medium label-xs">Риск</th>
                   <th className="px-2.5 py-[7px] text-left font-medium label-xs">Валюта</th>
                   <th className="px-2.5 py-[7px] text-left font-medium label-xs">Карта</th>
                   <th className="px-2.5 py-[7px] text-left font-medium label-xs">Домен</th>
@@ -296,7 +296,7 @@ export function AccountsPage() {
                           }} />
                         </td>
                         <td className="px-2.5 py-[7px] text-center">
-                          <HealthBadge score={acc.health_score} risk={risk} />
+                          <RiskBadge risk={risk} />
                         </td>
                         <td className="px-2.5 py-[7px] text-xs" style={{ color: 'var(--text-muted)' }}>{acc.currency ?? '-'}</td>
                         <td className="px-2.5 py-[7px] text-xs font-mono" style={{ color: acc.card_info ? 'var(--text-secondary)' : 'var(--text-muted)' }}>{acc.card_info ?? '-'}</td>
@@ -342,21 +342,20 @@ function accountAge(firstSeen: string | null | undefined): string {
   return `${years}г`;
 }
 
-function HealthBadge({ score, risk }: { score?: number | null; risk: string }) {
-  if (score == null) {
-    // Fallback to old risk badge if no health score calculated yet
-    const RISK_LABELS: Record<string, string> = { high: 'Высокий', medium: 'Средний', low: 'Низкий', unknown: '—' };
-    return <span className={`risk-badge-${risk} inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium`}>{RISK_LABELS[risk] ?? '—'}</span>;
-  }
-  const color = score >= 80 ? '#22c55e' : score >= 50 ? '#eab308' : score >= 25 ? '#f97316' : '#ef4444';
-  const bg = score >= 80 ? 'rgba(34,197,94,0.12)' : score >= 50 ? 'rgba(234,179,8,0.12)' : score >= 25 ? 'rgba(249,115,22,0.12)' : 'rgba(239,68,68,0.12)';
+function RiskBadge({ risk }: { risk: string }) {
+  const cfg: Record<string, { label: string; color: string; bg: string }> = {
+    high:    { label: 'Высокий', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
+    medium:  { label: 'Средний', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+    low:     { label: 'Низкий',  color: '#22c55e', bg: 'rgba(34,197,94,0.12)' },
+    unknown: { label: '—',       color: '#6b7280', bg: 'rgba(107,114,128,0.08)' },
+  };
+  const c = cfg[risk] ?? cfg['unknown']!;
   return (
     <span
-      className="inline-flex items-center justify-center rounded-full font-mono text-[11px] font-semibold"
-      style={{ background: bg, color, minWidth: 36, height: 22, padding: '0 6px' }}
-      title={`Health Score: ${score}/100`}
+      className="inline-flex items-center justify-center rounded-full text-[10px] font-medium"
+      style={{ background: c.bg, color: c.color, minWidth: 36, height: 22, padding: '0 8px', border: `1px solid ${c.color}25` }}
     >
-      {score}
+      {c.label}
     </span>
   );
 }

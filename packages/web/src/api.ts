@@ -286,7 +286,6 @@ export interface AccountSummary {
   first_seen?: string | null;
   account_type?: string | null;
   account_type_source?: string | null;
-  health_score?: number | null;
   tags?: Array<{ id: string; name: string; color: string }>;
 }
 

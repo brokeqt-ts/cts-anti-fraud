@@ -4,7 +4,6 @@ import { scoreAccountOnBan } from './ai/auto-scoring.service.js';
 import { scoreOnBanDetected } from './ai/leaderboard.service.js';
 import { notifyOwnerAndAdmins, formatCid } from './notification.service.js';
 import * as telegram from './telegram-bot.service.js';
-import { updateAccountHealthScore } from './health-score.service.js';
 
 /**
  * Auto-ban detection service.
@@ -152,9 +151,6 @@ async function handleSuspension(
   const banId = banIdResult.rows[0]?.['id'] as string | undefined;
 
   console.log(`[auto-ban-detector] Auto-created ban for CID ${accountGoogleId} (lifetime: ${lifetimeHours}h, reason: ${banReasonGoogle ?? 'unknown'})`);
-
-  // Recalculate health score immediately after ban detection
-  updateAccountHealthScore(pool, accountGoogleId).catch(() => {});
 
   // Skip notifications and alerts for catch-up (historical) bans
   if (options.silent) {
@@ -307,8 +303,6 @@ async function handleResolution(pool: pg.Pool, accountGoogleId: string): Promise
       newStatus: 'active',
     }).catch(() => {});
 
-    // Recalculate health score after ban resolution
-    updateAccountHealthScore(pool, accountGoogleId).catch(() => {});
   }
 }
 
