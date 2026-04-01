@@ -1510,6 +1510,25 @@ export interface NotificationHistoryEntry {
 export const fetchNotificationHistory = (limit?: number): Promise<{ history: NotificationHistoryEntry[] }> =>
   apiFetch(`/admin/notifications/history${limit ? `?limit=${limit}` : ''}`);
 
+// --- Audit Log ---
+
+export interface AuditEntry {
+  id: string;
+  user_id: string | null;
+  user_name: string;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  details: Record<string, unknown> | null;
+  ip_address: string | null;
+  created_at: string;
+}
+
+export const fetchAuditLog = (params?: Record<string, string>): Promise<{ total: number; entries: AuditEntry[] }> => {
+  const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+  return apiFetch(`/admin/audit${qs}`);
+};
+
 // --- Telegram Connect ---
 
 export interface TelegramBotInfo {

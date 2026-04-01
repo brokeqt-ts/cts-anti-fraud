@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { getPool } from '../config/database.js';
 import { env } from '../config/env.js';
 import * as tagsRepo from '../repositories/tags.repository.js';
+import { audit } from '../services/audit.service.js';
 
 export async function listTagsHandler(
   _request: FastifyRequest,
@@ -26,6 +27,7 @@ export async function createTagHandler(
   const pool = getPool(env.DATABASE_URL);
   try {
     const tag = await tagsRepo.createTag(pool, name, color);
+    audit(pool, request, 'tag.create', { entityType: 'tag', entityId: tag.id, details: { name, color } });
     await reply.status(201).send({ tag });
   } catch (err) {
     const msg = err instanceof Error ? err.message : '';
@@ -69,6 +71,7 @@ export async function deleteTagHandler(
     await reply.status(404).send({ error: 'Tag not found', code: 'NOT_FOUND' });
     return;
   }
+  audit(pool, request, 'tag.delete', { entityType: 'tag', entityId: params['id']! });
   await reply.status(204).send();
 }
 

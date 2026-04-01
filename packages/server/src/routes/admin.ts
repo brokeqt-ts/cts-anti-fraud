@@ -29,6 +29,7 @@ import {
   sendNotificationHandler,
   notificationHistoryHandler,
 } from '../handlers/admin-notifications.handler.js';
+import { listAuditHandler } from '../handlers/audit.handler.js';
 
 // --- JSON Schemas for user management ---
 
@@ -330,5 +331,15 @@ export async function adminRoutes(fastify: FastifyInstance): Promise<void> {
       preHandler: [fastify.authenticate, fastify.requireRole('admin')],
     },
     notificationHistoryHandler,
+  );
+
+  // --- Audit log (admin only) ---
+
+  fastify.get(
+    '/admin/audit',
+    {
+      preHandler: [fastify.authenticate, fastify.requireRole('admin')],
+    },
+    listAuditHandler,
   );
 }

@@ -160,6 +160,18 @@
 - Все dropdown через React Portal (`createPortal`) для корректного z-index
 - Risk Score badge (Высокий/Средний/Низкий) вместо Health Score
 
+### UX-16: Audit Log ✅
+- Миграция 060: таблица `audit_log` (user_id, user_name, action, entity_type, entity_id, details JSONB, ip_address)
+- Сервис `audit.service.ts`: `logAudit()` + helper `audit(pool, request, action, opts)`
+- GET `/api/v1/admin/audit` — список с фильтрами (action, user_id, entity_type, from_date, to_date) + пагинация
+- Аудит подключён к: bans.handler (ban.create), accounts.handler (account.update),
+  admin-users.handler (user.create, user.update, user.delete), tags.handler (tag.create, tag.delete),
+  extension.handler (extension.download), admin-notifications.handler (settings.update)
+- Frontend: страница `/admin/audit` с таблицей, фильтрами по действиям, пагинацией
+- Раскрываемые строки: клик показывает JSON details
+- Навигация: пункт "Аудит" в sidebar (только для admin)
+- Индексы: user_id, action, created_at DESC, (entity_type, entity_id)
+
 ---
 
 ## Конвенции (из CLAUDE.md)

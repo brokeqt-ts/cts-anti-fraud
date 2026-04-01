@@ -17,6 +17,7 @@ import { LoginPage } from './pages/login.js';
 import { NotificationsPage } from './pages/notifications.js';
 import { UsersPage } from './pages/users.js';
 import { AdminNotificationsPage } from './pages/admin-notifications.js';
+import { AuditLogPage } from './pages/audit-log.js';
 import { useAuth } from './contexts/auth-context.js';
 import { Loader2 } from 'lucide-react';
 
@@ -104,6 +105,14 @@ export function App() {
           element={
             <RequireAdmin>
               <AdminNotificationsPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="/admin/audit"
+          element={
+            <RequireAdmin>
+              <AuditLogPage />
             </RequireAdmin>
           }
         />

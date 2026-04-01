@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, ShieldBan, Globe, Settings, Plus, Shield, Link2, BarChart3, ShieldCheck, Brain, LogOut, UserCog, Bell, BellRing, BookOpen, Search } from 'lucide-react';
+import { LayoutDashboard, Users, ShieldBan, Globe, Settings, Plus, Shield, Link2, BarChart3, ShieldCheck, Brain, LogOut, UserCog, Bell, BellRing, BookOpen, Search, ClipboardList } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useCallback } from 'react';
 import { AnimatedThemeToggler } from './ui/animated-theme-toggler.js';
@@ -30,7 +30,7 @@ export function Layout() {
   const { lastNotification } = useNotificationStream();
 
   const navItems = user?.role === 'admin'
-    ? [...baseNavItems.slice(0, -1), { to: '/users', label: 'Пользователи', icon: UserCog }, { to: '/admin/notifications', label: 'Упр. уведомлениями', icon: BellRing }, baseNavItems[baseNavItems.length - 1]]
+    ? [...baseNavItems.slice(0, -1), { to: '/users', label: 'Пользователи', icon: UserCog }, { to: '/admin/notifications', label: 'Упр. уведомлениями', icon: BellRing }, { to: '/admin/audit', label: 'Аудит', icon: ClipboardList }, baseNavItems[baseNavItems.length - 1]]
     : baseNavItems;
 
   const handleLogout = useCallback(async () => {

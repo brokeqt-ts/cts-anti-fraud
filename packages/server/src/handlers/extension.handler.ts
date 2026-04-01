@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import archiver from 'archiver';
 import { getPool } from '../config/database.js';
+import { audit } from '../services/audit.service.js';
 import { env } from '../config/env.js';
 
 const API_KEY_PLACEHOLDER = '__CTS_API_KEY_PLACEHOLDER__';
@@ -86,6 +87,7 @@ export async function downloadExtensionHandler(
     await reply.status(401).send({ error: 'Authentication required', code: 'AUTH_REQUIRED' });
     return;
   }
+  audit(getPool(env.DATABASE_URL), request, 'extension.download', { entityType: 'user', entityId: userId });
   await streamExtensionZip(request, reply, userId);
 }
 

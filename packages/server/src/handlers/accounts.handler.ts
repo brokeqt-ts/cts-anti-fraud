@@ -4,6 +4,7 @@ import { env } from '../config/env.js';
 import * as accountsRepo from '../repositories/accounts.repository.js';
 import * as qsRepo from '../repositories/quality-score.repository.js';
 import { getUserIdFilter } from '../utils/user-scope.js';
+import { audit } from '../services/audit.service.js';
 
 const VALID_ACCOUNT_TYPES = ['farm', 'bought', 'agency', 'unknown'];
 const VALID_VERTICALS = ['gambling', 'nutra', 'crypto', 'dating', 'sweepstakes', 'ecom', 'finance', 'other'];
@@ -133,6 +134,7 @@ export async function patchAccountHandler(
       return;
     }
 
+    audit(pool, request, 'account.update', { entityType: 'account', entityId: google_id, details: patchParams as Record<string, unknown> });
     await reply.status(200).send({ account });
   } catch (err: unknown) {
     request.log.error({ err, handler: 'patchAccountHandler', google_id }, 'Failed to update account');

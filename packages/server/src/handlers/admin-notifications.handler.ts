@@ -4,6 +4,7 @@ import { env } from '../config/env.js';
 import * as settingsService from '../services/notification-settings.service.js';
 import { createNotification } from '../services/notification.service.js';
 import { sendTestMessage } from '../services/telegram-bot.service.js';
+import { audit } from '../services/audit.service.js';
 
 // ─── 3A: Notification Settings ───────────────────────────────────────────────
 
@@ -34,6 +35,7 @@ export async function updateSettingHandler(
     return;
   }
 
+  audit(pool, request, 'settings.update', { entityType: 'notification_setting', entityId: key, details: body as Record<string, unknown> });
   await reply.send({ setting });
 }
 

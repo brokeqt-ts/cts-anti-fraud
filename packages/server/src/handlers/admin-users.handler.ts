@@ -3,6 +3,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { getPool } from '../config/database.js';
 import { env } from '../config/env.js';
 import { hashPassword } from '../services/auth/password.service.js';
+import { audit } from '../services/audit.service.js';
 
 const pool = getPool(env.DATABASE_URL);
 
@@ -59,6 +60,7 @@ export async function createUserHandler(
 
   const user = result.rows[0] as Record<string, unknown>;
 
+  audit(pool, request, 'user.create', { entityType: 'user', entityId: user['id'] as string, details: { name, email, role } });
   await reply.status(201).send({ user });
 }
 
@@ -195,6 +197,7 @@ export async function updateUserHandler(
     await pool.query(`DELETE FROM refresh_tokens WHERE user_id = $1`, [id]);
   }
 
+  audit(pool, request, 'user.update', { entityType: 'user', entityId: id, details: { name, email, role, is_active } });
   await reply.status(200).send({ user: result.rows[0] });
 }
 
@@ -232,6 +235,7 @@ export async function deleteUserHandler(
   // Revoke all refresh tokens
   await pool.query(`DELETE FROM refresh_tokens WHERE user_id = $1`, [id]);
 
+  audit(pool, request, 'user.delete', { entityType: 'user', entityId: id });
   await reply.status(200).send({ status: 'ok' });
 }
 

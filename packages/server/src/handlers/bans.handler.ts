@@ -4,6 +4,7 @@ import { env } from '../config/env.js';
 import * as bansRepo from '../repositories/bans.repository.js';
 import * as accountsRepo from '../repositories/accounts.repository.js';
 import { getUserIdFilter } from '../utils/user-scope.js';
+import { audit } from '../services/audit.service.js';
 
 export async function createBanHandler(
   request: FastifyRequest,
@@ -68,6 +69,7 @@ export async function createBanHandler(
     ban_reason_internal: ban_reason_internal ?? null,
   });
 
+  audit(pool, request, 'ban.create', { entityType: 'ban', entityId: ban.id as string, details: { account_google_id, ban_reason_google } });
   await reply.status(201).send(ban);
 }
 
