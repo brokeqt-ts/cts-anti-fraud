@@ -224,12 +224,7 @@ export function AnimatedRow({
           transition: { duration: 0.3, ease: EASE },
         },
       }}
-      whileHover={{
-        backgroundColor: 'var(--bg-card)',
-        scale: 1.005,
-        transition: { duration: 0.15 },
-      }}
-      className={className}
+      className={`animated-row ${className}`}
       onClick={onClick}
       style={{ borderBottom: '1px solid var(--bg-card)', transformOrigin: 'center' }}
     >
