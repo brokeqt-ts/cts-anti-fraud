@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Search, ChevronRight, Users, Download, Tag, Plus, X } from 'lucide-react';
 import {
@@ -167,7 +168,7 @@ export function AccountsPage() {
             ))}
           </div>
           {tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 items-center" style={{ position: 'relative', zIndex: 50 }}>
+            <div className="flex flex-wrap gap-1.5 items-center">
               <Tag className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
               <FilterPill active={!tagFilter} onClick={() => setTagFilter('')}>Все</FilterPill>
               {tags.map((t) => (
@@ -420,22 +421,35 @@ const TAG_PRESETS: TagCategory[] = [
 
 function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: React.Dispatch<React.SetStateAction<TagSummary[]>>; onUpdate: () => void }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
   const existingNames = new Set(tags.map((t) => t.name.toLowerCase()));
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (
+        dropRef.current && !dropRef.current.contains(e.target as Node) &&
+        btnRef.current && !btnRef.current.contains(e.target as Node)
+      ) setOpen(false);
     }
     if (open) document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open]);
 
+  const handleOpen = () => {
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + 4, left: Math.min(rect.left, window.innerWidth - 268) });
+    }
+    setOpen(!open);
+  };
+
   const handleAdd = async (preset: TagPreset) => {
     try {
       await createTag(preset.name, preset.color);
       onUpdate();
-    } catch { /* duplicate — ignore */ }
+    } catch { /* duplicate */ }
   };
 
   const handleDelete = async (id: string) => {
@@ -444,90 +458,97 @@ function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: 
     onUpdate();
   };
 
+  const dropdown = open ? createPortal(
+    <div
+      ref={dropRef}
+      className="rounded-xl p-3 space-y-3"
+      style={{
+        position: 'fixed',
+        zIndex: 99999,
+        top: pos.top,
+        left: pos.left,
+        width: 260,
+        maxHeight: 420,
+        overflowY: 'auto',
+        background: 'var(--bg-base)',
+        border: '1px solid var(--border-medium)',
+        boxShadow: '0 10px 40px rgba(0,0,0,0.5)',
+        backdropFilter: 'blur(20px)',
+        isolation: 'isolate',
+      }}
+    >
+      {TAG_PRESETS.map((cat) => (
+        <div key={cat.label}>
+          <div className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>
+            {cat.label}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {cat.items.map((preset) => {
+              const exists = existingNames.has(preset.name.toLowerCase());
+              return (
+                <button
+                  key={preset.name}
+                  onClick={() => !exists && handleAdd(preset)}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-all"
+                  style={{
+                    background: exists ? preset.color + '20' : 'transparent',
+                    color: exists ? preset.color : 'var(--text-muted)',
+                    border: `1px solid ${exists ? preset.color + '40' : 'var(--border-subtle)'}`,
+                    opacity: exists ? 1 : 0.7,
+                    cursor: exists ? 'default' : 'pointer',
+                  }}
+                >
+                  {exists && <span className="text-[8px]">✓</span>}
+                  {preset.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      {tags.length > 0 && (
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-wider mb-1.5 pt-1" style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
+            Активные теги
+          </div>
+          <div className="space-y-0.5">
+            {tags.map((t) => (
+              <div key={t.id} className="flex items-center justify-between gap-2 py-0.5">
+                <span className="flex items-center gap-1.5 text-xs" style={{ color: t.color }}>
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: t.color }} />
+                  {t.name}
+                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{t.account_count}</span>
+                </span>
+                <button
+                  onClick={() => handleDelete(t.id)}
+                  className="p-0.5 rounded hover:bg-red-500/10 transition-colors"
+                  style={{ color: 'var(--text-muted)' }}
+                  title="Удалить тег"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>,
+    document.body,
+  ) : null;
+
   return (
-    <div className="relative" ref={ref}>
+    <>
       <button
-        onClick={() => setOpen(!open)}
+        ref={btnRef}
+        onClick={handleOpen}
         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-medium transition-colors"
         style={{ background: 'var(--bg-card)', color: 'var(--text-muted)', border: '1px dashed var(--border-strong)' }}
       >
         <Plus className="w-3 h-3" /> Тег
       </button>
-      {open && (
-        <div
-          className="absolute top-full mt-1 right-0 z-[100] rounded-xl p-3 space-y-3"
-          style={{
-            background: 'var(--bg-base)',
-            border: '1px solid var(--border-medium)',
-            boxShadow: '0 10px 40px rgba(0,0,0,0.5)',
-            backdropFilter: 'blur(20px)',
-            isolation: 'isolate',
-            width: 260,
-            maxHeight: 420,
-            overflowY: 'auto',
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {TAG_PRESETS.map((cat) => (
-            <div key={cat.label}>
-              <div className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>
-                {cat.label}
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {cat.items.map((preset) => {
-                  const exists = existingNames.has(preset.name.toLowerCase());
-                  return (
-                    <button
-                      key={preset.name}
-                      onClick={() => !exists && handleAdd(preset)}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-all"
-                      style={{
-                        background: exists ? preset.color + '20' : 'transparent',
-                        color: exists ? preset.color : 'var(--text-muted)',
-                        border: `1px solid ${exists ? preset.color + '40' : 'var(--border-subtle)'}`,
-                        opacity: exists ? 1 : 0.7,
-                        cursor: exists ? 'default' : 'pointer',
-                      }}
-                    >
-                      {exists && <span className="text-[8px]">✓</span>}
-                      {preset.name}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-
-          {/* Existing tags with delete */}
-          {tags.length > 0 && (
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wider mb-1.5 pt-1" style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
-                Активные теги
-              </div>
-              <div className="space-y-0.5">
-                {tags.map((t) => (
-                  <div key={t.id} className="flex items-center justify-between gap-2 py-0.5">
-                    <span className="flex items-center gap-1.5 text-xs" style={{ color: t.color }}>
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: t.color }} />
-                      {t.name}
-                      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{t.account_count}</span>
-                    </span>
-                    <button
-                      onClick={() => handleDelete(t.id)}
-                      className="p-0.5 rounded hover:bg-red-500/10 transition-colors"
-                      style={{ color: 'var(--text-muted)' }}
-                      title="Удалить тег"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+      {dropdown}
+    </>
   );
 }
 
