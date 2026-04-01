@@ -171,19 +171,35 @@ export function AccountsPage() {
               <Tag className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
               <FilterPill active={!tagFilter} onClick={() => setTagFilter('')}>Все</FilterPill>
               {tags.map((t) => (
-                <button
+                <span
                   key={t.id}
-                  onClick={() => setTagFilter(tagFilter === t.id ? '' : t.id)}
-                  className="px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-200"
+                  className="inline-flex items-center gap-1 rounded-lg text-xs font-medium transition-all duration-200"
                   style={{
                     background: tagFilter === t.id ? t.color + '30' : 'var(--bg-card)',
                     color: tagFilter === t.id ? t.color : 'var(--text-muted)',
                     border: tagFilter === t.id ? `1px solid ${t.color}50` : '1px solid var(--border-subtle)',
                   }}
                 >
-                  {t.name}
-                  <span className="ml-1 opacity-60">{t.account_count}</span>
-                </button>
+                  <button
+                    onClick={() => setTagFilter(tagFilter === t.id ? '' : t.id)}
+                    className="pl-2.5 py-1"
+                  >
+                    {t.name}
+                    <span className="ml-1 opacity-60">{t.account_count}</span>
+                  </button>
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      if (tagFilter === t.id) setTagFilter('');
+                      await deleteTag(t.id);
+                      loadTags();
+                    }}
+                    className="pr-1.5 py-1 opacity-40 hover:opacity-100 transition-opacity"
+                    title="Удалить тег"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
               ))}
               <TagManager tags={tags} onUpdate={loadTags} />
             </div>
@@ -361,16 +377,51 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
   );
 }
 
-// ── Tag Colors ────────────────────────────────────────────────────────────────
-const TAG_COLORS = ['#6366f1', '#f43f5e', '#10b981', '#f59e0b', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6'];
+// ── Tag preset constructor ────────────────────────────────────────────────────
 
-// ── TagManager — create/delete tags (button + dropdown) ─────────────────────
+interface TagPreset { name: string; color: string }
+interface TagCategory { label: string; items: TagPreset[] }
+
+const TAG_PRESETS: TagCategory[] = [
+  { label: 'Вертикаль', items: [
+    { name: 'gambling', color: '#f43f5e' },
+    { name: 'nutra', color: '#10b981' },
+    { name: 'crypto', color: '#f59e0b' },
+    { name: 'dating', color: '#ec4899' },
+    { name: 'sweepstakes', color: '#8b5cf6' },
+    { name: 'finance', color: '#3b82f6' },
+    { name: 'ecom', color: '#14b8a6' },
+  ]},
+  { label: 'ГЕО', items: [
+    { name: 'EU', color: '#3b82f6' },
+    { name: 'US', color: '#6366f1' },
+    { name: 'CIS', color: '#f59e0b' },
+    { name: 'TIER1', color: '#10b981' },
+    { name: 'TIER2', color: '#f97316' },
+    { name: 'TIER3', color: '#ef4444' },
+    { name: 'LATAM', color: '#8b5cf6' },
+    { name: 'ASIA', color: '#ec4899' },
+  ]},
+  { label: 'Статус', items: [
+    { name: 'тест', color: '#f59e0b' },
+    { name: 'скейл', color: '#10b981' },
+    { name: 'на паузе', color: '#6b7280' },
+    { name: 'горит', color: '#ef4444' },
+    { name: 'новый', color: '#3b82f6' },
+  ]},
+  { label: 'Проект', items: [
+    { name: 'проект-A', color: '#6366f1' },
+    { name: 'проект-B', color: '#14b8a6' },
+    { name: 'проект-C', color: '#f43f5e' },
+  ]},
+];
+
+// ── TagManager — constructor with presets ────────────────────────────────────
 
 function TagManager({ tags, onUpdate }: { tags: TagSummary[]; onUpdate: () => void }) {
   const [open, setOpen] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newColor, setNewColor] = useState(TAG_COLORS[0]!);
   const ref = useRef<HTMLDivElement>(null);
+  const existingNames = new Set(tags.map((t) => t.name.toLowerCase()));
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -380,13 +431,11 @@ function TagManager({ tags, onUpdate }: { tags: TagSummary[]; onUpdate: () => vo
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  const handleCreate = async () => {
-    if (!newName.trim()) return;
+  const handleAdd = async (preset: TagPreset) => {
     try {
-      await createTag(newName.trim(), newColor);
-      setNewName('');
+      await createTag(preset.name, preset.color);
       onUpdate();
-    } catch { /* ignore duplicate */ }
+    } catch { /* duplicate — ignore */ }
   };
 
   const handleDelete = async (id: string) => {
@@ -405,61 +454,66 @@ function TagManager({ tags, onUpdate }: { tags: TagSummary[]; onUpdate: () => vo
       </button>
       {open && (
         <div
-          className="absolute right-0 bottom-full mb-1 z-50 rounded-xl p-3 space-y-2 shadow-2xl min-w-[220px]"
-          style={{ background: 'var(--bg-dropdown)', border: '1px solid var(--border-medium)' }}
+          className="absolute right-0 bottom-full mb-1 z-50 rounded-xl p-3 space-y-3 shadow-2xl"
+          style={{ background: 'var(--bg-dropdown)', border: '1px solid var(--border-medium)', minWidth: 260, maxHeight: 420, overflowY: 'auto' }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-            Создать тег
-          </div>
-          <div className="flex gap-1.5">
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-              placeholder="gambling-eu"
-              className="flex-1 bg-transparent outline-none text-xs px-2 py-1 rounded"
-              style={{ border: '1px solid var(--border-medium)', color: 'var(--text-primary)' }}
-            />
-            <button onClick={handleCreate} className="px-2 py-1 rounded text-xs font-medium" style={{ background: newColor + '20', color: newColor, border: `1px solid ${newColor}40` }}>
-              <Plus className="w-3 h-3" />
-            </button>
-          </div>
-          <div className="flex gap-1">
-            {TAG_COLORS.map((c) => (
-              <button
-                key={c}
-                onClick={() => setNewColor(c)}
-                className="w-5 h-5 rounded-full transition-transform"
-                style={{
-                  background: c,
-                  transform: newColor === c ? 'scale(1.2)' : 'scale(1)',
-                  boxShadow: newColor === c ? `0 0 0 2px var(--bg-base), 0 0 0 3px ${c}` : 'none',
-                }}
-              />
-            ))}
-          </div>
-          {tags.length > 0 && (
-            <>
-              <div className="text-[10px] font-semibold uppercase tracking-wider pt-1" style={{ color: 'var(--text-muted)' }}>
-                Существующие
+          {TAG_PRESETS.map((cat) => (
+            <div key={cat.label}>
+              <div className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>
+                {cat.label}
               </div>
-              <div className="space-y-1 max-h-[150px] overflow-y-auto">
+              <div className="flex flex-wrap gap-1">
+                {cat.items.map((preset) => {
+                  const exists = existingNames.has(preset.name.toLowerCase());
+                  return (
+                    <button
+                      key={preset.name}
+                      onClick={() => !exists && handleAdd(preset)}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-all"
+                      style={{
+                        background: exists ? preset.color + '20' : 'transparent',
+                        color: exists ? preset.color : 'var(--text-muted)',
+                        border: `1px solid ${exists ? preset.color + '40' : 'var(--border-subtle)'}`,
+                        opacity: exists ? 1 : 0.7,
+                        cursor: exists ? 'default' : 'pointer',
+                      }}
+                    >
+                      {exists && <span className="text-[8px]">✓</span>}
+                      {preset.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
+          {/* Existing tags with delete */}
+          {tags.length > 0 && (
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider mb-1.5 pt-1" style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
+                Активные теги
+              </div>
+              <div className="space-y-0.5">
                 {tags.map((t) => (
-                  <div key={t.id} className="flex items-center justify-between gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: t.color }} />
+                  <div key={t.id} className="flex items-center justify-between gap-2 py-0.5">
+                    <span className="flex items-center gap-1.5 text-xs" style={{ color: t.color }}>
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: t.color }} />
                       {t.name}
-                      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>({t.account_count})</span>
+                      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{t.account_count}</span>
                     </span>
-                    <button onClick={() => handleDelete(t.id)} className="p-0.5 rounded hover:bg-white/10 transition-colors" style={{ color: 'var(--text-muted)' }}>
+                    <button
+                      onClick={() => handleDelete(t.id)}
+                      className="p-0.5 rounded hover:bg-red-500/10 transition-colors"
+                      style={{ color: 'var(--text-muted)' }}
+                      title="Удалить тег"
+                    >
                       <X className="w-3 h-3" />
                     </button>
                   </div>
                 ))}
               </div>
-            </>
+            </div>
           )}
         </div>
       )}
