@@ -137,7 +137,7 @@ export function AccountsPage() {
 
       {/* Search + Filters */}
       <BlurFade delay={0.06}>
-        <div className="flex flex-wrap items-center gap-3 relative z-10">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="relative max-w-md flex-1 min-w-[200px]">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-muted)' }} strokeWidth={1.5} />
             <input type="text" placeholder="Поиск аккаунтов..." value={search} onChange={(e) => setSearch(e.target.value)} className="input-field pl-10" />
@@ -167,7 +167,7 @@ export function AccountsPage() {
             ))}
           </div>
           {tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 items-center">
+            <div className="flex flex-wrap gap-1.5 items-center" style={{ position: 'relative', zIndex: 50 }}>
               <Tag className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
               <FilterPill active={!tagFilter} onClick={() => setTagFilter('')}>Все</FilterPill>
               {tags.map((t) => (
@@ -420,18 +420,16 @@ const TAG_PRESETS: TagCategory[] = [
 
 function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: React.Dispatch<React.SetStateAction<TagSummary[]>>; onUpdate: () => void }) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const ref = useRef<HTMLDivElement>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
   const existingNames = new Set(tags.map((t) => t.name.toLowerCase()));
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node) && !btnRef.current?.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
-    document.addEventListener('mousedown', handleClick);
+    if (open) document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
+  }, [open]);
 
   const handleAdd = async (preset: TagPreset) => {
     try {
@@ -447,17 +445,9 @@ function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: 
   };
 
   return (
-    <div ref={ref}>
+    <div className="relative" ref={ref}>
       <button
-        ref={btnRef}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (!open && btnRef.current) {
-            const rect = btnRef.current.getBoundingClientRect();
-            setPos({ top: rect.bottom + 4, left: Math.max(8, rect.right - 260) });
-          }
-          setOpen(!open);
-        }}
+        onClick={() => setOpen(!open)}
         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-medium transition-colors"
         style={{ background: 'var(--bg-card)', color: 'var(--text-muted)', border: '1px dashed var(--border-strong)' }}
       >
@@ -465,8 +455,17 @@ function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: 
       </button>
       {open && (
         <div
-          className="fixed rounded-xl p-3 space-y-3"
-          style={{ zIndex: 99999, width: 260, maxHeight: 420, overflowY: 'auto' as const, top: pos.top, left: pos.left, backgroundColor: '#16161e', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 25px 60px rgba(0,0,0,0.8)' }}
+          className="absolute top-full mt-1 right-0 z-[100] rounded-xl p-3 space-y-3"
+          style={{
+            background: 'var(--bg-base)',
+            border: '1px solid var(--border-medium)',
+            boxShadow: '0 10px 40px rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(20px)',
+            isolation: 'isolate',
+            width: 260,
+            maxHeight: 420,
+            overflowY: 'auto',
+          }}
           onClick={(e) => e.stopPropagation()}
         >
           {TAG_PRESETS.map((cat) => (
