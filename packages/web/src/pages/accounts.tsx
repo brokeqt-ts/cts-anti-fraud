@@ -470,11 +470,9 @@ function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: 
         width: 260,
         maxHeight: 420,
         overflowY: 'auto',
-        background: 'var(--bg-base)',
-        border: '1px solid var(--border-medium)',
-        boxShadow: '0 10px 40px rgba(0,0,0,0.5)',
-        backdropFilter: 'blur(20px)',
-        isolation: 'isolate',
+        background: 'var(--bg-dropdown)',
+        border: '1px solid var(--border-strong)',
+        boxShadow: '0 10px 40px rgba(0,0,0,0.6)',
       }}
     >
       {TAG_PRESETS.map((cat) => (
@@ -556,16 +554,21 @@ function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: 
 
 function AccountTagCell({ account, allTags, onUpdate }: { account: AccountSummary; allTags: TagSummary[]; onUpdate: () => void }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
   const accTags = account.tags ?? [];
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (
+        dropRef.current && !dropRef.current.contains(e.target as Node) &&
+        btnRef.current && !btnRef.current.contains(e.target as Node)
+      ) setOpen(false);
     }
-    document.addEventListener('mousedown', handleClick);
+    if (open) document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
+  }, [open]);
 
   const handleToggle = async (tagId: string, assigned: boolean) => {
     try {
@@ -578,8 +581,51 @@ function AccountTagCell({ account, allTags, onUpdate }: { account: AccountSummar
     } catch { /* ignore */ }
   };
 
+  const handleOpen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + 4, left: rect.left });
+    }
+    setOpen(!open);
+  };
+
+  const dropdown = open && allTags.length > 0 ? createPortal(
+    <div
+      ref={dropRef}
+      className="rounded-lg p-1.5 min-w-[160px]"
+      style={{
+        position: 'fixed',
+        zIndex: 99999,
+        top: pos.top,
+        left: pos.left,
+        background: 'var(--bg-dropdown)',
+        border: '1px solid var(--border-strong)',
+        boxShadow: '0 10px 40px rgba(0,0,0,0.6)',
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {allTags.map((t) => {
+        const assigned = accTags.some((at) => at.id === t.id);
+        return (
+          <button
+            key={t.id}
+            onClick={() => handleToggle(t.id, assigned)}
+            className="w-full flex items-center gap-2 px-2 py-1 rounded text-xs text-left transition-colors hover:bg-white/5"
+            style={{ color: assigned ? t.color : 'var(--text-muted)' }}
+          >
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: t.color, opacity: assigned ? 1 : 0.3 }} />
+            {t.name}
+            {assigned && <span className="ml-auto text-[10px]" style={{ color: t.color }}>✓</span>}
+          </button>
+        );
+      })}
+    </div>,
+    document.body,
+  ) : null;
+
   return (
-    <div className="relative flex flex-wrap gap-1 items-center" ref={ref}>
+    <div className="flex flex-wrap gap-1 items-center">
       {accTags.map((t) => (
         <span
           key={t.id}
@@ -590,36 +636,15 @@ function AccountTagCell({ account, allTags, onUpdate }: { account: AccountSummar
         </span>
       ))}
       <button
-        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        ref={btnRef}
+        onClick={handleOpen}
         className="inline-flex items-center justify-center w-4 h-4 rounded-full transition-colors hover:bg-white/10"
         style={{ color: 'var(--text-muted)', opacity: accTags.length > 0 ? 0.5 : 0.3 }}
         title="Управление тегами"
       >
         <Plus className="w-3 h-3" />
       </button>
-      {open && allTags.length > 0 && (
-        <div
-          className="absolute left-0 top-full mt-1 z-50 rounded-lg p-1.5 shadow-2xl min-w-[160px]"
-          style={{ background: 'var(--bg-dropdown)', border: '1px solid var(--border-medium)' }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {allTags.map((t) => {
-            const assigned = accTags.some((at) => at.id === t.id);
-            return (
-              <button
-                key={t.id}
-                onClick={() => handleToggle(t.id, assigned)}
-                className="w-full flex items-center gap-2 px-2 py-1 rounded text-xs text-left transition-colors hover:bg-white/5"
-                style={{ color: assigned ? t.color : 'var(--text-muted)' }}
-              >
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: t.color, opacity: assigned ? 1 : 0.3 }} />
-                {t.name}
-                {assigned && <span className="ml-auto text-[10px]" style={{ color: t.color }}>✓</span>}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {dropdown}
     </div>
   );
 }
