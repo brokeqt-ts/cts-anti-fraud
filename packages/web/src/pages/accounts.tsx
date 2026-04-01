@@ -287,15 +287,7 @@ export function AccountsPage() {
                           )}
                         </td>
                         <td className="px-2.5 py-[7px]">
-                          <AccountTagCell account={acc} allTags={tags} onUpdate={() => {
-                            const params: Record<string, string> = {};
-                            if (search) params['search'] = search;
-                            if (statusFilter) params['status'] = statusFilter;
-                            if (currencyFilter) params['currency'] = currencyFilter;
-                            if (tagFilter) params['tag_id'] = tagFilter;
-                            fetchAccounts(params).then((d) => { setAccounts(d.accounts); setTotal(d.total); }).catch(() => {});
-                            loadTags();
-                          }} />
+                          <AccountTagCell account={acc} allTags={tags} setAccounts={setAccounts} onTagsChange={loadTags} />
                         </td>
                         <td className="px-2.5 py-[7px] text-center">
                           <RiskBadge risk={risk} />
@@ -596,7 +588,12 @@ function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: 
 
 // ── AccountTagCell — show tags + assign/unassign popover ────────────────────
 
-function AccountTagCell({ account, allTags, onUpdate }: { account: AccountSummary; allTags: TagSummary[]; onUpdate: () => void }) {
+function AccountTagCell({ account, allTags, setAccounts, onTagsChange }: {
+  account: AccountSummary;
+  allTags: TagSummary[];
+  setAccounts: React.Dispatch<React.SetStateAction<AccountSummary[]>>;
+  onTagsChange: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -614,15 +611,35 @@ function AccountTagCell({ account, allTags, onUpdate }: { account: AccountSummar
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open]);
 
-  const handleToggle = async (tagId: string, assigned: boolean) => {
+  // Optimistic update helper
+  const updateAccountTags = (newTags: Array<{ id: string; name: string; color: string }>) => {
+    setAccounts(prev => prev.map(a =>
+      a.id === account.id ? { ...a, tags: newTags } : a,
+    ));
+  };
+
+  const handleAssign = async (tag: { id: string; name: string; color: string }) => {
+    // Optimistic: add tag immediately
+    updateAccountTags([...accTags, tag]);
     try {
-      if (assigned) {
-        await unassignTag(account.google_account_id, tagId);
-      } else {
-        await assignTag(account.google_account_id, tagId);
-      }
-      onUpdate();
-    } catch { /* ignore */ }
+      await assignTag(account.google_account_id, tag.id);
+      onTagsChange();
+    } catch {
+      // Revert on error
+      updateAccountTags(accTags);
+    }
+  };
+
+  const handleUnassign = async (tagId: string) => {
+    // Optimistic: remove tag immediately
+    updateAccountTags(accTags.filter(t => t.id !== tagId));
+    try {
+      await unassignTag(account.google_account_id, tagId);
+      onTagsChange();
+    } catch {
+      // Revert on error
+      updateAccountTags(accTags);
+    }
   };
 
   const handleOpen = (e: React.MouseEvent) => {
@@ -659,7 +676,7 @@ function AccountTagCell({ account, allTags, onUpdate }: { account: AccountSummar
         return (
           <button
             key={t.id}
-            onClick={() => handleToggle(t.id, assigned)}
+            onClick={() => assigned ? handleUnassign(t.id) : handleAssign(t)}
             className="w-full flex items-center gap-2 px-2 py-1 rounded text-xs text-left transition-colors hover:bg-white/5"
             style={{ color: assigned ? t.color : 'var(--text-secondary)' }}
           >
@@ -678,16 +695,23 @@ function AccountTagCell({ account, allTags, onUpdate }: { account: AccountSummar
       {accTags.map((t) => (
         <span
           key={t.id}
-          className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium"
+          className="inline-flex items-center gap-0.5 rounded-full pl-1.5 pr-0.5 py-0.5 text-[9px] font-medium group/tag"
           style={{ background: t.color + '20', color: t.color, border: `1px solid ${t.color}30` }}
         >
           {t.name}
+          <button
+            onClick={(e) => { e.stopPropagation(); handleUnassign(t.id); }}
+            className="w-3 h-3 inline-flex items-center justify-center rounded-full opacity-0 group-hover/tag:opacity-100 transition-opacity hover:bg-white/20"
+            title="Убрать тег"
+          >
+            <X className="w-2 h-2" />
+          </button>
         </span>
       ))}
       <button
         ref={btnRef}
         onClick={handleOpen}
-        className="inline-flex items-center justify-center w-5 h-5 rounded transition-colors hover:bg-[var(--bg-hover)]"
+        className="inline-flex items-center justify-center w-5 h-5 rounded transition-colors"
         style={{ color: 'var(--text-secondary)', border: '1px solid var(--border-strong)' }}
         onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--border-focus)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
         onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
