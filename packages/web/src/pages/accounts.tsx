@@ -191,6 +191,7 @@ export function AccountsPage() {
                     onClick={async (e) => {
                       e.stopPropagation();
                       if (tagFilter === t.id) setTagFilter('');
+                      setTags(prev => prev.filter(x => x.id !== t.id));
                       await deleteTag(t.id);
                       loadTags();
                     }}
@@ -201,11 +202,11 @@ export function AccountsPage() {
                   </button>
                 </span>
               ))}
-              <TagManager tags={tags} onUpdate={loadTags} />
+              <TagManager tags={tags} setTags={setTags} onUpdate={loadTags} />
             </div>
           )}
           {tags.length === 0 && (
-            <TagManager tags={tags} onUpdate={loadTags} />
+            <TagManager tags={tags} setTags={setTags} onUpdate={loadTags} />
           )}
         </div>
       </BlurFade>
@@ -417,7 +418,7 @@ const TAG_PRESETS: TagCategory[] = [
 
 // ── TagManager — constructor with presets ────────────────────────────────────
 
-function TagManager({ tags, onUpdate }: { tags: TagSummary[]; onUpdate: () => void }) {
+function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: React.Dispatch<React.SetStateAction<TagSummary[]>>; onUpdate: () => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const existingNames = new Set(tags.map((t) => t.name.toLowerCase()));
@@ -438,6 +439,7 @@ function TagManager({ tags, onUpdate }: { tags: TagSummary[]; onUpdate: () => vo
   };
 
   const handleDelete = async (id: string) => {
+    setTags(prev => prev.filter(x => x.id !== id));
     await deleteTag(id);
     onUpdate();
   };
@@ -453,7 +455,7 @@ function TagManager({ tags, onUpdate }: { tags: TagSummary[]; onUpdate: () => vo
       </button>
       {open && (
         <div
-          className="absolute right-0 bottom-full mb-1 z-50 rounded-xl p-3 space-y-3 shadow-2xl"
+          className="absolute right-0 top-full mt-1 z-50 rounded-xl p-3 space-y-3 shadow-2xl"
           style={{ background: 'var(--bg-dropdown)', border: '1px solid var(--border-medium)', minWidth: 260, maxHeight: 420, overflowY: 'auto' }}
           onClick={(e) => e.stopPropagation()}
         >
