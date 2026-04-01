@@ -137,7 +137,7 @@ export function AccountsPage() {
 
       {/* Search + Filters */}
       <BlurFade delay={0.06}>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 relative z-10">
           <div className="relative max-w-md flex-1 min-w-[200px]">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-muted)' }} strokeWidth={1.5} />
             <input type="text" placeholder="Поиск аккаунтов..." value={search} onChange={(e) => setSearch(e.target.value)} className="input-field pl-10" />
@@ -455,7 +455,7 @@ function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: 
       </button>
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 z-50 rounded-xl p-3 space-y-3 shadow-2xl"
+          className="absolute right-0 top-full mt-1 z-[100] rounded-xl p-3 space-y-3 shadow-2xl"
           style={{ background: 'var(--bg-dropdown)', border: '1px solid var(--border-medium)', minWidth: 260, maxHeight: 420, overflowY: 'auto' }}
           onClick={(e) => e.stopPropagation()}
         >
