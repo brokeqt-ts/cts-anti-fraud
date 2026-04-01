@@ -465,8 +465,8 @@ function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: 
       </button>
       {open && (
         <div
-          className="fixed z-[9999] rounded-xl p-3 space-y-3 tag-dropdown"
-          style={{ width: 260, maxHeight: 420, overflowY: 'auto', top: pos.top, left: pos.left }}
+          className="fixed rounded-xl p-3 space-y-3"
+          style={{ zIndex: 99999, width: 260, maxHeight: 420, overflowY: 'auto' as const, top: pos.top, left: pos.left, backgroundColor: '#16161e', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 25px 60px rgba(0,0,0,0.8)' }}
           onClick={(e) => e.stopPropagation()}
         >
           {TAG_PRESETS.map((cat) => (
