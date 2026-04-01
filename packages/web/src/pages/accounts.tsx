@@ -290,7 +290,7 @@ export function AccountsPage() {
                           )}
                         </td>
                         <td className="px-2.5 py-[7px]">
-                          <AccountTagCell account={acc} allTags={tags} setAccounts={setAccounts} />
+                          <AccountTagCell account={acc} allTags={tags} />
                         </td>
                         <td className="px-2.5 py-[7px] text-center">
                           <RiskBadge risk={risk} />
@@ -591,16 +591,15 @@ function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: 
 
 // ── AccountTagCell — show tags + assign/unassign popover ────────────────────
 
-function AccountTagCell({ account, allTags, setAccounts }: {
+function AccountTagCell({ account, allTags }: {
   account: AccountSummary;
   allTags: TagSummary[];
-  setAccounts: React.Dispatch<React.SetStateAction<AccountSummary[]>>;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
+  const [localTags, setLocalTags] = useState<Array<{ id: string; name: string; color: string }>>(account.tags ?? []);
   const btnRef = useRef<HTMLButtonElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
-  const accTags = account.tags ?? [];
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -614,39 +613,21 @@ function AccountTagCell({ account, allTags, setAccounts }: {
   }, [open]);
 
   const handleAssign = async (tag: { id: string; name: string; color: string }) => {
-    setAccounts(prev => prev.map(a =>
-      a.id === account.id
-        ? { ...a, tags: [...(a.tags ?? []), tag] }
-        : a,
-    ));
+    setLocalTags(prev => [...prev, tag]);
     try {
       await assignTag(account.google_account_id, tag.id);
     } catch {
-      setAccounts(prev => prev.map(a =>
-        a.id === account.id
-          ? { ...a, tags: (a.tags ?? []).filter(t => t.id !== tag.id) }
-          : a,
-      ));
+      setLocalTags(prev => prev.filter(t => t.id !== tag.id));
     }
   };
 
   const handleUnassign = async (tagId: string) => {
-    let removed: { id: string; name: string; color: string } | undefined;
-    setAccounts(prev => prev.map(a => {
-      if (a.id !== account.id) return a;
-      removed = (a.tags ?? []).find(t => t.id === tagId);
-      return { ...a, tags: (a.tags ?? []).filter(t => t.id !== tagId) };
-    }));
+    const removed = localTags.find(t => t.id === tagId);
+    setLocalTags(prev => prev.filter(t => t.id !== tagId));
     try {
       await unassignTag(account.google_account_id, tagId);
     } catch {
-      if (removed) {
-        setAccounts(prev => prev.map(a =>
-          a.id === account.id
-            ? { ...a, tags: [...(a.tags ?? []), removed!] }
-            : a,
-        ));
-      }
+      if (removed) setLocalTags(prev => [...prev, removed]);
     }
   };
 
@@ -680,7 +661,7 @@ function AccountTagCell({ account, allTags, setAccounts }: {
       onClick={(e) => e.stopPropagation()}
     >
       {allTags.map((t) => {
-        const assigned = accTags.some((at) => at.id === t.id);
+        const assigned = localTags.some((at) => at.id === t.id);
         return (
           <button
             key={t.id}
@@ -700,7 +681,7 @@ function AccountTagCell({ account, allTags, setAccounts }: {
 
   return (
     <div className="flex flex-wrap gap-1 items-center">
-      {accTags.map((t) => (
+      {localTags.map((t) => (
         <span
           key={t.id}
           className="inline-flex items-center gap-0.5 rounded-full pl-1.5 pr-0.5 py-0.5 text-[9px] font-medium group/tag"
