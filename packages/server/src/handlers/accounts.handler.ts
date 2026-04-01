@@ -20,6 +20,7 @@ export async function listAccountsHandler(
       search: query['search'],
       status: query['status'],
       currency: query['currency'],
+      tagId: query['tag_id'],
       limit: parseInt(query['limit'] ?? '50', 10),
       offset: parseInt(query['offset'] ?? '0', 10),
       userId: getUserIdFilter(request),

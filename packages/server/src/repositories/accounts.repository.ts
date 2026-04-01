@@ -6,6 +6,7 @@ export interface ListAccountsParams {
   search?: string;
   status?: string;
   currency?: string;
+  tagId?: string;
   limit: number;
   offset: number;
   userId?: string;
@@ -62,6 +63,10 @@ export async function listAccounts(pool: pg.Pool, params: ListAccountsParams): P
   if (params.currency) {
     conditions.push(`a.currency = $${paramIdx++}`);
     queryParams.push(params.currency);
+  }
+  if (params.tagId) {
+    conditions.push(`EXISTS (SELECT 1 FROM account_tags atg WHERE atg.account_id = a.id AND atg.tag_id = $${paramIdx++})`);
+    queryParams.push(params.tagId);
   }
 
   const where = `WHERE ${conditions.join(' AND ')}`;
@@ -142,6 +147,32 @@ export async function listAccounts(pool: pg.Pool, params: ListAccountsParams): P
      ${where}`,
     queryParams,
   );
+
+  // Fetch tags for all returned accounts in a single query
+  const accountIds = result.rows.map((r: Record<string, unknown>) => r['id'] as string);
+  if (accountIds.length > 0) {
+    const tagsResult = await pool.query(
+      `SELECT atg.account_id, t.id AS tag_id, t.name, t.color
+       FROM account_tags atg
+       JOIN tags t ON t.id = atg.tag_id
+       WHERE atg.account_id = ANY($1)
+       ORDER BY t.name`,
+      [accountIds],
+    );
+    const tagsByAccount = new Map<string, Array<{ id: string; name: string; color: string }>>();
+    for (const row of tagsResult.rows as Array<{ account_id: string; tag_id: string; name: string; color: string }>) {
+      const arr = tagsByAccount.get(row.account_id) ?? [];
+      arr.push({ id: row.tag_id, name: row.name, color: row.color });
+      tagsByAccount.set(row.account_id, arr);
+    }
+    for (const acc of result.rows as Array<Record<string, unknown>>) {
+      acc['tags'] = tagsByAccount.get(acc['id'] as string) ?? [];
+    }
+  } else {
+    for (const acc of result.rows as Array<Record<string, unknown>>) {
+      acc['tags'] = [];
+    }
+  }
 
   return {
     total: parseInt(countResult.rows[0]?.['total'] as string, 10),

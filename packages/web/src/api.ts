@@ -287,6 +287,7 @@ export interface AccountSummary {
   account_type?: string | null;
   account_type_source?: string | null;
   health_score?: number | null;
+  tags?: Array<{ id: string; name: string; color: string }>;
 }
 
 export interface CampaignRow {
@@ -462,6 +463,33 @@ export const fetchAccount = (googleId: string): Promise<AccountDetail> =>
 
 export const patchAccount = (googleId: string, data: Record<string, unknown>): Promise<{ account: Record<string, unknown> }> =>
   apiFetch(`/accounts/${googleId}`, { method: 'PATCH', body: JSON.stringify(data) });
+
+// ── Tags API ────────────────────────────────────────────────────────────────
+
+export interface TagSummary {
+  id: string;
+  name: string;
+  color: string;
+  account_count: number;
+}
+
+export const fetchTags = (): Promise<{ tags: TagSummary[] }> =>
+  apiFetch('/tags');
+
+export const createTag = (name: string, color: string): Promise<{ tag: TagSummary }> =>
+  apiFetch('/tags', { method: 'POST', body: JSON.stringify({ name, color }) });
+
+export const updateTag = (id: string, name: string, color: string): Promise<{ tag: TagSummary }> =>
+  apiFetch(`/tags/${id}`, { method: 'PATCH', body: JSON.stringify({ name, color }) });
+
+export const deleteTag = (id: string): Promise<void> =>
+  apiFetch(`/tags/${id}`, { method: 'DELETE' });
+
+export const assignTag = (googleId: string, tagId: string): Promise<void> =>
+  apiFetch(`/accounts/${googleId}/tags/${tagId}`, { method: 'POST' });
+
+export const unassignTag = (googleId: string, tagId: string): Promise<void> =>
+  apiFetch(`/accounts/${googleId}/tags/${tagId}`, { method: 'DELETE' });
 
 export interface DomainSummary {
   domain: string;

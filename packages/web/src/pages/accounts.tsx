@@ -1,7 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, ChevronRight, Users, Download } from 'lucide-react';
-import { fetchAccounts, ApiError, type AccountSummary, type OverviewStats, fetchOverview, timeAgo, formatCid, riskLevel, effectiveStatus } from '../api.js';
+import { Search, ChevronRight, Users, Download, Tag, Plus, X } from 'lucide-react';
+import {
+  fetchAccounts, ApiError, type AccountSummary, type OverviewStats, fetchOverview,
+  timeAgo, formatCid, riskLevel, effectiveStatus,
+  fetchTags, createTag, deleteTag, assignTag, unassignTag, type TagSummary,
+} from '../api.js';
 import { downloadCsv } from '../utils/csv.js';
 import { StatusBadge } from '../components/badge.js';
 import { TableSkeleton } from '../components/skeleton.js';
@@ -42,13 +46,20 @@ export function AccountsPage() {
   const [currencyFilter, setCurrencyFilter] = useState('');
   const [riskFilter, setRiskFilter] = useState('');
   const [accountTypeFilter, setAccountTypeFilter] = useState('');
+  const [tagFilter, setTagFilter] = useState('');
+  const [tags, setTags] = useState<TagSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
+  const loadTags = useCallback(() => {
+    fetchTags().then((d) => setTags(d.tags)).catch(() => {});
+  }, []);
+
   useEffect(() => {
     fetchOverview().then(setStats).catch(() => {});
-  }, []);
+    loadTags();
+  }, [loadTags]);
 
   useEffect(() => {
     setLoading(true);
@@ -56,6 +67,7 @@ export function AccountsPage() {
     if (search) params['search'] = search;
     if (statusFilter) params['status'] = statusFilter;
     if (currencyFilter) params['currency'] = currencyFilter;
+    if (tagFilter) params['tag_id'] = tagFilter;
     fetchAccounts(params)
       .then((data) => { setAccounts(data.accounts); setTotal(data.total); })
       .catch((e: unknown) => {
@@ -63,7 +75,7 @@ export function AccountsPage() {
         setError(e instanceof Error ? e.message : 'Неизвестная ошибка');
       })
       .finally(() => setLoading(false));
-  }, [search, statusFilter, currencyFilter, navigate]);
+  }, [search, statusFilter, currencyFilter, tagFilter, navigate]);
 
   const suspended = stats?.suspended_accounts ?? 0;
 
@@ -154,6 +166,31 @@ export function AccountsPage() {
               <FilterPill key={t} active={accountTypeFilter === t} onClick={() => setAccountTypeFilter(t)}>{ACCOUNT_TYPE_LABELS[t]}</FilterPill>
             ))}
           </div>
+          {tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 items-center">
+              <Tag className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
+              <FilterPill active={!tagFilter} onClick={() => setTagFilter('')}>Все</FilterPill>
+              {tags.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setTagFilter(tagFilter === t.id ? '' : t.id)}
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-200"
+                  style={{
+                    background: tagFilter === t.id ? t.color + '30' : 'var(--bg-card)',
+                    color: tagFilter === t.id ? t.color : 'var(--text-muted)',
+                    border: tagFilter === t.id ? `1px solid ${t.color}50` : '1px solid var(--border-subtle)',
+                  }}
+                >
+                  {t.name}
+                  <span className="ml-1 opacity-60">{t.account_count}</span>
+                </button>
+              ))}
+              <TagManager tags={tags} onUpdate={loadTags} />
+            </div>
+          )}
+          {tags.length === 0 && (
+            <TagManager tags={tags} onUpdate={loadTags} />
+          )}
         </div>
       </BlurFade>
 
@@ -173,6 +210,7 @@ export function AccountsPage() {
                   <th className="px-3.5 py-[7px] text-left font-medium label-xs">Название</th>
                   <th className="px-3.5 py-[7px] text-left font-medium label-xs">Статус</th>
                   <th className="px-3.5 py-[7px] text-left font-medium label-xs">Тип</th>
+                  <th className="px-3.5 py-[7px] text-left font-medium label-xs">Теги</th>
                   <th className="px-3.5 py-[7px] text-center font-medium label-xs">Health</th>
                   <th className="px-3.5 py-[7px] text-left font-medium label-xs">Валюта</th>
                   <th className="px-3.5 py-[7px] text-left font-medium label-xs">Карта</th>
@@ -236,6 +274,18 @@ export function AccountsPage() {
                           ) : (
                             <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>-</span>
                           )}
+                        </td>
+                        <td className="px-3.5 py-[7px]">
+                          <AccountTagCell account={acc} allTags={tags} onUpdate={() => {
+                            // Refetch accounts + tags
+                            const params: Record<string, string> = {};
+                            if (search) params['search'] = search;
+                            if (statusFilter) params['status'] = statusFilter;
+                            if (currencyFilter) params['currency'] = currencyFilter;
+                            if (tagFilter) params['tag_id'] = tagFilter;
+                            fetchAccounts(params).then((d) => { setAccounts(d.accounts); setTotal(d.total); }).catch(() => {});
+                            loadTags();
+                          }} />
                         </td>
                         <td className="px-3.5 py-[7px] text-center">
                           <HealthBadge score={acc.health_score} risk={risk} />
@@ -323,5 +373,183 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
     >
       {children}
     </button>
+  );
+}
+
+// ── Tag Colors ────────────────────────────────────────────────────────────────
+const TAG_COLORS = ['#6366f1', '#f43f5e', '#10b981', '#f59e0b', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6'];
+
+// ── TagManager — create/delete tags (button + dropdown) ─────────────────────
+
+function TagManager({ tags, onUpdate }: { tags: TagSummary[]; onUpdate: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newColor, setNewColor] = useState(TAG_COLORS[0]!);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const handleCreate = async () => {
+    if (!newName.trim()) return;
+    try {
+      await createTag(newName.trim(), newColor);
+      setNewName('');
+      onUpdate();
+    } catch { /* ignore duplicate */ }
+  };
+
+  const handleDelete = async (id: string) => {
+    await deleteTag(id);
+    onUpdate();
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-colors hover:bg-white/5"
+        style={{ color: 'var(--text-muted)', border: '1px dashed var(--border-subtle)' }}
+      >
+        <Plus className="w-3 h-3" /> Тег
+      </button>
+      {open && (
+        <div
+          className="absolute right-0 top-full mt-1 z-50 rounded-xl p-3 space-y-2 shadow-2xl min-w-[220px]"
+          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-medium)' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+            Создать тег
+          </div>
+          <div className="flex gap-1.5">
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+              placeholder="gambling-eu"
+              className="flex-1 bg-transparent outline-none text-xs px-2 py-1 rounded"
+              style={{ border: '1px solid var(--border-medium)', color: 'var(--text-primary)' }}
+            />
+            <button onClick={handleCreate} className="px-2 py-1 rounded text-xs font-medium" style={{ background: newColor + '20', color: newColor, border: `1px solid ${newColor}40` }}>
+              <Plus className="w-3 h-3" />
+            </button>
+          </div>
+          <div className="flex gap-1">
+            {TAG_COLORS.map((c) => (
+              <button
+                key={c}
+                onClick={() => setNewColor(c)}
+                className="w-5 h-5 rounded-full transition-transform"
+                style={{
+                  background: c,
+                  transform: newColor === c ? 'scale(1.2)' : 'scale(1)',
+                  boxShadow: newColor === c ? `0 0 0 2px var(--bg-base), 0 0 0 3px ${c}` : 'none',
+                }}
+              />
+            ))}
+          </div>
+          {tags.length > 0 && (
+            <>
+              <div className="text-[10px] font-semibold uppercase tracking-wider pt-1" style={{ color: 'var(--text-muted)' }}>
+                Существующие
+              </div>
+              <div className="space-y-1 max-h-[150px] overflow-y-auto">
+                {tags.map((t) => (
+                  <div key={t.id} className="flex items-center justify-between gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: t.color }} />
+                      {t.name}
+                      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>({t.account_count})</span>
+                    </span>
+                    <button onClick={() => handleDelete(t.id)} className="p-0.5 rounded hover:bg-white/10 transition-colors" style={{ color: 'var(--text-muted)' }}>
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── AccountTagCell — show tags + assign/unassign popover ────────────────────
+
+function AccountTagCell({ account, allTags, onUpdate }: { account: AccountSummary; allTags: TagSummary[]; onUpdate: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const accTags = account.tags ?? [];
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const handleToggle = async (tagId: string, assigned: boolean) => {
+    try {
+      if (assigned) {
+        await unassignTag(account.google_account_id, tagId);
+      } else {
+        await assignTag(account.google_account_id, tagId);
+      }
+      onUpdate();
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <div className="relative flex flex-wrap gap-1 items-center" ref={ref}>
+      {accTags.map((t) => (
+        <span
+          key={t.id}
+          className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium"
+          style={{ background: t.color + '20', color: t.color, border: `1px solid ${t.color}30` }}
+        >
+          {t.name}
+        </span>
+      ))}
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        className="inline-flex items-center justify-center w-4 h-4 rounded-full transition-colors hover:bg-white/10"
+        style={{ color: 'var(--text-muted)', opacity: accTags.length > 0 ? 0.5 : 0.3 }}
+        title="Управление тегами"
+      >
+        <Plus className="w-3 h-3" />
+      </button>
+      {open && allTags.length > 0 && (
+        <div
+          className="absolute left-0 top-full mt-1 z-50 rounded-lg p-1.5 shadow-2xl min-w-[160px]"
+          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-medium)' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {allTags.map((t) => {
+            const assigned = accTags.some((at) => at.id === t.id);
+            return (
+              <button
+                key={t.id}
+                onClick={() => handleToggle(t.id, assigned)}
+                className="w-full flex items-center gap-2 px-2 py-1 rounded text-xs text-left transition-colors hover:bg-white/5"
+                style={{ color: assigned ? t.color : 'var(--text-muted)' }}
+              >
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: t.color, opacity: assigned ? 1 : 0.3 }} />
+                {t.name}
+                {assigned && <span className="ml-auto text-[10px]" style={{ color: t.color }}>✓</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
