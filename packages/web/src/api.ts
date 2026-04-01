@@ -1529,6 +1529,27 @@ export const fetchAuditLog = (params?: Record<string, string>): Promise<{ total:
   return apiFetch(`/admin/audit${qs}`);
 };
 
+// --- Ban Chain Graph ---
+
+export interface BanChainNode {
+  id: string;
+  google_account_id: string;
+  display_name: string | null;
+  status: string;
+  ban_count: number;
+  last_ban_at: string | null;
+}
+
+export interface BanChainEdge {
+  source: string;
+  target: string;
+  type: 'domain' | 'bin' | 'proxy';
+  label: string;
+}
+
+export const fetchBanChainGraph = (): Promise<{ nodes: BanChainNode[]; edges: BanChainEdge[] }> =>
+  apiFetch('/analytics/ban-chain-graph');
+
 // --- Telegram Connect ---
 
 export interface TelegramBotInfo {
