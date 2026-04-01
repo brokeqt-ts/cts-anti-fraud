@@ -420,12 +420,14 @@ const TAG_PRESETS: TagCategory[] = [
 
 function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: React.Dispatch<React.SetStateAction<TagSummary[]>>; onUpdate: () => void }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const existingNames = new Set(tags.map((t) => t.name.toLowerCase()));
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node) && !btnRef.current?.contains(e.target as Node)) setOpen(false);
     }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
@@ -445,9 +447,17 @@ function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: 
   };
 
   return (
-    <div className="relative" ref={ref}>
+    <div ref={ref}>
       <button
-        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        ref={btnRef}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!open && btnRef.current) {
+            const rect = btnRef.current.getBoundingClientRect();
+            setPos({ top: rect.bottom + 4, left: Math.max(8, rect.right - 260) });
+          }
+          setOpen(!open);
+        }}
         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-medium transition-colors"
         style={{ background: 'var(--bg-card)', color: 'var(--text-muted)', border: '1px dashed var(--border-strong)' }}
       >
@@ -455,8 +465,8 @@ function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: 
       </button>
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 z-[100] rounded-xl p-3 space-y-3 shadow-2xl"
-          style={{ background: 'var(--bg-dropdown)', border: '1px solid var(--border-medium)', minWidth: 260, maxHeight: 420, overflowY: 'auto' }}
+          className="fixed z-[9999] rounded-xl p-3 space-y-3 shadow-2xl"
+          style={{ background: 'var(--bg-dropdown)', border: '1px solid var(--border-medium)', width: 260, maxHeight: 420, overflowY: 'auto', top: pos.top, left: pos.left }}
           onClick={(e) => e.stopPropagation()}
         >
           {TAG_PRESETS.map((cat) => (
