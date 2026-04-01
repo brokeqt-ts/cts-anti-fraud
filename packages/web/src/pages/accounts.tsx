@@ -200,8 +200,8 @@ export function AccountsPage() {
 
       {/* Table */}
       <BlurFade delay={0.12}>
-        <div className="card-static overflow-hidden">
-          <div className="overflow-x-auto">
+        <div className="card-static overflow-visible">
+          <div className="overflow-x-auto overflow-y-visible">
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -413,15 +413,15 @@ function TagManager({ tags, onUpdate }: { tags: TagSummary[]; onUpdate: () => vo
     <div className="relative" ref={ref}>
       <button
         onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
-        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-colors hover:bg-white/5"
-        style={{ color: 'var(--text-muted)', border: '1px dashed var(--border-subtle)' }}
+        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-medium transition-colors"
+        style={{ background: 'var(--bg-card)', color: 'var(--text-muted)', border: '1px dashed var(--border-strong)' }}
       >
         <Plus className="w-3 h-3" /> Тег
       </button>
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 z-50 rounded-xl p-3 space-y-2 shadow-2xl min-w-[220px]"
-          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-medium)' }}
+          className="absolute right-0 bottom-full mb-1 z-50 rounded-xl p-3 space-y-2 shadow-2xl min-w-[220px]"
+          style={{ background: 'var(--bg-dropdown)', border: '1px solid var(--border-medium)' }}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
@@ -530,7 +530,7 @@ function AccountTagCell({ account, allTags, onUpdate }: { account: AccountSummar
       {open && allTags.length > 0 && (
         <div
           className="absolute left-0 top-full mt-1 z-50 rounded-lg p-1.5 shadow-2xl min-w-[160px]"
-          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-medium)' }}
+          style={{ background: 'var(--bg-dropdown)', border: '1px solid var(--border-medium)' }}
           onClick={(e) => e.stopPropagation()}
         >
           {allTags.map((t) => {
