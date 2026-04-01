@@ -49,6 +49,7 @@ export function AccountsPage() {
   const [accountTypeFilter, setAccountTypeFilter] = useState('');
   const [tagFilter, setTagFilter] = useState('');
   const [tags, setTags] = useState<TagSummary[]>([]);
+  const [tagOverrides, setTagOverrides] = useState<Record<string, Array<{ id: string; name: string; color: string }>>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -290,7 +291,12 @@ export function AccountsPage() {
                           )}
                         </td>
                         <td className="px-2.5 py-[7px]">
-                          <AccountTagCell account={acc} allTags={tags} />
+                          <AccountTagCell
+                            account={acc}
+                            allTags={tags}
+                            overrideTags={tagOverrides[acc.id]}
+                            setTagOverrides={setTagOverrides}
+                          />
                         </td>
                         <td className="px-2.5 py-[7px] text-center">
                           <RiskBadge risk={risk} />
@@ -591,15 +597,19 @@ function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: 
 
 // ── AccountTagCell — show tags + assign/unassign popover ────────────────────
 
-function AccountTagCell({ account, allTags }: {
+function AccountTagCell({ account, allTags, overrideTags, setTagOverrides }: {
   account: AccountSummary;
   allTags: TagSummary[];
+  overrideTags?: Array<{ id: string; name: string; color: string }>;
+  setTagOverrides: React.Dispatch<React.SetStateAction<Record<string, Array<{ id: string; name: string; color: string }>>>>;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
-  const [localTags, setLocalTags] = useState<Array<{ id: string; name: string; color: string }>>(account.tags ?? []);
   const btnRef = useRef<HTMLButtonElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
+
+  // overrideTags (page-level state) takes priority over server data
+  const displayTags = overrideTags ?? account.tags ?? [];
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -613,21 +623,22 @@ function AccountTagCell({ account, allTags }: {
   }, [open]);
 
   const handleAssign = async (tag: { id: string; name: string; color: string }) => {
-    setLocalTags(prev => [...prev, tag]);
+    const newTags = [...displayTags, tag];
+    setTagOverrides(prev => ({ ...prev, [account.id]: newTags }));
     try {
       await assignTag(account.google_account_id, tag.id);
     } catch {
-      setLocalTags(prev => prev.filter(t => t.id !== tag.id));
+      setTagOverrides(prev => ({ ...prev, [account.id]: displayTags }));
     }
   };
 
   const handleUnassign = async (tagId: string) => {
-    const removed = localTags.find(t => t.id === tagId);
-    setLocalTags(prev => prev.filter(t => t.id !== tagId));
+    const newTags = displayTags.filter(t => t.id !== tagId);
+    setTagOverrides(prev => ({ ...prev, [account.id]: newTags }));
     try {
       await unassignTag(account.google_account_id, tagId);
     } catch {
-      if (removed) setLocalTags(prev => [...prev, removed]);
+      setTagOverrides(prev => ({ ...prev, [account.id]: displayTags }));
     }
   };
 
@@ -661,7 +672,7 @@ function AccountTagCell({ account, allTags }: {
       onClick={(e) => e.stopPropagation()}
     >
       {allTags.map((t) => {
-        const assigned = localTags.some((at) => at.id === t.id);
+        const assigned = displayTags.some((at) => at.id === t.id);
         return (
           <button
             key={t.id}
@@ -681,7 +692,7 @@ function AccountTagCell({ account, allTags }: {
 
   return (
     <div className="flex flex-wrap gap-1 items-center">
-      {localTags.map((t) => (
+      {displayTags.map((t) => (
         <span
           key={t.id}
           className="inline-flex items-center gap-0.5 rounded-full pl-1.5 pr-0.5 py-0.5 text-[9px] font-medium group/tag"
