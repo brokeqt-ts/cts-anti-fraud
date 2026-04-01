@@ -65,6 +65,7 @@ const NOTIFICATION_TYPE_BLACKLIST = new Set([
   'CREATIVE_BRIEF_AIMAX',
   'CREATIVE_BRIEF',
   'DATA_MANAGER_LAUNCH_IN_SA360',
+  'DM_IN_SA360_CONVERSIONS',
   'ASSET_SUGGESTIONS_PROMO',
   'CONVERSION_TRACKING_PROMO',
   'SMART_CAMPAIGN_PROMO',
@@ -88,9 +89,11 @@ const NOTIFICATION_TYPE_BLACKLIST = new Set([
 function isBlacklisted(notificationType: string | null, label: string | null, title: string | null): boolean {
   if (notificationType && NOTIFICATION_TYPE_BLACKLIST.has(notificationType)) return true;
   if (label && NOTIFICATION_TYPE_BLACKLIST.has(label)) return true;
-  // Also filter generic promo patterns
+  if (title && NOTIFICATION_TYPE_BLACKLIST.has(title)) return true;
+  // Also filter generic promo patterns and known UI noise substrings
   const text = `${notificationType ?? ''} ${label ?? ''} ${title ?? ''}`;
   if (/_PROMO$/i.test(text)) return true;
+  if (/EXPAND_COLLAPSE|HALO_|CREATIVE_BRIEF|FORECASTING|DATA_MANAGER|DM_IN_SA360|SCOPING_FEATURE/i.test(text)) return true;
   return false;
 }
 
