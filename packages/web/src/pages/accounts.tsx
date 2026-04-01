@@ -380,6 +380,8 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
 
 // ── Tag preset constructor ────────────────────────────────────────────────────
 
+const TAG_COLORS = ['#6366f1', '#f43f5e', '#10b981', '#f59e0b', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6'];
+
 interface TagPreset { name: string; color: string }
 interface TagCategory { label: string; items: TagPreset[] }
 
@@ -422,6 +424,7 @@ const TAG_PRESETS: TagCategory[] = [
 function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: React.Dispatch<React.SetStateAction<TagSummary[]>>; onUpdate: () => void }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
+  const [customName, setCustomName] = useState('');
   const btnRef = useRef<HTMLButtonElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
   const existingNames = new Set(tags.map((t) => t.name.toLowerCase()));
@@ -448,6 +451,17 @@ function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: 
   const handleAdd = async (preset: TagPreset) => {
     try {
       await createTag(preset.name, preset.color);
+      onUpdate();
+    } catch { /* duplicate */ }
+  };
+
+  const handleCustomCreate = async () => {
+    const name = customName.trim();
+    if (!name || existingNames.has(name.toLowerCase())) return;
+    const color = TAG_COLORS[tags.length % TAG_COLORS.length]!;
+    try {
+      await createTag(name, color);
+      setCustomName('');
       onUpdate();
     } catch { /* duplicate */ }
   };
@@ -503,6 +517,37 @@ function TagManager({ tags, setTags, onUpdate }: { tags: TagSummary[]; setTags: 
           </div>
         </div>
       ))}
+
+      {/* Custom tag input */}
+      <div style={{ borderTop: '1px solid var(--border-medium)', paddingTop: 8 }}>
+        <div className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+          Свой тег
+        </div>
+        <div className="flex gap-1.5">
+          <input
+            type="text"
+            value={customName}
+            onChange={(e) => setCustomName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleCustomCreate()}
+            placeholder="Название тега..."
+            className="flex-1 bg-transparent outline-none text-xs px-2 py-1 rounded"
+            style={{ border: '1px solid var(--border-medium)', color: 'var(--text-primary)' }}
+          />
+          <button
+            onClick={handleCustomCreate}
+            disabled={!customName.trim() || existingNames.has(customName.trim().toLowerCase())}
+            className="px-2 py-1 rounded text-xs font-medium transition-colors"
+            style={{
+              background: customName.trim() && !existingNames.has(customName.trim().toLowerCase()) ? 'rgba(99,102,241,0.15)' : 'transparent',
+              color: customName.trim() && !existingNames.has(customName.trim().toLowerCase()) ? '#818cf8' : 'var(--text-muted)',
+              border: '1px solid var(--border-medium)',
+              cursor: customName.trim() && !existingNames.has(customName.trim().toLowerCase()) ? 'pointer' : 'default',
+            }}
+          >
+            <Plus className="w-3 h-3" />
+          </button>
+        </div>
+      </div>
 
       {tags.length > 0 && (
         <div>
@@ -642,8 +687,10 @@ function AccountTagCell({ account, allTags, onUpdate }: { account: AccountSummar
       <button
         ref={btnRef}
         onClick={handleOpen}
-        className="inline-flex items-center justify-center w-5 h-5 rounded transition-colors hover:bg-white/10"
+        className="inline-flex items-center justify-center w-5 h-5 rounded transition-colors hover:bg-[var(--bg-hover)]"
         style={{ color: 'var(--text-secondary)', border: '1px solid var(--border-strong)' }}
+        onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--border-focus)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
         title="Управление тегами"
       >
         <Plus className="w-3 h-3" />
