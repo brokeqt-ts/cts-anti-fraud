@@ -216,6 +216,7 @@ export function AccountsPage() {
                       });
                       await deleteTag(t.id);
                       loadTags();
+                      reloadAccounts();
                     }}
                     className="pr-1.5 py-1 opacity-40 hover:opacity-100 transition-opacity"
                     title="Удалить тег"
@@ -224,11 +225,11 @@ export function AccountsPage() {
                   </button>
                 </span>
               ))}
-              <TagManager tags={tags} setTags={setTags} setTagOverrides={setTagOverrides} onUpdate={loadTags} />
+              <TagManager tags={tags} setTags={setTags} setTagOverrides={setTagOverrides} onUpdate={loadTags} onReload={reloadAccounts} />
             </div>
           )}
           {tags.length === 0 && (
-            <TagManager tags={tags} setTags={setTags} setTagOverrides={setTagOverrides} onUpdate={loadTags} />
+            <TagManager tags={tags} setTags={setTags} setTagOverrides={setTagOverrides} onUpdate={loadTags} onReload={reloadAccounts} />
           )}
         </div>
       </BlurFade>
@@ -539,11 +540,12 @@ const TAG_PRESETS: TagCategory[] = [
 
 // ── TagManager — constructor with presets ────────────────────────────────────
 
-function TagManager({ tags, setTags, setTagOverrides, onUpdate }: {
+function TagManager({ tags, setTags, setTagOverrides, onUpdate, onReload }: {
   tags: TagSummary[];
   setTags: React.Dispatch<React.SetStateAction<TagSummary[]>>;
   setTagOverrides: React.Dispatch<React.SetStateAction<Record<string, Array<{ id: string; name: string; color: string }>>>>;
   onUpdate: () => void;
+  onReload: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
@@ -598,6 +600,7 @@ function TagManager({ tags, setTags, setTagOverrides, onUpdate }: {
     });
     await deleteTag(id);
     onUpdate();
+    onReload();
   };
 
   const dropdown = open ? createPortal(
