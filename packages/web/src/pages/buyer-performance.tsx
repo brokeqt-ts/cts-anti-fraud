@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { BarChart3, TrendingUp, TrendingDown } from 'lucide-react';
 import { fetchBuyerPerformance, type BuyerPerformance, timeAgo } from '../api.js';
 import { TableSkeleton } from '../components/skeleton.js';
@@ -9,6 +10,7 @@ export function BuyerPerformancePage() {
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<keyof BuyerPerformance>('total_accounts');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchBuyerPerformance()
@@ -87,7 +89,7 @@ export function BuyerPerformancePage() {
                     const banRate = parseFloat(b.ban_rate || '0');
                     const lifetime = parseFloat(b.avg_lifetime_hours || '0');
                     return (
-                      <AnimatedRow key={b.user_id}>
+                      <AnimatedRow key={b.user_id} className="cursor-pointer" onClick={() => navigate(`/admin/buyers/${b.user_id}`)}>
                         <td className="px-3 py-2.5">
                           <div className="flex flex-col">
                             <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{b.name}</span>

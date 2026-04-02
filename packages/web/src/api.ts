@@ -1550,6 +1550,16 @@ export interface BuyerPerformance {
 export const fetchBuyerPerformance = (): Promise<{ buyers: BuyerPerformance[] }> =>
   apiFetch('/stats/buyer-performance');
 
+export interface BuyerDetail {
+  buyer: BuyerPerformance & { created_at: string };
+  accounts: Array<{ google_account_id: string; display_name: string | null; status: string; currency: string | null; account_type: string | null; updated_at: string; ban_count: number }>;
+  audit: { total: number; entries: AuditEntry[] };
+  bans_by_vertical: Array<{ offer_vertical: string; count: number }>;
+}
+
+export const fetchBuyerDetail = (id: string, auditOffset = 0): Promise<BuyerDetail> =>
+  apiFetch(`/stats/buyer-performance/${id}?audit_offset=${auditOffset}`);
+
 // --- Audit Log ---
 
 export const fetchAuditLog = (params?: Record<string, string>): Promise<{ total: number; entries: AuditEntry[] }> => {
