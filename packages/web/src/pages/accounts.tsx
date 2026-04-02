@@ -62,6 +62,17 @@ export function AccountsPage() {
     fetchTags().then((d) => setTags(d.tags)).catch(() => {});
   }, []);
 
+  const reloadAccounts = useCallback(() => {
+    const params: Record<string, string> = {};
+    if (search) params['search'] = search;
+    if (statusFilter) params['status'] = statusFilter;
+    if (currencyFilter) params['currency'] = currencyFilter;
+    if (tagFilter) params['tag_id'] = tagFilter;
+    fetchAccounts(params)
+      .then((data) => { setAccounts(data.accounts); setTotal(data.total); })
+      .catch(() => {});
+  }, [search, statusFilter, currencyFilter, tagFilter]);
+
   useEffect(() => {
     fetchOverview().then(setStats).catch(() => {});
     loadTags();
@@ -380,7 +391,7 @@ export function AccountsPage() {
           <div className="w-px h-5" style={{ background: 'var(--border-medium)' }} />
 
           {/* Bulk tag assign */}
-          <BulkTagButton selectedIds={[...selected]} tags={tags} onDone={() => { loadTags(); setSelected(new Set()); }} />
+          <BulkTagButton selectedIds={[...selected]} tags={tags} onDone={() => { reloadAccounts(); loadTags(); setSelected(new Set()); }} />
 
           {/* Bulk assessment */}
           <button
@@ -394,6 +405,8 @@ export function AccountsPage() {
                 }
               } catch { /* ignore */ }
               setBulkLoading(null);
+              reloadAccounts();
+              setSelected(new Set());
             }}
             disabled={bulkLoading === 'assessment'}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
