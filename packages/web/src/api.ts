@@ -1527,6 +1527,31 @@ export interface AuditEntry {
   created_at: string;
 }
 
+// --- Buyer Performance ---
+
+export interface BuyerPerformance {
+  user_id: string;
+  name: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  last_login_at: string | null;
+  total_accounts: number;
+  active_accounts: number;
+  suspended_accounts: number;
+  total_bans: number;
+  ban_rate: string;
+  avg_lifetime_hours: string;
+  total_spend: string;
+  last_ban_at: string | null;
+  last_activity: string | null;
+}
+
+export const fetchBuyerPerformance = (): Promise<{ buyers: BuyerPerformance[] }> =>
+  apiFetch('/stats/buyer-performance');
+
+// --- Audit Log ---
+
 export const fetchAuditLog = (params?: Record<string, string>): Promise<{ total: number; entries: AuditEntry[] }> => {
   const qs = params ? '?' + new URLSearchParams(params).toString() : '';
   return apiFetch(`/admin/audit${qs}`);
