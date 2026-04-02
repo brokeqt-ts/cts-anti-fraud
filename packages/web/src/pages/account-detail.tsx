@@ -12,161 +12,9 @@ import {
   ShimmerBorder,
   DotPattern,
 } from '../components/ui/animations.js';
-
-const RISK_LABELS: Record<string, string> = {
-  high: 'Высокий риск',
-  medium: 'Средний риск',
-  low: 'Низкий риск',
-  unknown: 'Неизвестен',
-};
-
-/** Parsed notification card data. */
-interface NotifCard {
-  title: string;
-  description: string;
-  category: 'CRITICAL' | 'WARNING' | 'INFO';
-  type: string;
-  label: string;
-}
-
-const CATEGORY_STYLES: Record<string, { color: string; bg: string; label: string }> = {
-  CRITICAL: { color: '#f87171', bg: 'rgba(239,68,68,0.08)', label: 'CRITICAL' },
-  WARNING: { color: '#fbbf24', bg: 'rgba(245,158,11,0.08)', label: 'WARNING' },
-  INFO: { color: '#60a5fa', bg: 'rgba(59,130,246,0.08)', label: 'INFO' },
-};
-
-/**
- * Parse notification items from the raw nested JSON structure.
- *
- * The notification object has field "notifications" which contains field "2"
- * which is an array of items. Each item:
- *   - item["50"]["1"] = title
- *   - item["50"]["2"] = description
- *   - item["50"]["5"] = array of {1: Name, 2: Value} pairs
- *   - item["6"] = label (fallback)
- *   - item["3"] = notification code
- *   - item["4"] = sub-code
- */
-function parseNotificationCards(raw: unknown): NotifCard[] {
-  if (raw == null) return [];
-
-  if (typeof raw !== 'object' || Array.isArray(raw)) return [];
-
-  const obj = raw as Record<string, unknown>;
-
-  // Try the nested structure: obj["notifications"]["2"] -> array
-  // The raw value from the DB row is `n.notifications`, which IS the notification object
-  // It may have a "2" field directly, or a "notifications" wrapper
-  let items: unknown[] | null = null;
-
-  // Direct: { "2": [...] }
-  if (Array.isArray(obj['2'])) {
-    items = obj['2'] as unknown[];
-  }
-  // Wrapped: { notifications: { "2": [...] } }
-  const notifs = obj['notifications'];
-  if (!items && notifs && typeof notifs === 'object' && !Array.isArray(notifs)) {
-    const inner = notifs as Record<string, unknown>;
-    if (Array.isArray(inner['2'])) {
-      items = inner['2'] as unknown[];
-    }
-  }
-
-  if (!items || items.length === 0) {
-    // Fallback: try old format { "1": [entries...] }
-    const entries = obj['1'];
-    if (Array.isArray(entries) && entries.length > 0) {
-      return entries.map((entry) => {
-        if (!entry || typeof entry !== 'object') return null;
-        return parseLegacyEntry(entry as Record<string, unknown>);
-      }).filter((x): x is NotifCard => x != null);
-    }
-    return [];
-  }
-
-  const cards: NotifCard[] = [];
-  for (const item of items) {
-    if (!item || typeof item !== 'object') continue;
-    const card = parseNotifItem(item as Record<string, unknown>);
-    if (card) cards.push(card);
-  }
-  return cards;
-}
-
-function parseNotifItem(item: Record<string, unknown>): NotifCard | null {
-  const field50 = item['50'] as Record<string, unknown> | undefined;
-  const title = field50?.['1'] as string | undefined;
-  const description = field50?.['2'] as string | undefined;
-  const kvPairs = field50?.['5'] as Array<Record<string, string>> | undefined;
-  const label = (item['6'] as string) ?? '';
-
-  // Extract category and type from key-value pairs
-  let category: 'CRITICAL' | 'WARNING' | 'INFO' = 'INFO';
-  let type = '';
-
-  if (Array.isArray(kvPairs)) {
-    for (const kv of kvPairs) {
-      const name = kv['1'];
-      const value = kv['2'];
-      if (name === 'Category') {
-        if (value === 'CRITICAL') category = 'CRITICAL';
-        else if (value === 'WARNING') category = 'WARNING';
-        else category = 'INFO';
-      }
-      if (name === 'Type') {
-        type = value ?? '';
-      }
-    }
-  }
-
-  // Infer category from label/title if not found in kvPairs
-  if (!kvPairs || kvPairs.length === 0) {
-    const allText = `${title ?? ''} ${description ?? ''} ${label}`.toLowerCase();
-    if (allText.includes('suspend') || allText.includes('violation') || allText.includes('disapproved')) {
-      category = 'CRITICAL';
-    } else if (allText.includes('warning') || allText.includes('payment') || allText.includes('billing')) {
-      category = 'WARNING';
-    }
-  }
-
-  // If no title/description, use label as fallback
-  if (!title && !description && !label) return null;
-
-  return {
-    title: title ?? label ?? 'Уведомление',
-    description: description ?? '',
-    category,
-    type,
-    label,
-  };
-}
-
-function parseLegacyEntry(entry: Record<string, unknown>): NotifCard | null {
-  const strings: string[] = [];
-  collectStrings(entry, strings, 0, 5);
-  const meaningful = strings.filter((s) => s.length > 3 && !/^\d+$/.test(s));
-  if (meaningful.length === 0) return null;
-
-  const allText = meaningful.join(' ');
-  let category: 'CRITICAL' | 'WARNING' | 'INFO' = 'INFO';
-  if (/suspend|violation|disapproved|PolicyViolation/i.test(allText)) category = 'CRITICAL';
-  else if (/payment|billing|warning/i.test(allText)) category = 'WARNING';
-
-  return {
-    title: meaningful[0] ?? 'Уведомление',
-    description: meaningful.slice(1).join(' '),
-    category,
-    type: '',
-    label: '',
-  };
-}
-
-function collectStrings(obj: unknown, out: string[], depth: number, maxDepth: number): void {
-  if (depth > maxDepth || obj == null) return;
-  if (typeof obj === 'string' && obj.length > 0) { out.push(obj); return; }
-  if (Array.isArray(obj)) { for (const item of obj) collectStrings(item, out, depth + 1, maxDepth); return; }
-  if (typeof obj === 'object') { for (const val of Object.values(obj as Record<string, unknown>)) collectStrings(val, out, depth + 1, maxDepth); }
-}
+import { type NotifCard, CATEGORY_STYLES, parseNotificationCards } from './account-detail/notification-parser.js';
+import { RISK_LABELS, UI_NOISE_RE, deduplicateCampaigns } from './account-detail/helpers.js';
+import { MetricPill } from './account-detail/shared-components.js';
 
 export function AccountDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -263,8 +111,6 @@ export function AccountDetailPage() {
   const dedupedCampaigns = deduplicateCampaigns(data.campaigns ?? []);
 
   // Use parsed notification_details from API when available, fallback to client-side parsing
-  // Filter out Google Ads UI noise (feature flags, promos) that may already be in DB
-  const UI_NOISE_RE = /_PROMO$|EXPAND_COLLAPSE|HALO_|CREATIVE_BRIEF|FORECASTING|DATA_MANAGER|SEARCH_THEMES|DM_IN_SA360|SCOPING_FEATURE/;
   const parsedNotifDetails = (data.notification_details ?? []).filter(
     nd => !UI_NOISE_RE.test(nd.notification_type ?? '') && !UI_NOISE_RE.test(nd.label ?? '') && !UI_NOISE_RE.test(nd.title ?? ''),
   );
@@ -1117,14 +963,7 @@ function BanSourceBadge({ source }: { source?: string }) {
   );
 }
 
-function MetricPill({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</span>
-      <span className="text-xs font-semibold font-mono" style={{ color: 'var(--text-secondary)' }}>{value}</span>
-    </div>
-  );
-}
+// MetricPill moved to account-detail/shared-components.tsx
 
 function InfoField({ label, value }: { label: string; value: string | null | undefined }) {
   return (
@@ -1186,17 +1025,7 @@ function formatBudget(micros: string | null, currency: string | null): string {
   return `${sym}${amount.toFixed(2)}/день`;
 }
 
-/** Deduplicate campaigns by campaign_id, keeping the most recent captured_at. */
-function deduplicateCampaigns(campaigns: CampaignRow[]): CampaignRow[] {
-  const map = new Map<string, CampaignRow>();
-  for (const c of campaigns) {
-    const existing = map.get(c.campaign_id);
-    if (!existing || c.captured_at > existing.captured_at) {
-      map.set(c.campaign_id, c);
-    }
-  }
-  return [...map.values()];
-}
+// deduplicateCampaigns moved to account-detail/helpers.ts
 
 function CampaignsSection({ campaigns: raw, campaignMetrics }: { campaigns: CampaignRow[]; campaignMetrics: CampaignMetric[] }) {
   const campaigns = deduplicateCampaigns(raw);
