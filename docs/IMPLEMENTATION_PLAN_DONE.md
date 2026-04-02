@@ -160,6 +160,15 @@
 - Все dropdown через React Portal (`createPortal`) для корректного z-index
 - Risk Score badge (Высокий/Средний/Низкий) вместо Health Score
 
+### UX-14: Bulk операции ✅
+- Чекбоксы в списке аккаунтов: индивидуальные + "выбрать все" в заголовке
+- Floating bulk action bar: появляется при выборе, показывает количество выбранных
+- Bulk assign тег: dropdown с выбором тега → `POST /tags/bulk-assign` для всех выбранных
+- Bulk assessment: запуск оценки рисков по всем выбранным аккаунтам
+- Bulk CSV export: скачивание CSV только по выбранным аккаунтам
+- Кнопка "X" для снятия выделения
+- Чекбоксы видны при hover, подсвечены при выборе (#818cf8)
+
 ### UX-16: Audit Log ✅
 - Миграция 060: таблица `audit_log` (user_id, user_name, action, entity_type, entity_id, details JSONB, ip_address)
 - Сервис `audit.service.ts`: `logAudit()` + helper `audit(pool, request, action, opts)`

@@ -1,11 +1,11 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Search, ChevronRight, Users, Download, Tag, Plus, X } from 'lucide-react';
+import { Search, ChevronRight, Users, Download, Tag, Plus, X, CheckSquare, Square, Brain, ShieldCheck } from 'lucide-react';
 import {
   fetchAccounts, ApiError, type AccountSummary, type OverviewStats, fetchOverview,
   timeAgo, formatCid, riskLevel, effectiveStatus,
-  fetchTags, createTag, deleteTag, assignTag, unassignTag, type TagSummary,
+  fetchTags, createTag, deleteTag, assignTag, unassignTag, bulkAssignTag, type TagSummary,
 } from '../api.js';
 import { downloadCsv } from '../utils/csv.js';
 import { StatusBadge } from '../components/badge.js';
@@ -50,6 +50,8 @@ export function AccountsPage() {
   const [tagFilter, setTagFilter] = useState('');
   const [tags, setTags] = useState<TagSummary[]>([]);
   const [tagOverrides, setTagOverrides] = useState<Record<string, Array<{ id: string; name: string; color: string }>>>({});
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -231,6 +233,20 @@ export function AccountsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                  <th className="px-2 py-[7px] w-8">
+                    <button
+                      onClick={() => {
+                        if (selected.size === filteredAccounts.length) setSelected(new Set());
+                        else setSelected(new Set(filteredAccounts.map(a => a.google_account_id)));
+                      }}
+                      className="flex items-center justify-center"
+                      style={{ color: selected.size > 0 ? '#818cf8' : 'var(--text-muted)' }}
+                    >
+                      {selected.size > 0 && selected.size === filteredAccounts.length
+                        ? <CheckSquare className="w-3.5 h-3.5" />
+                        : <Square className="w-3.5 h-3.5" />}
+                    </button>
+                  </th>
                   <th className="px-2.5 py-[7px] text-left font-medium label-xs">Google ID</th>
                   <th className="px-2.5 py-[7px] text-left font-medium label-xs">Профиль</th>
                   <th className="px-2.5 py-[7px] text-left font-medium label-xs">Статус</th>
@@ -248,12 +264,12 @@ export function AccountsPage() {
               </thead>
               {loading ? (
                 <tbody>
-                  <tr><td colSpan={13}><TableSkeleton rows={6} cols={8} /></td></tr>
+                  <tr><td colSpan={14}><TableSkeleton rows={6} cols={8} /></td></tr>
                 </tbody>
               ) : filteredAccounts.length === 0 ? (
                 <tbody>
                   <tr>
-                    <td colSpan={13}>
+                    <td colSpan={14}>
                       <div className="relative py-16 flex flex-col items-center justify-center gap-3 overflow-hidden">
                         <DotPattern />
                         <Users className="w-8 h-8" style={{ color: 'var(--border-strong)' }} />
@@ -268,6 +284,25 @@ export function AccountsPage() {
                     const risk = riskLevel(acc);
                     return (
                       <AnimatedRow key={acc.id} className="cursor-pointer group" onClick={() => navigate(`/accounts/${acc.google_account_id}`)}>
+                        <td className="px-2 py-[7px]">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelected(prev => {
+                                const next = new Set(prev);
+                                if (next.has(acc.google_account_id)) next.delete(acc.google_account_id);
+                                else next.add(acc.google_account_id);
+                                return next;
+                              });
+                            }}
+                            className="flex items-center justify-center"
+                            style={{ color: selected.has(acc.google_account_id) ? '#818cf8' : 'var(--text-muted)' }}
+                          >
+                            {selected.has(acc.google_account_id)
+                              ? <CheckSquare className="w-3.5 h-3.5" />
+                              : <Square className="w-3.5 h-3.5 opacity-30 group-hover:opacity-100 transition-opacity" />}
+                          </button>
+                        </td>
                         <td className="px-2.5 py-[7px]">
                           <span className={`font-mono whitespace-nowrap ${acc.profile_name ? 'text-[10px]' : 'text-xs'}`} style={{ color: acc.profile_name ? 'var(--text-muted)' : 'var(--text-secondary)' }}>{formatCid(acc.google_account_id)}</span>
                         </td>
@@ -332,6 +367,71 @@ export function AccountsPage() {
           )}
         </div>
       </BlurFade>
+
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl"
+          style={{ background: 'var(--bg-dropdown)', border: '1px solid var(--border-strong)' }}
+        >
+          <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+            Выбрано: {selected.size}
+          </span>
+          <div className="w-px h-5" style={{ background: 'var(--border-medium)' }} />
+
+          {/* Bulk tag assign */}
+          <BulkTagButton selectedIds={[...selected]} tags={tags} onDone={() => { loadTags(); setSelected(new Set()); }} />
+
+          {/* Bulk assessment */}
+          <button
+            onClick={async () => {
+              setBulkLoading('assessment');
+              try {
+                for (const gid of selected) {
+                  await fetch(`${import.meta.env.VITE_API_URL || ''}/api/v1/assessment?account_google_id=${gid}`, {
+                    headers: { Authorization: `Bearer ${localStorage.getItem('cts_access_token') ?? ''}` },
+                  });
+                }
+              } catch { /* ignore */ }
+              setBulkLoading(null);
+            }}
+            disabled={bulkLoading === 'assessment'}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+            style={{ background: 'rgba(34,197,94,0.08)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.2)' }}
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            {bulkLoading === 'assessment' ? 'Оценка...' : 'Assessment'}
+          </button>
+
+          {/* Bulk CSV export */}
+          <button
+            onClick={() => {
+              const selectedAccounts = filteredAccounts.filter(a => selected.has(a.google_account_id));
+              const headers = ['Google ID', 'Статус', 'Тип', 'Риск', 'Валюта', 'Карта', 'Домен', 'Профиль', 'Баны'];
+              const rows = selectedAccounts.map(acc => [
+                acc.google_account_id, effectiveStatus(acc), acc.account_type, riskLevel(acc),
+                acc.currency, acc.card_info, acc.domain, acc.profile_name, acc.ban_count,
+              ]);
+              downloadCsv(`accounts_selected_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+            style={{ background: 'rgba(99,102,241,0.08)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.2)' }}
+          >
+            <Download className="w-3.5 h-3.5" />
+            CSV
+          </button>
+
+          {/* Clear selection */}
+          <button
+            onClick={() => setSelected(new Set())}
+            className="p-1.5 rounded-lg transition-colors hover:bg-white/5"
+            style={{ color: 'var(--text-muted)' }}
+            title="Снять выделение"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -734,5 +834,77 @@ function AccountTagCell({ account, allTags, overrideTags, setTagOverrides }: {
       </button>
       {dropdown}
     </div>
+  );
+}
+
+// ── BulkTagButton — assign tag to multiple selected accounts ────────────────
+
+function BulkTagButton({ selectedIds, tags, onDone }: { selectedIds: string[]; tags: TagSummary[]; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const [loading, setLoading] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (dropRef.current && !dropRef.current.contains(e.target as Node) && btnRef.current && !btnRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  const handleAssign = async (tagId: string) => {
+    setLoading(true);
+    try {
+      await bulkAssignTag(selectedIds, tagId);
+      onDone();
+    } catch { /* ignore */ }
+    setLoading(false);
+    setOpen(false);
+  };
+
+  const dropdown = open && tags.length > 0 ? createPortal(
+    <div
+      ref={dropRef}
+      className="rounded-lg p-1.5 min-w-[160px]"
+      style={{ position: 'fixed', zIndex: 99999, bottom: 70, left: pos.left, background: 'var(--bg-dropdown)', border: '1px solid var(--border-strong)', boxShadow: '0 10px 40px rgba(0,0,0,0.6)' }}
+    >
+      {loading ? (
+        <div className="px-3 py-2 text-xs" style={{ color: 'var(--text-muted)' }}>Назначение...</div>
+      ) : tags.map(t => (
+        <button
+          key={t.id}
+          onClick={() => handleAssign(t.id)}
+          className="w-full flex items-center gap-2 px-2 py-1 rounded text-xs text-left transition-colors hover:bg-white/5"
+          style={{ color: t.color }}
+        >
+          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: t.color }} />
+          {t.name}
+        </button>
+      ))}
+    </div>,
+    document.body,
+  ) : null;
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onClick={() => {
+          if (!open && btnRef.current) {
+            const rect = btnRef.current.getBoundingClientRect();
+            setPos({ top: rect.top, left: rect.left });
+          }
+          setOpen(!open);
+        }}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+        style={{ background: 'rgba(163,130,250,0.08)', color: '#a78bfa', border: '1px solid rgba(163,130,250,0.2)' }}
+      >
+        <Tag className="w-3.5 h-3.5" />
+        Тег
+      </button>
+      {dropdown}
+    </>
   );
 }

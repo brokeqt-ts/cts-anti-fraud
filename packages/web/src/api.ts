@@ -492,6 +492,9 @@ export const assignTag = (googleId: string, tagId: string): Promise<void> =>
 export const unassignTag = (googleId: string, tagId: string): Promise<void> =>
   apiFetch(`/accounts/${googleId}/tags/${tagId}`, { method: 'DELETE' });
 
+export const bulkAssignTag = (googleAccountIds: string[], tagId: string): Promise<{ assigned: number }> =>
+  apiFetch('/tags/bulk-assign', { method: 'POST', body: JSON.stringify({ google_account_ids: googleAccountIds, tag_id: tagId }) });
+
 export interface DomainSummary {
   domain: string;
   account_count: string;
