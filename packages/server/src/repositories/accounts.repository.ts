@@ -71,6 +71,7 @@ export async function listAccounts(pool: pg.Pool, params: ListAccountsParams): P
 
   const where = `WHERE ${conditions.join(' AND ')}`;
 
+  // Main query: replaced scalar subqueries with LEFT JOIN aggregations for performance
   const result = await pool.query(
     `SELECT
        a.id,
@@ -80,72 +81,83 @@ export async function listAccounts(pool: pg.Pool, params: ListAccountsParams): P
        a.payer_name,
        a.currency,
        a.updated_at,
-       (SELECT COUNT(*) FROM ban_logs b WHERE b.account_google_id = a.google_account_id) AS ban_count,
-       (SELECT signal_value FROM account_signals s
-        WHERE s.account_google_id = a.google_account_id AND s.signal_name = 'account_suspended'
-        ORDER BY s.captured_at DESC LIMIT 1) AS suspended_signal,
-       (SELECT MAX(rp.created_at) FROM raw_payloads rp
-        WHERE rp.profile_id = a.google_account_id) AS last_seen,
-       (SELECT COALESCE(ads.display_url, (ads.final_urls->>0)::text)
-        FROM ads WHERE ads.account_google_id = a.google_account_id
-        ORDER BY ads.captured_at DESC LIMIT 1) AS domain,
+       COALESCE(ban_agg.ban_count, 0)::int AS ban_count,
+       sig.signal_value AS suspended_signal,
+       rp_agg.last_seen,
+       rp_agg.first_seen,
+       dom.domain,
        ap.profile_name,
        ap.browser_type::text AS browser_type,
        pm.card_info,
-       (SELECT MIN(rp.created_at) FROM raw_payloads rp
-        WHERE rp.profile_id = a.google_account_id) AS first_seen,
-       (SELECT COUNT(*) FROM notification_details nd
-        WHERE nd.account_google_id = a.google_account_id) AS notifications_count,
+       COALESCE(nd_agg.notifications_count, 0)::int AS notifications_count,
        a.account_type,
        a.account_type_source
      FROM accounts a
+     -- Ban count aggregate
+     LEFT JOIN (
+       SELECT account_google_id, COUNT(*)::int AS ban_count
+       FROM ban_logs GROUP BY account_google_id
+     ) ban_agg ON ban_agg.account_google_id = a.google_account_id
+     -- Latest suspended signal
+     LEFT JOIN LATERAL (
+       SELECT s.signal_value FROM account_signals s
+       WHERE s.account_google_id = a.google_account_id AND s.signal_name = 'account_suspended'
+       ORDER BY s.captured_at DESC LIMIT 1
+     ) sig ON true
+     -- First/last seen from raw_payloads
+     LEFT JOIN (
+       SELECT profile_id, MIN(created_at) AS first_seen, MAX(created_at) AS last_seen
+       FROM raw_payloads GROUP BY profile_id
+     ) rp_agg ON rp_agg.profile_id = a.google_account_id
+     -- Latest domain from ads
+     LEFT JOIN LATERAL (
+       SELECT COALESCE(ads.display_url, (ads.final_urls->>0)::text) AS domain
+       FROM ads WHERE ads.account_google_id = a.google_account_id
+       ORDER BY ads.captured_at DESC LIMIT 1
+     ) dom ON true
+     -- Latest antidetect profile
      LEFT JOIN LATERAL (
        SELECT ap2.profile_name, ap2.browser_type
        FROM account_consumables ac2
        JOIN antidetect_profiles ap2 ON ap2.id = ac2.antidetect_profile_id
        WHERE ac2.account_id = a.id AND ac2.unlinked_at IS NULL
-       ORDER BY ac2.linked_at DESC
-       LIMIT 1
+       ORDER BY ac2.linked_at DESC LIMIT 1
      ) ap ON true
+     -- Latest payment method
      LEFT JOIN LATERAL (
        SELECT CASE
          WHEN pm2.card_network IS NOT NULL AND pm2.last4 IS NOT NULL
            THEN pm2.card_network || ' ••' || pm2.last4
-         WHEN pm2.bin IS NOT NULL
-           THEN 'BIN ' || pm2.bin
+         WHEN pm2.bin IS NOT NULL THEN 'BIN ' || pm2.bin
          ELSE NULL
        END AS card_info
        FROM account_consumables ac3
        JOIN payment_methods pm2 ON pm2.id = ac3.payment_method_id
        WHERE ac3.account_id = a.id AND ac3.unlinked_at IS NULL
-       ORDER BY ac3.linked_at DESC
-       LIMIT 1
+       ORDER BY ac3.linked_at DESC LIMIT 1
      ) pm ON true
+     -- Notification count aggregate
+     LEFT JOIN (
+       SELECT account_google_id, COUNT(*)::int AS notifications_count
+       FROM notification_details GROUP BY account_google_id
+     ) nd_agg ON nd_agg.account_google_id = a.google_account_id
      ${where}
      ORDER BY a.updated_at DESC
      LIMIT $${paramIdx++} OFFSET $${paramIdx++}`,
     [...queryParams, params.limit, params.offset],
   );
 
-  const countResult = await pool.query(
-    `SELECT COUNT(*) as total FROM accounts a
-     LEFT JOIN LATERAL (
-       SELECT ap2.profile_name
-       FROM account_consumables ac2
-       JOIN antidetect_profiles ap2 ON ap2.id = ac2.antidetect_profile_id
-       WHERE ac2.account_id = a.id AND ac2.unlinked_at IS NULL
-       LIMIT 1
-     ) ap ON true
-     LEFT JOIN LATERAL (
-       SELECT 1
-       FROM account_consumables ac3
-       JOIN payment_methods pm2 ON pm2.id = ac3.payment_method_id
-       WHERE ac3.account_id = a.id AND ac3.unlinked_at IS NULL
-       LIMIT 1
-     ) pm ON true
-     ${where}`,
-    queryParams,
-  );
+  // Count query: simplified — no LATERAL JOINs needed, only joins required for WHERE filters
+  const needsProfileJoin = params.search != null;
+  const countSql = needsProfileJoin
+    ? `SELECT COUNT(*) as total FROM accounts a
+       LEFT JOIN LATERAL (
+         SELECT ap2.profile_name FROM account_consumables ac2
+         JOIN antidetect_profiles ap2 ON ap2.id = ac2.antidetect_profile_id
+         WHERE ac2.account_id = a.id AND ac2.unlinked_at IS NULL LIMIT 1
+       ) ap ON true ${where}`
+    : `SELECT COUNT(*) as total FROM accounts a ${where}`;
+  const countResult = await pool.query(countSql, queryParams);
 
   // Fetch tags for all returned accounts in a single query
   const accountIds = result.rows.map((r: Record<string, unknown>) => r['id'] as string);

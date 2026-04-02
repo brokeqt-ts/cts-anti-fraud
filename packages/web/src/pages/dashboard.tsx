@@ -29,9 +29,9 @@ export function DashboardPage() {
         if (e instanceof ApiError && e.status === 401) { navigate('/settings'); return; }
         setError(e instanceof Error ? e.message : 'Неизвестная ошибка');
       });
-    fetchActivity().then(setActivity);
-    fetchParsedData().then(setParsed).catch(() => {});
-    fetchAnalyticsOverview().then(setAnalyticsOverview).catch(() => {});
+    fetchActivity().then(setActivity).catch(() => {});
+    fetchParsedData().then(setParsed).catch((e) => console.warn('[dashboard] parsedData failed:', e));
+    fetchAnalyticsOverview().then(setAnalyticsOverview).catch((e) => console.warn('[dashboard] analyticsOverview failed:', e));
   }, [navigate]);
 
   if (error) {

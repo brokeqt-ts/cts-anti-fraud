@@ -28,8 +28,17 @@
 
   /* Accents */
   --accent-green: #22c55e;
+  --accent-green-soft: #4ade80;
   --accent-red: #ef4444;
+  --accent-red-soft: #f87171;
   --accent-amber: #f59e0b;
+  --accent-amber-soft: #fbbf24;
+  --accent-blue: #3b82f6;
+  --accent-blue-soft: #60a5fa;
+  --accent-purple: #8b5cf6;
+  --accent-purple-soft: #a78bfa;
+  --accent-pink: #ec4899;
+  --accent-teal: #14b8a6;
 }
 
 [data-theme="light"] {

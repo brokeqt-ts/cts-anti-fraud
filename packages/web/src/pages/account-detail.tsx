@@ -199,20 +199,20 @@ export function AccountDetailPage() {
         if (dom) {
           fetchDomainDetail(dom)
             .then((r) => { if (r.content_analysis) setDomainAnalysis(r.content_analysis); })
-            .catch(() => {});
+            .catch((e) => console.warn('[account-detail] domain analysis failed:', e));
         }
       })
       .catch((e: unknown) => {
         if (e instanceof ApiError && e.status === 401) { navigate('/settings'); return; }
         setError(e instanceof Error ? e.message : 'Неизвестная ошибка');
       });
-    fetchBanChain(id).then(setBanChain).catch(() => {});
+    fetchBanChain(id).then(setBanChain).catch((e) => console.warn('[account-detail] ban chain failed:', e));
     fetchAccountCompetitiveIntelligence(id)
       .then((r) => setCompetitors(r.competitors))
-      .catch(() => {});
-    fetchQualityDistribution(id).then(setQsDist).catch(() => {});
-    fetchLowQualityKeywords(id).then((r) => setQsLow(r.keywords)).catch(() => {});
-    fetchQualityHistory(id).then((r) => setQsHistory(r.history)).catch(() => {});
+      .catch((e) => console.warn('[account-detail] competitive intel failed:', e));
+    fetchQualityDistribution(id).then(setQsDist).catch((e) => console.warn('[account-detail] QS dist failed:', e));
+    fetchLowQualityKeywords(id).then((r) => setQsLow(r.keywords)).catch((e) => console.warn('[account-detail] low QS failed:', e));
+    fetchQualityHistory(id).then((r) => setQsHistory(r.history)).catch((e) => console.warn('[account-detail] QS history failed:', e));
   }, [id, navigate]);
 
   const handleAiAnalyze = useCallback(async () => {

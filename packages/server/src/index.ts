@@ -47,6 +47,19 @@ import './types.js';
 const MAX_MIGRATION_RETRIES = 3;
 const MIGRATION_RETRY_DELAY_MS = 2000;
 
+/** Run an async task with retry on failure. */
+async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 5000): Promise<T> {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (i === retries) throw err;
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  throw new Error('unreachable');
+}
+
 async function syncAdminPassword(pool: pg.Pool): Promise<void> {
   const isDev = env.NODE_ENV !== 'production';
   const forceReset = process.env['FORCE_ADMIN_PASSWORD_RESET'] === 'true';
@@ -235,14 +248,13 @@ async function start() {
 
   intervals.push(setInterval(() => {
     app.log.info('[cron] Periodic domain enrichment cycle starting...');
-    runDomainEnrichmentCycle(pool)
+    withRetry(() => runDomainEnrichmentCycle(pool))
       .then((r) => {
         app.log.info(`[cron] Enrichment: collected=${r.collected}, enriched=${r.enriched}, errors=${r.errors}`);
-        // Run content analysis after enrichment
         return analyzeAllDomains(pool, 10);
       })
       .then((r) => app.log.info(`[cron] Domain content analysis: analyzed=${r.analyzed}, errors=${r.errors}`))
-      .catch((err) => app.log.error('[cron] Enrichment failed: %s', err instanceof Error ? err.message : err));
+      .catch((err) => app.log.error('[cron] Enrichment failed after retries: %s', err instanceof Error ? err.message : err));
   }, 6 * 60 * 60 * 1000)); // Every 6 hours
 
   // АВТОМАТИЗАЦИЯ 3: Catch-up scan for suspended accounts (auto-ban + post-mortem)
