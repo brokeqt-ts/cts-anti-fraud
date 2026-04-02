@@ -13,8 +13,9 @@ import {
   DotPattern,
 } from '../components/ui/animations.js';
 import { type NotifCard, CATEGORY_STYLES, parseNotificationCards } from './account-detail/notification-parser.js';
-import { RISK_LABELS, UI_NOISE_RE, deduplicateCampaigns } from './account-detail/helpers.js';
+import { RISK_LABELS, UI_NOISE_RE, deduplicateCampaigns, adHasContent } from './account-detail/helpers.js';
 import { MetricPill } from './account-detail/shared-components.js';
+import { CollapsibleSection } from '../components/collapsible-section.js';
 
 export function AccountDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -229,38 +230,48 @@ export function AccountDetailPage() {
         />
       </StaggerItem>
 
-      {/* Campaigns — hide when empty */}
+      {/* Campaigns */}
       {dedupedCampaigns.length > 0 && (
         <StaggerItem>
-          <CampaignsSection campaigns={data.campaigns ?? []} campaignMetrics={data.campaign_metrics ?? []} />
+          <CollapsibleSection title="Кампании" count={dedupedCampaigns.length} defaultOpen>
+            <CampaignsSection campaigns={data.campaigns ?? []} campaignMetrics={data.campaign_metrics ?? []} />
+          </CollapsibleSection>
         </StaggerItem>
       )}
 
       {/* Spend Chart */}
       {(data.keyword_daily_stats ?? []).length > 0 && (
         <StaggerItem>
-          <SpendChart stats={data.keyword_daily_stats ?? []} currency={(data.campaigns?.[0]?.currency) ?? null} bans={data.bans} />
+          <CollapsibleSection title="График расходов" defaultOpen>
+            <SpendChart stats={data.keyword_daily_stats ?? []} currency={(data.campaigns?.[0]?.currency) ?? null} bans={data.bans} />
+          </CollapsibleSection>
         </StaggerItem>
       )}
 
-      {/* Keywords — hide when empty */}
+      {/* Keywords */}
       {(data.keywords ?? []).length > 0 && (
         <StaggerItem>
-          <KeywordsSection keywords={data.keywords ?? []} />
+          <CollapsibleSection title="Ключевые слова" count={(data.keywords ?? []).length}>
+            <KeywordsSection keywords={data.keywords ?? []} />
+          </CollapsibleSection>
         </StaggerItem>
       )}
 
-      {/* Quality Score — show when distribution data exists */}
+      {/* Quality Score */}
       {qsDist && qsDist.distribution.length > 0 && (
         <StaggerItem>
-          <QualityScoreSection distribution={qsDist.distribution} aggregates={qsDist.aggregates} lowKeywords={qsLow ?? []} history={qsHistory ?? []} />
+          <CollapsibleSection title="Quality Score" count={qsDist.aggregates.total_keywords}>
+            <QualityScoreSection distribution={qsDist.distribution} aggregates={qsDist.aggregates} lowKeywords={qsLow ?? []} history={qsHistory ?? []} />
+          </CollapsibleSection>
         </StaggerItem>
       )}
 
-      {/* Ads — hide when empty */}
+      {/* Ads */}
       {(data.ads ?? []).filter(adHasContent).length > 0 && (
         <StaggerItem>
-          <AdsSection ads={data.ads ?? []} />
+          <CollapsibleSection title="Объявления" count={(data.ads ?? []).filter(adHasContent).length}>
+            <AdsSection ads={data.ads ?? []} />
+          </CollapsibleSection>
         </StaggerItem>
       )}
 
@@ -322,29 +333,37 @@ export function AccountDetailPage() {
         }} />
       </StaggerItem>
 
-      {/* Connected Accounts / Shared Resources */}
+      {/* Connected Accounts */}
       {banChain && banChain.connections.length > 0 && (
         <StaggerItem>
-          <ConnectedAccountsPanel banChain={banChain} />
+          <CollapsibleSection title="Связанные аккаунты" count={banChain.connections.length}>
+            <ConnectedAccountsPanel banChain={banChain} />
+          </CollapsibleSection>
         </StaggerItem>
       )}
 
       {/* Competitors */}
       {competitors.length > 0 && (
         <StaggerItem>
-          <AccountCompetitorsSection competitors={competitors} />
+          <CollapsibleSection title="Конкуренты" count={competitors.length}>
+            <AccountCompetitorsSection competitors={competitors} />
+          </CollapsibleSection>
         </StaggerItem>
       )}
 
       {/* Ban History */}
       <StaggerItem>
-        <BanHistorySection bans={data.bans} navigate={navigate} accountCid={id ?? ''} />
+        <CollapsibleSection title="История банов" count={data.bans.length} defaultOpen={data.bans.length > 0}>
+          <BanHistorySection bans={data.bans} navigate={navigate} accountCid={id ?? ''} />
+        </CollapsibleSection>
       </StaggerItem>
 
       {/* Domain Health */}
       {domainForHealth && domainAnalysis && (
         <StaggerItem>
-          <DomainHealthCard domain={domainForHealth} analysis={domainAnalysis} />
+          <CollapsibleSection title="Здоровье домена">
+            <DomainHealthCard domain={domainForHealth} analysis={domainAnalysis} />
+          </CollapsibleSection>
         </StaggerItem>
       )}
 
@@ -1125,13 +1144,7 @@ function deduplicateAds(ads: AdRow[]): AdRow[] {
   return [...map.values()];
 }
 
-/** Check if an ad has any displayable content (headlines, descriptions, or URLs). */
-function adHasContent(ad: AdRow): boolean {
-  const headlines = Array.isArray(ad.headlines) ? ad.headlines : [];
-  const descriptions = Array.isArray(ad.descriptions) ? ad.descriptions : [];
-  const finalUrls = Array.isArray(ad.final_urls) ? ad.final_urls : [];
-  return headlines.length > 0 || descriptions.length > 0 || finalUrls.length > 0 || !!ad.display_url;
-}
+// adHasContent moved to account-detail/helpers.ts
 
 function AdsSection({ ads: raw }: { ads: AdRow[] }) {
   const allAds = deduplicateAds(raw);
