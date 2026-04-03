@@ -53,6 +53,11 @@ export type ExtractedData =
 export function extractData(url: string, body: unknown): ExtractedData | null {
   if (!body || typeof body !== 'object') return null;
 
+  // RPC/protobuf responses use numeric keys ("1", "2", "3") — not the named keys
+  // our extractors look for. Return null so these fall through to the raw path,
+  // which the server-side RPC router handles correctly.
+  if (url.toLowerCase().includes('/rpc/')) return null;
+
   const data = body as Record<string, unknown>;
   const urlLower = url.toLowerCase();
 
