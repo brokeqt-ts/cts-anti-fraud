@@ -105,11 +105,25 @@ export async function resetParsedDataHandler(
   reply: FastifyReply,
 ): Promise<void> {
   const pool = getPool(env.DATABASE_URL);
+  const client = await pool.connect();
 
-  // 1. Truncate Phase 2 + Phase 3 + Phase 3b + Phase 4 tables
-  const truncatedTables = await adminRepo.truncateParsedTables(pool);
+  let truncatedTables: string[] = [];
 
-  // 2. Re-run backfill logic
+  try {
+    // 1. TRUNCATE inside a transaction — if re-parse crashes immediately after truncate,
+    //    the transaction rolls back and parsed data is preserved.
+    await client.query('BEGIN');
+    truncatedTables = await adminRepo.truncateParsedTables(client);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    client.release();
+    throw err;
+  }
+
+  client.release();
+
+  // 2. Re-run backfill logic (outside transaction — too many rows for a single long tx)
   const rows = await adminRepo.getRpcPayloadsForBackfill(pool);
 
   let parsed = 0;

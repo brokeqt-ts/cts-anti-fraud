@@ -134,7 +134,7 @@ async function handleSuspension(
      ) AS lifetime_hours`,
     [accountGoogleId, bannedAt.toISOString()],
   );
-  const lifetimeHours = lifetimeResult.rows[0]?.['lifetime_hours']
+  const lifetimeHours = lifetimeResult.rows[0]?.['lifetime_hours'] != null
     ? Math.round(Number(lifetimeResult.rows[0]['lifetime_hours']))
     : null;
 

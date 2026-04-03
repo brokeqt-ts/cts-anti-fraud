@@ -1,6 +1,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { getPool } from '../config/database.js';
 import { env } from '../config/env.js';
+import { safeErrorDetails } from '../utils/error-response.js';
 import { BanPredictor } from '../services/ml/ban-predictor.js';
 import { getAccountFeatures } from '../services/feature-extraction.service.js';
 import * as predictionsRepo from '../repositories/predictions.repository.js';
@@ -32,7 +33,7 @@ export async function trainHandler(
     await reply.status(200).send(result);
   } catch (err: unknown) {
     request.log.error({ err, handler: 'trainHandler' }, 'Training failed');
-    await reply.status(500).send({ error: 'Training failed', code: 'TRAINING_ERROR', details: err instanceof Error ? err.message : String(err) });
+    await reply.status(500).send({ error: 'Training failed', code: 'TRAINING_ERROR', details: safeErrorDetails(err) });
   }
 }
 
@@ -198,7 +199,7 @@ export async function bootstrapTrainHandler(
     await reply.status(500).send({
       error: 'Bootstrap training failed',
       code: 'TRAINING_ERROR',
-      details: err instanceof Error ? err.message : String(err),
+      details: safeErrorDetails(err),
     });
   }
 }

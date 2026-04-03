@@ -1,6 +1,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { getPool } from '../config/database.js';
 import { env } from '../config/env.js';
+import { safeErrorDetails } from '../utils/error-response.js';
 import * as ctsRepo from '../repositories/cts.repository.js';
 import { CTSService } from '../services/cts.service.js';
 
@@ -125,7 +126,7 @@ export async function syncCtsSitesHandler(
     await reply.status(500).send({
       error: 'Ошибка синхронизации с CTS',
       code: 'CTS_SYNC_ERROR',
-      details: err instanceof Error ? err.message : String(err),
+      details: safeErrorDetails(err),
     });
   }
 }
@@ -173,7 +174,7 @@ export async function getCtsSiteTrafficHandler(
     await reply.status(500).send({
       error: 'Ошибка получения данных трафика',
       code: 'CTS_TRAFFIC_ERROR',
-      details: err instanceof Error ? err.message : String(err),
+      details: safeErrorDetails(err),
     });
   }
 }
@@ -231,7 +232,7 @@ export async function linkCtsSiteToAccountHandler(
     await reply.status(500).send({
       error: 'Ошибка привязки сайта к аккаунту',
       code: 'LINK_ERROR',
-      details: err instanceof Error ? err.message : String(err),
+      details: safeErrorDetails(err),
     });
   }
 }

@@ -1,6 +1,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { getPool } from '../config/database.js';
 import { env } from '../config/env.js';
+import { safeErrorDetails } from '../utils/error-response.js';
 import * as domainsRepo from '../repositories/domains.repository.js';
 import { analyzeAndSave, analyzeAllDomains, analyzeContent } from '../services/domain-content-analyzer.js';
 import { getUserIdFilter } from '../utils/user-scope.js';
@@ -25,7 +26,7 @@ export async function listDomainsHandler(
     await reply.status(500).send({
       error: 'Failed to list domains',
       code: 'INTERNAL_ERROR',
-      details: err instanceof Error ? err.message : String(err),
+      details: safeErrorDetails(err),
     });
   }
 }
@@ -65,7 +66,7 @@ export async function getDomainHandler(
     await reply.status(500).send({
       error: 'Failed to get domain details',
       code: 'INTERNAL_ERROR',
-      details: err instanceof Error ? err.message : String(err),
+      details: safeErrorDetails(err),
     });
   }
 }
@@ -146,7 +147,7 @@ export async function analyzeDomainContentHandler(
     await reply.status(500).send({
       error: 'Content analysis failed',
       code: 'ANALYSIS_ERROR',
-      details: err instanceof Error ? err.message : String(err),
+      details: safeErrorDetails(err),
     });
   }
 }
@@ -168,7 +169,7 @@ export async function scanAllDomainsContentHandler(
     await reply.status(500).send({
       error: 'Batch content scan failed',
       code: 'SCAN_ERROR',
-      details: err instanceof Error ? err.message : String(err),
+      details: safeErrorDetails(err),
     });
   }
 }

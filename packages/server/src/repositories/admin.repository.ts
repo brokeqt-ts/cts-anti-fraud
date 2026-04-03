@@ -211,7 +211,7 @@ export async function getRpcPayloadsForBackfill(pool: pg.Pool): Promise<RawPaylo
 /**
  * Truncate all parsed data tables (Phase 2-4).
  */
-export async function truncateParsedTables(pool: pg.Pool): Promise<string[]> {
+export async function truncateParsedTables(pool: pg.Pool | pg.PoolClient): Promise<string[]> {
   const tables = [
     'campaigns', 'billing_info', 'notification_details', 'account_metrics',
     'ads', 'ad_groups', 'transaction_details', 'keywords',
@@ -319,10 +319,16 @@ export async function getParsedData(pool: pg.Pool): Promise<ParsedDataResult> {
 /**
  * Browse raw_payloads with optional CID and domain filters.
  */
+/** Escape special LIKE/ILIKE wildcard characters so user input is treated as literal. */
+function escapeLike(str: string): string {
+  return str.replace(/[%_\\]/g, '\\$&');
+}
+
 export async function listRawPayloads(
   pool: pg.Pool,
   filters: RawPayloadListFilters,
 ): Promise<RawPayloadListResult> {
+  const domainPattern = filters.domain ? `%${escapeLike(filters.domain)}%` : null;
   const result = await pool.query(
     `SELECT
        id,
@@ -339,10 +345,10 @@ export async function listRawPayloads(
        LEFT(raw_payload::text, 500) AS body_preview
      FROM raw_payloads
      WHERE ($1::text IS NULL OR raw_payload->>'googleCid' = $1)
-       AND ($2::text IS NULL OR source_url ILIKE '%' || $2 || '%')
+       AND ($2::text IS NULL OR source_url ILIKE $2 ESCAPE '\\')
      ORDER BY created_at DESC
      LIMIT $3`,
-    [filters.cid, filters.domain, filters.limit],
+    [filters.cid, domainPattern, filters.limit],
   );
 
   return {

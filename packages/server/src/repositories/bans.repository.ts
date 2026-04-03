@@ -98,7 +98,7 @@ export async function calculateLifetimeHours(
     [accountGoogleId, banDate],
   );
   const val = result.rows[0]?.['lifetime_hours'];
-  return val ? Math.round(Number(val)) : null;
+  return val != null ? Math.round(Number(val)) : null;
 }
 
 /**

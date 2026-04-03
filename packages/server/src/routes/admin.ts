@@ -166,6 +166,15 @@ export async function adminRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post(
     '/admin/reset-parsed-data',
     {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['confirm'],
+          properties: {
+            confirm: { type: 'boolean', enum: [true] },
+          },
+        },
+      },
       preHandler: [fastify.authenticate, fastify.requireRole('admin')],
     },
     resetParsedDataHandler,

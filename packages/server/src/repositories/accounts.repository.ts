@@ -477,10 +477,12 @@ export async function linkConsumable(
   );
 }
 
-export async function unlinkConsumable(pool: pg.Pool, id: string): Promise<boolean> {
+export async function unlinkConsumable(pool: pg.Pool, id: string, accountId: string): Promise<boolean> {
   const result = await pool.query(
-    `UPDATE account_consumables SET unlinked_at = NOW() WHERE id = $1 AND unlinked_at IS NULL RETURNING id`,
-    [id],
+    `UPDATE account_consumables SET unlinked_at = NOW()
+     WHERE id = $1 AND account_id = $2 AND unlinked_at IS NULL
+     RETURNING id`,
+    [id, accountId],
   );
   return (result.rowCount ?? 0) > 0;
 }

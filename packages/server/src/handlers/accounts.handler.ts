@@ -1,6 +1,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { getPool } from '../config/database.js';
 import { env } from '../config/env.js';
+import { safeErrorDetails } from '../utils/error-response.js';
 import * as accountsRepo from '../repositories/accounts.repository.js';
 import * as qsRepo from '../repositories/quality-score.repository.js';
 import { getUserIdFilter } from '../utils/user-scope.js';
@@ -47,7 +48,7 @@ export async function listAccountsHandler(
     await reply.status(500).send({
       error: 'Failed to list accounts',
       code: 'INTERNAL_ERROR',
-      details: err instanceof Error ? err.message : String(err),
+      details: safeErrorDetails(err),
     });
   }
 }
@@ -88,7 +89,7 @@ export async function getAccountHandler(
     await reply.status(500).send({
       error: 'Failed to get account details',
       code: 'INTERNAL_ERROR',
-      details: err instanceof Error ? err.message : String(err),
+      details: safeErrorDetails(err),
     });
   }
 }
@@ -141,7 +142,7 @@ export async function patchAccountHandler(
     await reply.status(500).send({
       error: 'Failed to update account',
       code: 'INTERNAL_ERROR',
-      details: err instanceof Error ? err.message : String(err),
+      details: safeErrorDetails(err),
     });
   }
 }
@@ -199,7 +200,7 @@ export async function addConsumableHandler(
     await reply.status(500).send({
       error: 'Failed to add consumable',
       code: 'INTERNAL_ERROR',
-      details: err instanceof Error ? err.message : String(err),
+      details: safeErrorDetails(err),
     });
   }
 }
@@ -345,18 +346,17 @@ export async function deleteConsumableHandler(
 
   try {
     const pool = getPool(env.DATABASE_URL);
-
-    // Verify ownership for non-admin users
     const userId = getUserIdFilter(request);
-    if (userId) {
-      const accountId = await accountsRepo.getAccountIdByGoogleId(pool, google_id, userId);
-      if (!accountId) {
-        await reply.status(404).send({ error: 'Account not found', code: 'NOT_FOUND' });
-        return;
-      }
+
+    // Always resolve accountId — used both for ownership check and as WHERE clause in unlink
+    const accountId = await accountsRepo.getAccountIdByGoogleId(pool, google_id, userId);
+    if (!accountId) {
+      await reply.status(404).send({ error: 'Account not found', code: 'NOT_FOUND' });
+      return;
     }
 
-    const unlinked = await accountsRepo.unlinkConsumable(pool, id);
+    // Unlink only if the consumable row belongs to this account (prevents IDOR)
+    const unlinked = await accountsRepo.unlinkConsumable(pool, id, accountId);
 
     if (!unlinked) {
       await reply.status(404).send({ error: 'Consumable link not found', code: 'NOT_FOUND' });
@@ -369,7 +369,7 @@ export async function deleteConsumableHandler(
     await reply.status(500).send({
       error: 'Failed to unlink consumable',
       code: 'INTERNAL_ERROR',
-      details: err instanceof Error ? err.message : String(err),
+      details: safeErrorDetails(err),
     });
   }
 }

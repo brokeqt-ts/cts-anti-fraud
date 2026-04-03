@@ -1,6 +1,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { getPool } from '../config/database.js';
 import { env } from '../config/env.js';
+import { safeErrorDetails } from '../utils/error-response.js';
 import { generatePostMortem } from '../services/post-mortem.service.js';
 import * as analyticsRepo from '../repositories/analytics.repository.js';
 import * as accountsRepo from '../repositories/accounts.repository.js';
@@ -551,7 +552,7 @@ export async function postMortemAllHandler(
 
   let generated = 0;
   let failed = 0;
-  const errors: Array<{ ban_id: string; error: string }> = [];
+  const errors: Array<{ ban_id: string; error: string | null }> = [];
 
   for (const banId of banIds) {
     try {
@@ -561,7 +562,7 @@ export async function postMortemAllHandler(
       failed++;
       errors.push({
         ban_id: banId,
-        error: err instanceof Error ? err.message : String(err),
+        error: safeErrorDetails(err),
       });
     }
   }

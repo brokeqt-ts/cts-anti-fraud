@@ -1,6 +1,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { getPool } from '../config/database.js';
 import { env } from '../config/env.js';
+import { safeErrorDetails } from '../utils/error-response.js';
 import { AIAnalyzer } from '../services/ai/ai-analyzer.js';
 import * as aiRepo from '../repositories/ai-analysis.repository.js';
 import * as accountsRepo from '../repositories/accounts.repository.js';
@@ -69,10 +70,10 @@ export async function analyzeAccountHandler(
     });
   } catch (err: unknown) {
     request.log.error({ err, handler: 'analyzeAccountHandler', accountId }, 'AI analysis failed');
-    const message = err instanceof Error ? err.message : String(err);
-    const status = message.includes('не найден') ? 404 : 500;
+    const rawMsg = err instanceof Error ? err.message : String(err);
+    const status = rawMsg.includes('не найден') ? 404 : 500;
     await reply.status(status).send({
-      error: message,
+      error: safeErrorDetails(err) ?? 'AI analysis failed',
       code: status === 404 ? 'NOT_FOUND' : 'AI_ANALYSIS_ERROR',
     });
   }
@@ -122,10 +123,10 @@ export async function analyzeBanHandler(
     await reply.status(200).send(result);
   } catch (err: unknown) {
     request.log.error({ err, handler: 'analyzeBanHandler', banLogId }, 'Ban AI analysis failed');
-    const message = err instanceof Error ? err.message : String(err);
-    const status = message.includes('не найден') ? 404 : 500;
+    const rawMsg = err instanceof Error ? err.message : String(err);
+    const status = rawMsg.includes('не найден') ? 404 : 500;
     await reply.status(status).send({
-      error: message,
+      error: safeErrorDetails(err) ?? 'AI analysis failed',
       code: status === 404 ? 'NOT_FOUND' : 'AI_ANALYSIS_ERROR',
     });
   }
@@ -183,7 +184,7 @@ export async function compareAccountsHandler(
     await reply.status(200).send(result);
   } catch (err: unknown) {
     request.log.error({ err, handler: 'compareAccountsHandler' }, 'Comparison failed');
-    const message = err instanceof Error ? err.message : String(err);
+    const message = safeErrorDetails(err);
     await reply.status(500).send({
       error: message,
       code: 'AI_ANALYSIS_ERROR',
@@ -225,9 +226,9 @@ export async function compareModelsHandler(
     await reply.status(200).send(result);
   } catch (err: unknown) {
     request.log.error({ err, handler: 'compareModelsHandler', accountId }, 'Model comparison failed');
-    const message = err instanceof Error ? err.message : String(err);
-    const status = message.includes('не найден') ? 404 : 500;
-    await reply.status(status).send({ error: message, code: status === 404 ? 'NOT_FOUND' : 'COMPARISON_ERROR' });
+    const rawMsg = err instanceof Error ? err.message : String(err);
+    const status = rawMsg.includes('не найден') ? 404 : 500;
+    await reply.status(status).send({ error: safeErrorDetails(err) ?? 'Comparison failed', code: status === 404 ? 'NOT_FOUND' : 'COMPARISON_ERROR' });
   }
 }
 
@@ -347,7 +348,7 @@ export async function submitFeedbackHandler(
       updated_outcome: result.updated_outcome,
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = safeErrorDetails(err);
     if (message === 'Prediction not found') {
       await reply.status(404).send({ error: message, code: 'NOT_FOUND' });
       return;
@@ -519,7 +520,7 @@ export async function analyzeDomainHandler(
     await reply.status(200).send(result);
   } catch (err: unknown) {
     request.log.error({ err, handler: 'analyzeDomainHandler', domainId }, 'Domain audit failed');
-    const message = err instanceof Error ? err.message : String(err);
+    const message = safeErrorDetails(err);
     await reply.status(500).send({ error: message, code: 'AI_ANALYSIS_ERROR' });
   }
 }
@@ -659,7 +660,7 @@ export async function analyzeRotationHandler(
     await reply.status(200).send(result);
   } catch (err: unknown) {
     request.log.error({ err, handler: 'analyzeRotationHandler', banLogId }, 'Rotation strategy failed');
-    const message = err instanceof Error ? err.message : String(err);
+    const message = safeErrorDetails(err);
     await reply.status(500).send({ error: message, code: 'AI_ANALYSIS_ERROR' });
   }
 }
@@ -752,7 +753,7 @@ export async function analyzeAppealHandler(
     await reply.status(200).send(result);
   } catch (err: unknown) {
     request.log.error({ err, handler: 'analyzeAppealHandler', banLogId }, 'Appeal strategy failed');
-    const message = err instanceof Error ? err.message : String(err);
+    const message = safeErrorDetails(err);
     await reply.status(500).send({ error: message, code: 'AI_ANALYSIS_ERROR' });
   }
 }
@@ -913,7 +914,7 @@ export async function analyzeFarmHandler(
     await reply.status(200).send(result);
   } catch (err: unknown) {
     request.log.error({ err, handler: 'analyzeFarmHandler' }, 'Farm analysis failed');
-    const message = err instanceof Error ? err.message : String(err);
+    const message = safeErrorDetails(err);
     await reply.status(500).send({ error: message, code: 'AI_ANALYSIS_ERROR' });
   }
 }

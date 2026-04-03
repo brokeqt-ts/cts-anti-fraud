@@ -198,6 +198,15 @@ async function start() {
     process.exit(1);
   }
 
+  // Warn if legacy API_KEY is set in production — it grants admin access without audit trail
+  if (env.NODE_ENV === 'production' && env.API_KEY) {
+    console.warn(
+      '[SECURITY] Legacy API_KEY is set in production. ' +
+      'Any request using this key gets admin access with no audit log entry. ' +
+      'Migrate all clients to per-user API keys and remove API_KEY from env.',
+    );
+  }
+
   const app = await buildApp();
 
   try {

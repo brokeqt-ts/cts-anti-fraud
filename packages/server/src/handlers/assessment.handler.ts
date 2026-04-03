@@ -1,6 +1,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { getPool } from '../config/database.js';
 import { env } from '../config/env.js';
+import { safeErrorDetails } from '../utils/error-response.js';
 import { assess, type AssessmentRequest } from '../services/assessment.service.js';
 import * as accountsRepo from '../repositories/accounts.repository.js';
 import { getUserIdFilter } from '../utils/user-scope.js';
@@ -48,7 +49,7 @@ export async function assessHandler(
     await reply.status(500).send({
       error: 'Ошибка при оценке рисков',
       code: 'INTERNAL_ERROR',
-      details: err instanceof Error ? err.message : String(err),
+      details: safeErrorDetails(err),
     });
   }
 }

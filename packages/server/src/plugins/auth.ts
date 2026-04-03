@@ -59,7 +59,10 @@ export const authPlugin = fp(async function auth(fastify: FastifyInstance): Prom
       if (apiKey === env.API_KEY) {
         request.user = { id: 'legacy', role: 'admin', name: 'Legacy API Key' };
         request.apiKeyScope = 'full';
-        fastify.log.warn('Legacy API_KEY used — migrate to per-user keys');
+        fastify.log.warn(
+          { ip: request.ip, url: request.url, method: request.method },
+          '[SECURITY] Legacy API_KEY used — migrate to per-user keys',
+        );
         return;
       }
       await reply.status(401).send({
