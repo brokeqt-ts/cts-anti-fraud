@@ -488,20 +488,32 @@ function buildLifeEvents(
     }
   }
 
-  // Suspension / restoration signals
-  for (const s of signals) {
+  // Suspension / restoration signals — deduplicate consecutive same-kind events within 24h
+  const signalEvents: LifeEvent[] = signals.map((s) => {
     const isSusp = isSuspendedFromSignal(s.signal_value);
-    events.push({
+    return {
       id: `signal-${s.id}`,
       ts: new Date(s.captured_at),
       kind: isSusp ? 'suspended' : 'restored',
       title: isSusp ? 'Аккаунт приостановлен' : 'Сигнал восстановления',
-    });
+    } satisfies LifeEvent;
+  }).sort((a, b) => a.ts.getTime() - b.ts.getTime());
+
+  for (const ev of signalEvents) {
+    const last = events.filter(e => e.kind === ev.kind).at(-1);
+    const withinDay = last && ev.ts.getTime() - last.ts.getTime() < 24 * 60 * 60 * 1000;
+    if (!withinDay) events.push(ev);
   }
 
-  // All notifications — no limits
+  // All notifications — deduplicate same title within 24h
+  const seenNotifTitles = new Map<string, number>();
   for (const c of notifCards) {
     const kind: EventKind = c.category === 'CRITICAL' ? 'critical' : c.category === 'WARNING' ? 'warning' : 'info';
+    const ts = new Date(c.captured_at).getTime();
+    const key = `${kind}::${c.title}`;
+    const lastSeen = seenNotifTitles.get(key);
+    if (lastSeen !== undefined && Math.abs(ts - lastSeen) < 24 * 60 * 60 * 1000) continue;
+    seenNotifTitles.set(key, ts);
     events.push({
       id: `notif-${kind}-${c.id}`,
       ts: new Date(c.captured_at),
