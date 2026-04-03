@@ -316,9 +316,14 @@ async function getConfig(): Promise<ExtensionConfig> {
   const config: ExtensionConfig = stored
     ? { ...stored }
     : { ...DEFAULT_CONFIG };
-  // Always use build-time constants for serverUrl and apiKey
-  config.serverUrl = BUILD_CONFIG.SERVER_URL || config.serverUrl;
-  config.apiKey = BUILD_CONFIG.API_KEY || config.apiKey;
+  // Use build-time constants only if they were actually replaced (not placeholders)
+  const isPlaceholder = (v: string) => v.startsWith('__CTS_') && v.endsWith('_PLACEHOLDER__');
+  if (BUILD_CONFIG.SERVER_URL && !isPlaceholder(BUILD_CONFIG.SERVER_URL)) {
+    config.serverUrl = BUILD_CONFIG.SERVER_URL;
+  }
+  if (BUILD_CONFIG.API_KEY && !isPlaceholder(BUILD_CONFIG.API_KEY)) {
+    config.apiKey = BUILD_CONFIG.API_KEY;
+  }
   return config;
 }
 
