@@ -806,13 +806,16 @@ function ConnectedAccountsPanel({ banChain }: { banChain: BanChainData }) {
         {shown.map((conn) => {
           const lt = LINK_TYPE_META[conn.link_type] ?? { label: conn.link_type, color: 'var(--text-muted)' };
           return (
-            <div
+            <Link
               key={conn.connected_account}
-              className="flex items-center gap-2 py-1.5 px-2 rounded-lg"
+              to={`/accounts/${conn.connected_account}`}
+              className="flex items-center gap-2 py-1.5 px-2 rounded-lg transition-colors"
               style={{
                 background: conn.is_banned ? 'rgba(239,68,68,0.04)' : 'var(--bg-raised)',
                 border: `1px solid ${conn.is_banned ? 'rgba(239,68,68,0.15)' : 'var(--border-subtle)'}`,
               }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = conn.is_banned ? 'rgba(239,68,68,0.08)' : 'var(--bg-card-hover)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = conn.is_banned ? 'rgba(239,68,68,0.04)' : 'var(--bg-raised)'; }}
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
@@ -833,16 +836,8 @@ function ConnectedAccountsPanel({ banChain }: { banChain: BanChainData }) {
                   <span className="text-xs font-mono truncate" style={{ color: 'var(--text-muted)', fontSize: 10 }}>· {conn.link_value}</span>
                 </div>
               </div>
-              <Link
-                to={`/accounts/${conn.connected_account}`}
-                className="text-xs flex-shrink-0 transition-colors"
-                style={{ color: 'var(--text-muted)' }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}
-              >
-                →
-              </Link>
-            </div>
+              <span className="text-xs flex-shrink-0" style={{ color: 'var(--text-muted)' }}>→</span>
+            </Link>
           );
         })}
       </div>
