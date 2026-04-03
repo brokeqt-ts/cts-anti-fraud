@@ -183,10 +183,12 @@ export async function processRpcPayload(
   const accountGoogleId = extractCid(sourceUrl);
   const ctx: RpcContext = { pool, rawPayloadId, sourceUrl, accountGoogleId, profileId: profileId ?? null, body };
 
-  // Ensure account exists before any parser runs — resolves the CID the same way parsers do
-  const resolvedCid = resolveCid(ctx);
-  if (resolvedCid) {
-    await ensureAccountExists(pool, resolvedCid, userId);
+  // Ensure account exists before any parser runs.
+  // Only use CID from URL params (ocid/__c) — profileId fallback may be a non-CID
+  // Google internal ID (GAIA, conversion tracking ID, etc.) that passes digit validation
+  // but is not a real Google Ads customer ID.
+  if (ctx.accountGoogleId) {
+    await ensureAccountExists(pool, ctx.accountGoogleId, userId);
   }
 
   if (rpcPath.includes('SettingsSummaryService/GetSummary')) {
