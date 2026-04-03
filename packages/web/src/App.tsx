@@ -17,7 +17,6 @@ import { LoginPage } from './pages/login.js';
 import { NotificationsPage } from './pages/notifications.js';
 import { UsersPage } from './pages/users.js';
 import { AdminNotificationsPage } from './pages/admin-notifications.js';
-import { BuyerPerformancePage } from './pages/buyer-performance.js';
 import { BuyerDetailPage } from './pages/buyer-detail.js';
 import { useAuth } from './contexts/auth-context.js';
 import { Loader2 } from 'lucide-react';
@@ -106,14 +105,6 @@ export function App() {
           element={
             <RequireAdmin>
               <AdminNotificationsPage />
-            </RequireAdmin>
-          }
-        />
-        <Route
-          path="/admin/buyers"
-          element={
-            <RequireAdmin>
-              <BuyerPerformancePage />
             </RequireAdmin>
           }
         />

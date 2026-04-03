@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Users as UsersIcon,
   Plus,
@@ -14,6 +15,8 @@ import {
   Check,
   Download,
   XCircle,
+  TrendingUp,
+  TrendingDown,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -24,22 +27,33 @@ import {
   resetUserApiKey,
   changeUserPassword,
   downloadExtensionForUser,
+  fetchBuyerPerformance,
   type AdminUser,
   type CreateUserRequest,
   type UpdateUserRequest,
+  type BuyerPerformance,
+  timeAgo,
 } from '../api.js';
 import { useAuth } from '../contexts/auth-context.js';
-import { StaggerContainer, StaggerItem, BlurFade } from '../components/ui/animations.js';
+import { TableSkeleton } from '../components/skeleton.js';
+import { StaggerContainer, StaggerItem, BlurFade, AnimatedRow } from '../components/ui/animations.js';
 
 
 type ModalMode = 'create' | 'edit' | 'password' | null;
 
 export function UsersPage() {
   const { user: currentUser } = useAuth();
+  const navigate = useNavigate();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // Buyer performance stats
+  const [buyers, setBuyers] = useState<BuyerPerformance[]>([]);
+  const [buyersLoading, setBuyersLoading] = useState(true);
+  const [sortBy, setSortBy] = useState<keyof BuyerPerformance>('total_accounts');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   // Modal state
   const [modalMode, setModalMode] = useState<ModalMode>(null);
@@ -72,6 +86,32 @@ export function UsersPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    fetchBuyerPerformance()
+      .then((d) => setBuyers(d.buyers))
+      .catch(() => {})
+      .finally(() => setBuyersLoading(false));
+  }, []);
+
+  const handleSort = (col: keyof BuyerPerformance) => {
+    if (sortBy === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortBy(col); setSortDir('desc'); }
+  };
+
+  const sortedBuyers = [...buyers].sort((a, b) => {
+    const av = a[sortBy], bv = b[sortBy];
+    const an = typeof av === 'number' ? av : parseFloat(String(av) || '0');
+    const bn = typeof bv === 'number' ? bv : parseFloat(String(bv) || '0');
+    return sortDir === 'desc' ? bn - an : an - bn;
+  });
+
+  const totals = buyers.reduce((t, b) => ({
+    accounts: t.accounts + b.total_accounts,
+    bans: t.bans + b.total_bans,
+    spend: t.spend + parseFloat(b.total_spend || '0'),
+    active: t.active + b.active_accounts,
+  }), { accounts: 0, bans: 0, spend: 0, active: 0 });
 
   // Auto-clear success messages
   useEffect(() => {
@@ -472,6 +512,126 @@ export function UsersPage() {
               )}
             </tbody>
           </table>
+        </div>
+      </StaggerItem>
+
+      {/* Buyer Performance Stats */}
+      <StaggerItem>
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <h2 className="text-sm font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Статистика байеров</h2>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Аккаунты, баны и активность по каждому пользователю</p>
+          </div>
+        </div>
+
+        {/* Summary cards */}
+        {!buyersLoading && buyers.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+            <div className="card-static px-4 py-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Всего аккаунтов</div>
+              <div className="text-lg font-bold font-mono mt-1" style={{ color: 'var(--text-primary)' }}>{totals.accounts}</div>
+            </div>
+            <div className="card-static px-4 py-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Активных</div>
+              <div className="text-lg font-bold font-mono mt-1" style={{ color: '#4ade80' }}>{totals.active}</div>
+            </div>
+            <div className="card-static px-4 py-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Всего банов</div>
+              <div className="text-lg font-bold font-mono mt-1" style={{ color: '#f87171' }}>{totals.bans}</div>
+            </div>
+            <div className="card-static px-4 py-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Общий spend</div>
+              <div className="text-lg font-bold font-mono mt-1" style={{ color: '#60a5fa' }}>${totals.spend.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+            </div>
+          </div>
+        )}
+
+        <div className="card-static overflow-visible">
+          <div className="overflow-x-auto overflow-y-visible">
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                  {([
+                    { label: 'Байер', col: 'name', align: 'left' },
+                    { label: 'Аккаунты', col: 'total_accounts', align: 'center' },
+                    { label: 'Активные', col: 'active_accounts', align: 'center' },
+                    { label: 'Баны', col: 'total_bans', align: 'center' },
+                    { label: 'Ban rate', col: 'ban_rate', align: 'center' },
+                    { label: 'Avg Lifetime', col: 'avg_lifetime_hours', align: 'right' },
+                    { label: 'Spend', col: 'total_spend', align: 'right' },
+                  ] as Array<{ label: string; col: keyof BuyerPerformance; align: string }>).map(({ label, col, align }) => (
+                    <th
+                      key={col}
+                      className={`px-3 py-2 font-medium label-xs cursor-pointer select-none transition-colors text-${align}`}
+                      style={{ color: sortBy === col ? 'var(--text-primary)' : 'var(--text-muted)' }}
+                      onClick={() => handleSort(col)}
+                    >
+                      {label}{sortBy === col && <span className="ml-0.5">{sortDir === 'desc' ? '↓' : '↑'}</span>}
+                    </th>
+                  ))}
+                  <th className="px-3 py-2 text-right font-medium label-xs" style={{ color: 'var(--text-muted)' }}>Активность</th>
+                </tr>
+              </thead>
+              {buyersLoading ? (
+                <tbody><tr><td colSpan={8}><TableSkeleton rows={4} cols={7} /></td></tr></tbody>
+              ) : sortedBuyers.length === 0 ? (
+                <tbody><tr><td colSpan={8} className="py-10 text-center text-sm" style={{ color: 'var(--text-muted)' }}>Нет данных</td></tr></tbody>
+              ) : (
+                <tbody>
+                  {sortedBuyers.map((b) => {
+                    const banRate = parseFloat(b.ban_rate || '0');
+                    const lifetime = parseFloat(b.avg_lifetime_hours || '0');
+                    return (
+                      <AnimatedRow key={b.user_id} className="cursor-pointer" onClick={() => navigate(`/admin/buyers/${b.user_id}`)}>
+                        <td className="px-3 py-2.5">
+                          <div className="flex flex-col">
+                            <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{b.name}</span>
+                            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{b.email}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 text-center">
+                          <span className="font-mono text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{b.total_accounts}</span>
+                        </td>
+                        <td className="px-3 py-2.5 text-center">
+                          <span className="font-mono text-xs" style={{ color: '#4ade80' }}>{b.active_accounts}</span>
+                        </td>
+                        <td className="px-3 py-2.5 text-center">
+                          {b.total_bans > 0
+                            ? <span className="font-mono text-xs font-semibold" style={{ color: '#f87171' }}>{b.total_bans}</span>
+                            : <span className="text-xs" style={{ color: 'var(--text-muted)' }}>0</span>}
+                        </td>
+                        <td className="px-3 py-2.5 text-center">
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                            style={{
+                              background: banRate > 50 ? 'rgba(239,68,68,0.1)' : banRate > 20 ? 'rgba(245,158,11,0.1)' : 'rgba(34,197,94,0.1)',
+                              color: banRate > 50 ? '#ef4444' : banRate > 20 ? '#f59e0b' : '#22c55e',
+                            }}
+                          >
+                            {banRate > 50 ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
+                            {banRate}%
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <span className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
+                            {lifetime > 24 ? `${(lifetime / 24).toFixed(1)}д` : `${lifetime.toFixed(0)}ч`}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <span className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
+                            ${parseFloat(b.total_spend || '0').toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-xs" style={{ color: 'var(--text-muted)' }}>
+                          {timeAgo(b.last_activity)}
+                        </td>
+                      </AnimatedRow>
+                    );
+                  })}
+                </tbody>
+              )}
+            </table>
+          </div>
         </div>
       </StaggerItem>
 
