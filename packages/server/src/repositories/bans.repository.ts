@@ -82,11 +82,17 @@ export async function calculateLifetimeHours(
   accountGoogleId: string,
   banDate: string,
 ): Promise<number | null> {
+  // start_date from Google Ads is stored as "YYYYMMDDHHmmss" — use TO_TIMESTAMP for correct parsing.
+  // Fallback chain: earliest Google campaign start → earliest raw_payload capture.
   const result = await pool.query(
     `SELECT COALESCE(
-       (SELECT EXTRACT(EPOCH FROM ($2::timestamp - MIN(start_date::date))) / 3600
-        FROM campaigns WHERE account_google_id = $1 AND start_date IS NOT NULL),
-       (SELECT EXTRACT(EPOCH FROM ($2::timestamp - MIN(created_at))) / 3600
+       (SELECT EXTRACT(EPOCH FROM ($2::timestamptz - MIN(TO_TIMESTAMP(SUBSTRING(start_date, 1, 8), 'YYYYMMDD')))) / 3600
+        FROM campaigns
+        WHERE account_google_id = $1
+          AND start_date IS NOT NULL
+          AND LENGTH(start_date) >= 8
+          AND start_date ~ '^[0-9]{8}'),
+       (SELECT EXTRACT(EPOCH FROM ($2::timestamptz - MIN(created_at))) / 3600
         FROM raw_payloads WHERE profile_id = $1)
      ) AS lifetime_hours`,
     [accountGoogleId, banDate],

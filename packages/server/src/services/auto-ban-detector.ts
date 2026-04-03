@@ -106,12 +106,33 @@ async function handleSuspension(
     ),
   ]);
 
-  // Calculate lifetime_hours from first raw_payload to now
-  const lifetimeResult = await pool.query(
-    `SELECT EXTRACT(EPOCH FROM (NOW() - MIN(created_at))) / 3600 AS lifetime_hours
-     FROM raw_payloads
-     WHERE profile_id = $1`,
+  // Use the earliest timestamp we have evidence of suspension as ban time.
+  // Prefer the first account_signals.captured_at for account_suspended —
+  // this is when the extension first intercepted the suspension signal from Google Ads,
+  // not when our detection code ran (avoids catch-up scans inflating the date).
+  const banTimeResult = await pool.query(
+    `SELECT MIN(captured_at) AS first_suspended_at
+     FROM account_signals
+     WHERE account_google_id = $1 AND signal_name = 'account_suspended'`,
     [accountGoogleId],
+  );
+  const bannedAt: Date = banTimeResult.rows[0]?.['first_suspended_at'] ?? new Date();
+
+  // Calculate lifetime_hours: from earliest Google Ads campaign start_date to ban time.
+  // start_date is stored as "YYYYMMDDHHmmss" from CampaignService/List interception.
+  // Fallback: earliest raw_payload capture (first time extension saw this account).
+  const lifetimeResult = await pool.query(
+    `SELECT COALESCE(
+       (SELECT EXTRACT(EPOCH FROM ($2::timestamptz - MIN(TO_TIMESTAMP(SUBSTRING(start_date, 1, 8), 'YYYYMMDD')))) / 3600
+        FROM campaigns
+        WHERE account_google_id = $1
+          AND start_date IS NOT NULL
+          AND LENGTH(start_date) >= 8
+          AND start_date ~ '^[0-9]{8}'),
+       (SELECT EXTRACT(EPOCH FROM ($2::timestamptz - MIN(created_at))) / 3600
+        FROM raw_payloads WHERE profile_id = $1)
+     ) AS lifetime_hours`,
+    [accountGoogleId, bannedAt.toISOString()],
   );
   const lifetimeHours = lifetimeResult.rows[0]?.['lifetime_hours']
     ? Math.round(Number(lifetimeResult.rows[0]['lifetime_hours']))
@@ -131,9 +152,10 @@ async function handleSuspension(
        account_google_id, is_banned, banned_at, ban_reason,
        ban_target, lifetime_hours, snapshot,
        ban_reason_internal, source
-     ) VALUES ($1, true, NOW(), $2, 'account', $3, $4, $5, 'auto')`,
+     ) VALUES ($1, true, $2, $3, 'account', $4, $5, $6, 'auto')`,
     [
       accountGoogleId,
+      bannedAt.toISOString(),
       banReasonGoogle,
       lifetimeHours,
       JSON.stringify(snapshot),
