@@ -218,16 +218,12 @@ export class CollectService {
         await this.processAccountData(profileId, item, userId);
         break;
       case 'campaign':
-        await this.processCampaignData(profileId, item);
-        break;
       case 'performance':
-        await this.processPerformanceData(profileId, item);
+      case 'ad_review':
+        console.warn(`[Collect] Deprecated structured item type '${item.type}' received — skipping (use raw path)`);
         break;
       case 'billing':
         await this.processBillingData(profileId, item);
-        break;
-      case 'ad_review':
-        await this.processAdReviewData(profileId, item);
         break;
       case 'status_change':
         await this.processStatusChangeData(profileId, item, userId);
@@ -400,70 +396,6 @@ export class CollectService {
     );
   }
 
-  private async processCampaignData(_profileId: string, item: CollectPayloadItem): Promise<void> {
-    const data = item.data as Record<string, unknown>;
-    const googleAccountId = data['accountId'] as string | undefined;
-    const googleCampaignId = data['campaignId'] as string | undefined;
-
-    if (!googleAccountId || !googleCampaignId) return;
-
-    const accountResult = await this.pool.query(
-      `SELECT id FROM accounts WHERE google_account_id = $1`,
-      [googleAccountId],
-    );
-
-    if (accountResult.rows.length === 0) return;
-
-    const accountId = accountResult.rows[0]['id'] as string;
-
-    await this.pool.query(
-      `INSERT INTO campaigns (account_id, google_campaign_id, campaign_name, campaign_type, status, raw_payload)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT DO NOTHING`,
-      [
-        accountId,
-        googleCampaignId,
-        data['campaignName'] ?? null,
-        data['campaignType'] ?? 'search',
-        data['status'] ?? 'active',
-        JSON.stringify(item.data),
-      ],
-    );
-  }
-
-  private async processPerformanceData(
-    _profileId: string,
-    item: CollectPayloadItem,
-  ): Promise<void> {
-    const data = item.data as Record<string, unknown>;
-    const googleCampaignId = data['campaignId'] as string | undefined;
-
-    if (!googleCampaignId) return;
-
-    await this.pool.query(
-      `UPDATE campaigns SET
-        impressions = COALESCE($1, impressions),
-        clicks = COALESCE($2, clicks),
-        ctr = COALESCE($3, ctr),
-        cpc = COALESCE($4, cpc),
-        conversions = COALESCE($5, conversions),
-        cost = COALESCE($6, cost),
-        raw_payload = $7,
-        updated_at = NOW()
-       WHERE google_campaign_id = $8`,
-      [
-        data['impressions'] ?? null,
-        data['clicks'] ?? null,
-        data['ctr'] ?? null,
-        data['cpc'] ?? null,
-        data['conversions'] ?? null,
-        data['cost'] ?? null,
-        JSON.stringify(item.data),
-        googleCampaignId,
-      ],
-    );
-  }
-
   private async processBillingData(_profileId: string, item: CollectPayloadItem): Promise<void> {
     const data = item.data as Record<string, unknown>;
     const googleAccountId = data['accountId'] as string | undefined;
@@ -485,22 +417,6 @@ export class CollectService {
         JSON.stringify(item.data),
         googleAccountId,
       ],
-    );
-  }
-
-  private async processAdReviewData(_profileId: string, item: CollectPayloadItem): Promise<void> {
-    const data = item.data as Record<string, unknown>;
-    const googleCampaignId = data['campaignId'] as string | undefined;
-
-    if (!googleCampaignId) return;
-
-    await this.pool.query(
-      `UPDATE campaigns SET
-        status = COALESCE($1, status),
-        raw_payload = $2,
-        updated_at = NOW()
-       WHERE google_campaign_id = $3`,
-      [data['reviewStatus'] ?? null, JSON.stringify(item.data), googleCampaignId],
     );
   }
 
