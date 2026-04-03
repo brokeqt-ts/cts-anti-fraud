@@ -76,7 +76,9 @@ export interface DomainDetailResult {
  * List all unique domains extracted from ads.final_urls,
  * enriched with data from the domains table if available.
  */
-export async function listDomains(pool: pg.Pool): Promise<DomainListResult> {
+export async function listDomains(pool: pg.Pool, userId?: string): Promise<DomainListResult> {
+  const params: unknown[] = [];
+  const accountFilter = userId ? (params.push(userId), `AND acc.user_id = $${params.length}`) : '';
   const result = await pool.query(`
     WITH extracted AS (
       SELECT DISTINCT
@@ -85,12 +87,13 @@ export async function listDomains(pool: pg.Pool): Promise<DomainListResult> {
           '/.*$', ''
         ) AS domain,
         a.account_google_id
-      FROM ads a,
+      FROM ads a
+      JOIN accounts acc ON acc.google_account_id = a.account_google_id,
       LATERAL (
         SELECT jsonb_array_elements_text(a.final_urls) AS url
         WHERE a.final_urls IS NOT NULL AND jsonb_typeof(a.final_urls) = 'array'
       ) urls
-      WHERE a.final_urls IS NOT NULL
+      WHERE a.final_urls IS NOT NULL ${accountFilter}
     ),
     domain_accounts AS (
       SELECT
@@ -151,7 +154,7 @@ export async function listDomains(pool: pg.Pool): Promise<DomainListResult> {
     LEFT JOIN domain_bans db ON db.domain_clean = da.domain
     LEFT JOIN domains d ON d.domain_name = da.domain
     ORDER BY COALESCE(db.ban_count, 0) DESC, da.account_count DESC
-  `);
+  `, params);
 
   return {
     total: result.rowCount ?? 0,
@@ -180,13 +183,16 @@ export async function getDomainByName(
 export async function getAccountsByDomain(
   pool: pg.Pool,
   domain: string,
+  userId?: string,
 ): Promise<DomainAccountRow[]> {
+  const params: unknown[] = [`%${domain}%`];
+  const userFilter = userId ? (params.push(userId), `AND a2.user_id = $${params.length}`) : '';
   const result = await pool.query(
     `SELECT DISTINCT a2.google_account_id, a2.display_name, a2.status
      FROM ads a
      JOIN accounts a2 ON a2.google_account_id = a.account_google_id
-     WHERE a.final_urls::text ILIKE $1`,
-    [`%${domain}%`],
+     WHERE a.final_urls::text ILIKE $1 ${userFilter}`,
+    params,
   );
   return result.rows.map(r => ({
     google_account_id: r['google_account_id'] as string,
@@ -201,13 +207,18 @@ export async function getAccountsByDomain(
 export async function getBansByDomain(
   pool: pg.Pool,
   domain: string,
+  userId?: string,
 ): Promise<DomainBanRow[]> {
+  const params: unknown[] = [`%${domain}%`];
+  const userFilter = userId
+    ? (params.push(userId), `AND account_google_id IN (SELECT google_account_id FROM accounts WHERE user_id = $${params.length})`)
+    : '';
   const result = await pool.query(
     `SELECT id, account_google_id, banned_at, ban_reason, ban_target, offer_vertical
      FROM ban_logs
-     WHERE domain ILIKE $1
+     WHERE domain ILIKE $1 ${userFilter}
      ORDER BY banned_at DESC`,
-    [`%${domain}%`],
+    params,
   );
   return result.rows.map(r => ({
     id: r['id'] as string,

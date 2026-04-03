@@ -3,6 +3,7 @@ import { getPool } from '../config/database.js';
 import { env } from '../config/env.js';
 import * as domainsRepo from '../repositories/domains.repository.js';
 import { analyzeAndSave, analyzeAllDomains, analyzeContent } from '../services/domain-content-analyzer.js';
+import { getUserIdFilter } from '../utils/user-scope.js';
 
 /**
  * GET /domains — list all unique domains from ads.final_urls,
@@ -13,9 +14,10 @@ export async function listDomainsHandler(
   reply: FastifyReply,
 ): Promise<void> {
   const pool = getPool(env.DATABASE_URL);
+  const userId = getUserIdFilter(_request);
 
   try {
-    const result = await domainsRepo.listDomains(pool);
+    const result = await domainsRepo.listDomains(pool, userId);
 
     await reply.status(200).send(result);
   } catch (err: unknown) {
@@ -37,12 +39,13 @@ export async function getDomainHandler(
 ): Promise<void> {
   const pool = getPool(env.DATABASE_URL);
   const { domain } = request.params as { domain: string };
+  const userId = getUserIdFilter(request);
 
   try {
     const [domainData, accounts, bans, contentAnalysis] = await Promise.all([
       domainsRepo.getDomainByName(pool, domain),
-      domainsRepo.getAccountsByDomain(pool, domain),
-      domainsRepo.getBansByDomain(pool, domain),
+      domainsRepo.getAccountsByDomain(pool, domain, userId),
+      domainsRepo.getBansByDomain(pool, domain, userId),
       pool.query(
         `SELECT dca.* FROM domain_content_analysis dca
          JOIN domains d ON d.id = dca.domain_id

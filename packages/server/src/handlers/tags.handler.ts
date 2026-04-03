@@ -3,6 +3,7 @@ import { getPool } from '../config/database.js';
 import { env } from '../config/env.js';
 import * as tagsRepo from '../repositories/tags.repository.js';
 import { audit } from '../services/audit.service.js';
+import { getUserIdFilter } from '../utils/user-scope.js';
 
 export async function listTagsHandler(
   _request: FastifyRequest,
@@ -80,10 +81,11 @@ export async function assignTagHandler(
   reply: FastifyReply,
 ): Promise<void> {
   const params = request.params as Record<string, string>;
+  const userId = getUserIdFilter(request);
   const pool = getPool(env.DATABASE_URL);
   const accRes = await pool.query(
-    `SELECT id FROM accounts WHERE google_account_id = $1`,
-    [params['google_id']],
+    `SELECT id FROM accounts WHERE google_account_id = $1 AND ($2::uuid IS NULL OR user_id = $2)`,
+    [params['google_id'], userId ?? null],
   );
   if (accRes.rows.length === 0) {
     await reply.status(404).send({ error: 'Account not found', code: 'NOT_FOUND' });
@@ -99,10 +101,11 @@ export async function unassignTagHandler(
   reply: FastifyReply,
 ): Promise<void> {
   const params = request.params as Record<string, string>;
+  const userId = getUserIdFilter(request);
   const pool = getPool(env.DATABASE_URL);
   const accRes = await pool.query(
-    `SELECT id FROM accounts WHERE google_account_id = $1`,
-    [params['google_id']],
+    `SELECT id FROM accounts WHERE google_account_id = $1 AND ($2::uuid IS NULL OR user_id = $2)`,
+    [params['google_id'], userId ?? null],
   );
   if (accRes.rows.length === 0) {
     await reply.status(404).send({ error: 'Account not found', code: 'NOT_FOUND' });
@@ -124,7 +127,24 @@ export async function bulkAssignTagHandler(
     await reply.status(400).send({ error: 'google_account_ids and tag_id required', code: 'VALIDATION_ERROR' });
     return;
   }
+  const userId = getUserIdFilter(request);
   const pool = getPool(env.DATABASE_URL);
-  const assigned = await tagsRepo.bulkAssignTag(pool, google_account_ids, tag_id);
+
+  // For buyers: filter account IDs to only those they own
+  let allowedIds = google_account_ids;
+  if (userId !== undefined) {
+    const owned = await pool.query(
+      `SELECT google_account_id FROM accounts WHERE google_account_id = ANY($1) AND user_id = $2`,
+      [google_account_ids, userId],
+    );
+    allowedIds = owned.rows.map(r => r['google_account_id'] as string);
+  }
+
+  if (allowedIds.length === 0) {
+    await reply.send({ assigned: 0 });
+    return;
+  }
+
+  const assigned = await tagsRepo.bulkAssignTag(pool, allowedIds, tag_id);
   await reply.send({ assigned });
 }

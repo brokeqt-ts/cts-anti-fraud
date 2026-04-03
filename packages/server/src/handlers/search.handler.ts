@@ -1,6 +1,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { getPool } from '../config/database.js';
 import { env } from '../config/env.js';
+import { getUserIdFilter } from '../utils/user-scope.js';
 
 interface SearchResult {
   type: 'account' | 'domain' | 'ban' | 'practice' | 'notification';
@@ -33,6 +34,7 @@ export async function searchHandler(
   }
 
   const pool = getPool(env.DATABASE_URL);
+  const userId = getUserIdFilter(request);
   const results: SearchResult[] = [];
   const operator = parseOperator(q);
 
@@ -52,14 +54,29 @@ export async function searchHandler(
         : '';
       const domTextAnd = tp ? `AND domain_name ILIKE $2` : '';
 
-      const accParams = (base: string[]) => tp ? [...base, tp] : base;
-      const banParams = (base: string[]) => tp ? [...base, tp] : base;
+      const accParams = (base: string[]) => {
+        const p = tp ? [...base, tp] : base;
+        return userId !== undefined ? [...p, userId] : p;
+      };
+      const banParams = (base: string[]) => {
+        const p = tp ? [...base, tp] : base;
+        return userId !== undefined ? [...p, userId] : p;
+      };
       const domParams = (base: string[]) => tp ? [...base, tp] : base;
+
+      // User-scope filters for operator queries
+      const userIdx = tp ? 3 : 2;
+      const accUserFilter = userId !== undefined
+        ? `AND ($${userIdx}::uuid IS NULL OR user_id = $${userIdx})`
+        : '';
+      const banUserFilter = userId !== undefined
+        ? `AND ($${userIdx}::uuid IS NULL OR account_google_id IN (SELECT google_account_id FROM accounts WHERE user_id = $${userIdx}))`
+        : '';
 
       if (operator.field === 'status') {
         const accs = await pool.query(
           `SELECT google_account_id, display_name, status::text, offer_vertical, account_type
-           FROM accounts WHERE status::text ILIKE $1 ${accTextAnd} ORDER BY updated_at DESC LIMIT 15`,
+           FROM accounts WHERE status::text ILIKE $1 ${accTextAnd} ${accUserFilter} ORDER BY updated_at DESC LIMIT 15`,
           accParams([pattern]),
         );
         for (const r of accs.rows as Array<Record<string, string | null>>) {
@@ -74,7 +91,7 @@ export async function searchHandler(
         // Accounts by vertical
         const accs = await pool.query(
           `SELECT google_account_id, display_name, status::text, offer_vertical
-           FROM accounts WHERE offer_vertical ILIKE $1 ${accTextAnd} ORDER BY updated_at DESC LIMIT 10`,
+           FROM accounts WHERE offer_vertical ILIKE $1 ${accTextAnd} ${accUserFilter} ORDER BY updated_at DESC LIMIT 10`,
           accParams([pattern]),
         );
         for (const r of accs.rows as Array<Record<string, string | null>>) {
@@ -88,7 +105,7 @@ export async function searchHandler(
         // Bans by vertical
         const bans = await pool.query(
           `SELECT id, account_google_id, ban_reason, offer_vertical, domain, banned_at
-           FROM ban_logs WHERE offer_vertical ILIKE $1 ${banTextAnd} ORDER BY banned_at DESC LIMIT 10`,
+           FROM ban_logs WHERE offer_vertical ILIKE $1 ${banTextAnd} ${banUserFilter} ORDER BY banned_at DESC LIMIT 10`,
           banParams([pattern]),
         );
         for (const r of bans.rows as Array<Record<string, string | null>>) {
@@ -102,7 +119,7 @@ export async function searchHandler(
       } else if (operator.field === 'bin') {
         const accs = await pool.query(
           `SELECT google_account_id, display_name, status::text, payment_bin, payment_bank
-           FROM accounts WHERE payment_bin ILIKE $1 ${accTextAnd} ORDER BY updated_at DESC LIMIT 10`,
+           FROM accounts WHERE payment_bin ILIKE $1 ${accTextAnd} ${accUserFilter} ORDER BY updated_at DESC LIMIT 10`,
           accParams([pattern]),
         );
         for (const r of accs.rows as Array<Record<string, string | null>>) {
@@ -127,7 +144,7 @@ export async function searchHandler(
         // Bans with this domain
         const bans = await pool.query(
           `SELECT id, account_google_id, ban_reason, offer_vertical, domain, banned_at
-           FROM ban_logs WHERE domain ILIKE $1 ${banTextAnd} ORDER BY banned_at DESC LIMIT 5`,
+           FROM ban_logs WHERE domain ILIKE $1 ${banTextAnd} ${banUserFilter} ORDER BY banned_at DESC LIMIT 5`,
           banParams([pattern]),
         );
         for (const r of bans.rows as Array<Record<string, string | null>>) {
@@ -141,7 +158,7 @@ export async function searchHandler(
       } else if (operator.field === 'type') {
         const accs = await pool.query(
           `SELECT google_account_id, display_name, status::text, account_type
-           FROM accounts WHERE account_type ILIKE $1 ${accTextAnd} ORDER BY updated_at DESC LIMIT 15`,
+           FROM accounts WHERE account_type ILIKE $1 ${accTextAnd} ${accUserFilter} ORDER BY updated_at DESC LIMIT 15`,
           accParams([pattern]),
         );
         for (const r of accs.rows as Array<Record<string, string | null>>) {
@@ -155,7 +172,7 @@ export async function searchHandler(
       } else if (operator.field === 'reason') {
         const bans = await pool.query(
           `SELECT id, account_google_id, ban_reason, offer_vertical, domain, banned_at
-           FROM ban_logs WHERE (ban_reason ILIKE $1 OR ban_reason_internal ILIKE $1) ${banTextAnd}
+           FROM ban_logs WHERE (ban_reason ILIKE $1 OR ban_reason_internal ILIKE $1) ${banTextAnd} ${banUserFilter}
            ORDER BY banned_at DESC LIMIT 10`,
           banParams([pattern]),
         );
@@ -170,7 +187,7 @@ export async function searchHandler(
       } else if (operator.field === 'country') {
         const accs = await pool.query(
           `SELECT google_account_id, display_name, status::text, country
-           FROM accounts WHERE country ILIKE $1 ${accTextAnd} ORDER BY updated_at DESC LIMIT 15`,
+           FROM accounts WHERE country ILIKE $1 ${accTextAnd} ${accUserFilter} ORDER BY updated_at DESC LIMIT 15`,
           accParams([pattern]),
         );
         for (const r of accs.rows as Array<Record<string, string | null>>) {
@@ -182,14 +199,19 @@ export async function searchHandler(
           });
         }
       } else if (operator.field === 'tag') {
+        const tagUserFilter = userId !== undefined
+          ? `AND ($${userIdx}::uuid IS NULL OR a.user_id = $${userIdx})`
+          : '';
         const accs = await pool.query(
           `SELECT a.google_account_id, a.display_name, a.status::text, t.name AS tag_name
            FROM accounts a
            JOIN account_tags at ON at.account_id = a.id
            JOIN tags t ON t.id = at.tag_id
-           WHERE t.name ILIKE $1 ${tp ? `AND (a.google_account_id ILIKE $2 OR a.display_name ILIKE $2)` : ''}
+           WHERE t.name ILIKE $1
+             ${tp ? `AND (a.google_account_id ILIKE $2 OR a.display_name ILIKE $2)` : ''}
+             ${tagUserFilter}
            ORDER BY a.updated_at DESC LIMIT 15`,
-          tp ? [pattern, tp] : [pattern],
+          [...(tp ? [pattern, tp] : [pattern]), ...(userId !== undefined ? [userId] : [])],
         );
         for (const r of accs.rows as Array<Record<string, string | null>>) {
           results.push({
@@ -209,17 +231,18 @@ export async function searchHandler(
         `SELECT google_account_id, display_name, status::text,
                 account_type, offer_vertical, payment_bin, payment_bank
          FROM accounts
-         WHERE google_account_id ILIKE $1
+         WHERE (google_account_id ILIKE $1
             OR display_name ILIKE $1
             OR status::text ILIKE $1
             OR offer_vertical ILIKE $1
             OR account_type ILIKE $1
             OR country ILIKE $1
             OR payment_bin ILIKE $1
-            OR payment_bank ILIKE $1
+            OR payment_bank ILIKE $1)
+           AND ($2::uuid IS NULL OR user_id = $2)
          ORDER BY updated_at DESC NULLS LAST
          LIMIT 8`,
-        [pattern],
+        [pattern, userId ?? null],
       );
       for (const row of accounts.rows as Array<Record<string, string | null>>) {
         results.push({
@@ -247,14 +270,15 @@ export async function searchHandler(
       const bans = await pool.query(
         `SELECT id, account_google_id, ban_reason, offer_vertical, domain, campaign_type, banned_at
          FROM ban_logs
-         WHERE account_google_id ILIKE $1
+         WHERE (account_google_id ILIKE $1
             OR ban_reason ILIKE $1
             OR ban_reason_internal ILIKE $1
             OR offer_vertical ILIKE $1
             OR domain ILIKE $1
-            OR campaign_type ILIKE $1
+            OR campaign_type ILIKE $1)
+           AND ($2::uuid IS NULL OR account_google_id IN (SELECT google_account_id FROM accounts WHERE user_id = $2))
          ORDER BY banned_at DESC LIMIT 5`,
-        [pattern],
+        [pattern, userId ?? null],
       );
       for (const row of bans.rows as Array<Record<string, string | null>>) {
         results.push({
@@ -284,9 +308,10 @@ export async function searchHandler(
       // 5. Notifications
       const notifications = await pool.query(
         `SELECT id, title, message, type, severity FROM notifications
-         WHERE title ILIKE $1 OR message ILIKE $1
+         WHERE (title ILIKE $1 OR message ILIKE $1)
+           AND ($2::uuid IS NULL OR user_id = $2)
          ORDER BY created_at DESC LIMIT 5`,
-        [pattern],
+        [pattern, userId ?? null],
       );
       for (const row of notifications.rows as Array<Record<string, string | null>>) {
         results.push({
