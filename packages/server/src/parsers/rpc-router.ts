@@ -339,7 +339,43 @@ export async function processRpcPayload(
     return true;
   }
 
-  // Known endpoints with no useful data — skip silently
+  // AggregateNotificationService — may contain aggregated ban/policy warnings
+  if (rpcPath.includes('AggregateNotificationService/List')) {
+    await parseNotifications(ctx);
+    return true;
+  }
+
+  // ConversionTypeService — conversion tracking setup
+  if (rpcPath.includes('ConversionTypeService/List')) {
+    await parseChangeHistory(ctx);
+    return true;
+  }
+
+  // EU compliance verification eligibility
+  if (rpcPath.includes('EuParSelfDeclarationEligibilityService')) {
+    await parseChangeHistory(ctx);
+    return true;
+  }
+
+  // User access list — which accounts the user can access
+  if (rpcPath.includes('UserCustomerAccessService/List')) {
+    await parseCustomerList(ctx);
+    return true;
+  }
+
+  // Suggestion/recommendation signals from Google
+  if (rpcPath.includes('SuggestionService/Get')) {
+    await parseChangeHistory(ctx);
+    return true;
+  }
+
+  // Gaia (Google account) info
+  if (rpcPath.includes('GaiaInfoService/Get') || rpcPath.includes('UserByGaiaService/Get')) {
+    await parseMultiLoginUser(ctx);
+    return true;
+  }
+
+  // Known endpoints with no useful anti-fraud data — skip silently
   if (
     rpcPath.includes('BotGuardCreationService/Get') ||
     rpcPath.includes('CustomerUserAppDataService/Mutate') ||
@@ -351,7 +387,15 @@ export async function processRpcPayload(
     rpcPath.includes('ClipboardService') ||
     rpcPath.includes('UserGuidedFlowExecutionInfoService') ||
     rpcPath.includes('AwnCatalogService') ||
-    rpcPath.includes('ManagerBillingSetupService/List')
+    rpcPath.includes('ManagerBillingSetupService/List') ||
+    // Base64-encoded internal service (Nikhil Agarwal) — no useful data
+    rpcPath.includes('TmlraGlsIEFnYXJ3YWw/Get') ||
+    // Onboarding — profile name, coupons, session data (low anti-fraud value)
+    rpcPath.includes('OnboardingService/GetGaiaProfileUserName') ||
+    rpcPath.includes('CodelessIncentiveService/GetIncentiveGroup') ||
+    rpcPath.includes('RedeemedCouponService/List') ||
+    rpcPath.includes('ConstructionSessionDataService/Mutate') ||
+    rpcPath.includes('CustomerAppDataService/Mutate')
   ) {
     return true;
   }
