@@ -46,9 +46,12 @@ export function BanDetailPage() {
   const snapSignals = (snap?.signals_at_ban ?? []) as Array<Record<string, unknown>>;
 
   // Lifetime visualization
-  const createdAt = ban.created_at ? new Date(ban.created_at) : null;
   const bannedAt = ban.banned_at ? new Date(ban.banned_at) : null;
   const lifetimeHours = ban.lifetime_hours;
+  // Account start date = ban date minus lifetime hours (mirrors calculateLifetimeHours logic)
+  const createdAt = bannedAt && lifetimeHours != null
+    ? new Date(bannedAt.getTime() - lifetimeHours * 3600 * 1000)
+    : null;
 
   return (
     <StaggerContainer className="py-5 px-6 space-y-1.5" staggerDelay={0.06}>
