@@ -100,6 +100,40 @@ export async function backfillParsersHandler(
   });
 }
 
+export async function clearAllDataHandler(
+  _request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const pool = getPool(env.DATABASE_URL);
+  const tables = [
+    'ai_feedback',
+    'ai_model_predictions',
+    'risk_verdicts',
+    'creative_snapshots',
+    'keyword_daily_stats',
+    'keywords',
+    'ads',
+    'ad_groups',
+    'campaigns',
+    'billing_info',
+    'notification_details',
+    'account_metrics',
+    'transaction_details',
+    'change_history',
+    'ban_logs',
+    'account_consumables',
+    'accounts',
+    'notifications',
+    'domains',
+    'proxies',
+    'antidetect_profiles',
+    'payment_methods',
+    'cts_sites',
+  ];
+  await pool.query(`TRUNCATE ${tables.join(', ')} CASCADE`);
+  await reply.status(200).send({ cleared: tables });
+}
+
 export async function resetParsedDataHandler(
   _request: FastifyRequest,
   reply: FastifyReply,

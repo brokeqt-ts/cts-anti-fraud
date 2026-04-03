@@ -4,6 +4,7 @@ import {
   rpcPayloadsHandler,
   backfillParsersHandler,
   resetParsedDataHandler,
+  clearAllDataHandler,
   mergeAccountHandler,
   parsedDataHandler,
   detectBansHandler,
@@ -161,6 +162,23 @@ export async function adminRoutes(fastify: FastifyInstance): Promise<void> {
       preHandler: [fastify.authenticate, fastify.requireRole('admin')],
     },
     backfillParsersHandler,
+  );
+
+  fastify.post(
+    '/admin/clear-all-data',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['confirm'],
+          properties: {
+            confirm: { type: 'boolean', enum: [true] },
+          },
+        },
+      },
+      preHandler: [fastify.authenticate, fastify.requireRole('admin')],
+    },
+    clearAllDataHandler,
   );
 
   fastify.post(
