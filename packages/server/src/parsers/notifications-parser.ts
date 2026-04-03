@@ -55,17 +55,22 @@ export async function parseNotifications(ctx: RpcContext): Promise<void> {
 
 /**
  * Blacklist of Google Ads UI notification types that are irrelevant for anti-fraud.
- * These are feature flags, promotional banners, and UI chrome — not policy signals.
+ * These are feature flags, promotional banners, announcements, and UI chrome — not policy signals.
  */
 const NOTIFICATION_TYPE_BLACKLIST = new Set([
+  // Announcements — Google Ads global news, TOS updates, product launches (not account-level events)
+  'ANNOUNCEMENT',
+  'ANNOUNCEMENT_ADWORDS_EXPRESS',
+  // UI chrome / feature toggles
   'L2_MENU_EXPAND_COLLAPSE',
   'HALO_SCOPING_FEATURE',
-  'PARENT_CHILD_REPORT_PROMO',
   'AWN_DS_FORECASTING_INGREDIENTS',
   'CREATIVE_BRIEF_AIMAX',
   'CREATIVE_BRIEF',
   'DATA_MANAGER_LAUNCH_IN_SA360',
   'DM_IN_SA360_CONVERSIONS',
+  // Promos
+  'PARENT_CHILD_REPORT_PROMO',
   'ASSET_SUGGESTIONS_PROMO',
   'CONVERSION_TRACKING_PROMO',
   'SMART_CAMPAIGN_PROMO',
@@ -90,6 +95,9 @@ function isBlacklisted(notificationType: string | null, label: string | null, ti
   if (notificationType && NOTIFICATION_TYPE_BLACKLIST.has(notificationType)) return true;
   if (label && NOTIFICATION_TYPE_BLACKLIST.has(label)) return true;
   if (title && NOTIFICATION_TYPE_BLACKLIST.has(title)) return true;
+  // Filter SUGGESTIONS_* labels (keyword deduping, optimization hints — not policy events)
+  if (label && /^SUGGESTIONS_/i.test(label)) return true;
+  if (notificationType && /^SUGGESTIONS_/i.test(notificationType)) return true;
   // Also filter generic promo patterns and known UI noise substrings
   const text = `${notificationType ?? ''} ${label ?? ''} ${title ?? ''}`;
   if (/_PROMO$/i.test(text)) return true;
@@ -215,8 +223,8 @@ async function parseNotificationDetails(
            category, notification_type, label, priority,
            raw_notification, raw_payload_id
          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-         ON CONFLICT (notification_id, raw_payload_id)
-         WHERE notification_id IS NOT NULL AND raw_payload_id IS NOT NULL
+         ON CONFLICT (notification_id, account_google_id)
+         WHERE notification_id IS NOT NULL AND account_google_id IS NOT NULL
          DO UPDATE SET
            title = EXCLUDED.title,
            description = EXCLUDED.description,
@@ -225,6 +233,7 @@ async function parseNotificationDetails(
            label = EXCLUDED.label,
            priority = EXCLUDED.priority,
            raw_notification = EXCLUDED.raw_notification,
+           raw_payload_id = EXCLUDED.raw_payload_id,
            updated_at = NOW()`,
         [
           accountGoogleId,
