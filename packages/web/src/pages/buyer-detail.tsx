@@ -59,8 +59,8 @@ export function BuyerDetailPage() {
   return (
     <div className="py-5 px-6 space-y-3">
       <BlurFade>
-        <Link to="/admin/buyers" className="inline-flex items-center gap-1.5 text-xs transition-colors mb-3" style={{ color: 'var(--text-muted)' }}>
-          <ArrowLeft className="w-3 h-3" /> Buyer Performance
+        <Link to="/users" className="inline-flex items-center gap-1.5 text-xs transition-colors mb-3" style={{ color: 'var(--text-muted)' }}>
+          <ArrowLeft className="w-3 h-3" /> Пользователи
         </Link>
 
         {/* Header */}

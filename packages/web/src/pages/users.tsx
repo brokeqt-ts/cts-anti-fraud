@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type FormEvent } from 'react';
+import { useState, useEffect, useCallback, useMemo, type FormEvent, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users as UsersIcon,
@@ -15,8 +15,8 @@ import {
   Check,
   Download,
   XCircle,
-  TrendingUp,
-  TrendingDown,
+  ChevronRight,
+  ExternalLink,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -35,8 +35,7 @@ import {
   timeAgo,
 } from '../api.js';
 import { useAuth } from '../contexts/auth-context.js';
-import { TableSkeleton } from '../components/skeleton.js';
-import { StaggerContainer, StaggerItem, BlurFade, AnimatedRow } from '../components/ui/animations.js';
+import { StaggerContainer, StaggerItem, BlurFade } from '../components/ui/animations.js';
 
 
 type ModalMode = 'create' | 'edit' | 'password' | null;
@@ -52,8 +51,9 @@ export function UsersPage() {
   // Buyer performance stats
   const [buyers, setBuyers] = useState<BuyerPerformance[]>([]);
   const [buyersLoading, setBuyersLoading] = useState(true);
-  const [sortBy, setSortBy] = useState<keyof BuyerPerformance>('total_accounts');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  // Expand state
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
   // Modal state
   const [modalMode, setModalMode] = useState<ModalMode>(null);
@@ -94,24 +94,10 @@ export function UsersPage() {
       .finally(() => setBuyersLoading(false));
   }, []);
 
-  const handleSort = (col: keyof BuyerPerformance) => {
-    if (sortBy === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortBy(col); setSortDir('desc'); }
-  };
-
-  const sortedBuyers = [...buyers].sort((a, b) => {
-    const av = a[sortBy], bv = b[sortBy];
-    const an = typeof av === 'number' ? av : parseFloat(String(av) || '0');
-    const bn = typeof bv === 'number' ? bv : parseFloat(String(bv) || '0');
-    return sortDir === 'desc' ? bn - an : an - bn;
-  });
-
-  const totals = buyers.reduce((t, b) => ({
-    accounts: t.accounts + b.total_accounts,
-    bans: t.bans + b.total_bans,
-    spend: t.spend + parseFloat(b.total_spend || '0'),
-    active: t.active + b.active_accounts,
-  }), { accounts: 0, bans: 0, spend: 0, active: 0 });
+  const buyersMap = useMemo(
+    () => Object.fromEntries(buyers.map((b) => [b.user_id, b])),
+    [buyers],
+  );
 
   // Auto-clear success messages
   useEffect(() => {
@@ -322,6 +308,7 @@ export function UsersPage() {
           <table className="w-full text-sm" style={{ color: 'var(--text-secondary)' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <th className="w-8 px-3 py-2.5"></th>
                 <th className="text-left px-4 py-2.5 label-xs font-medium">Имя</th>
                 <th className="text-left px-4 py-2.5 label-xs font-medium">Email</th>
                 <th className="text-left px-4 py-2.5 label-xs font-medium">Роль</th>
@@ -332,306 +319,283 @@ export function UsersPage() {
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
-                <tr
-                  key={u.id}
-                  className="transition-colors"
-                  style={{ borderBottom: '1px solid var(--border-subtle)' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <td className="px-4 py-2.5">
-                    <span style={{ color: 'var(--text-primary)' }} className="font-medium">{u.name}</span>
-                    {isSelf(u) && (
-                      <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,197,94,0.1)', color: '#4ade80' }}>
-                        вы
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 font-mono text-xs">{u.email}</td>
-                  <td className="px-4 py-2.5">
-                    <span
-                      className="text-xs px-2 py-0.5 rounded-full"
-                      style={{
-                        background: u.role === 'admin' ? 'rgba(251,191,36,0.12)' : 'rgba(96,165,250,0.12)',
-                        color: u.role === 'admin' ? '#fbbf24' : '#60a5fa',
-                      }}
+              {users.map((u) => {
+                const isExpanded = expandedUserId === u.id;
+                const b = buyersMap[u.id];
+                return (
+                  <Fragment key={u.id}>
+                    <tr
+                      className="transition-colors cursor-pointer"
+                      style={{ borderBottom: isExpanded ? 'none' : '1px solid var(--border-subtle)' }}
+                      onClick={() => setExpandedUserId(isExpanded ? null : u.id)}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = isExpanded ? 'var(--bg-hover)' : 'transparent')}
                     >
-                      {u.role}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-xs font-mono">{u.api_key_scope}</td>
-                  <td className="px-4 py-2.5">
-                    <span
-                      className="text-xs px-2 py-0.5 rounded-full"
-                      style={{
-                        background: u.is_active ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
-                        color: u.is_active ? '#4ade80' : '#f87171',
-                      }}
-                    >
-                      {u.is_active ? 'активен' : 'отключён'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    {revealedKeys[u.id] ? (
-                      <div className="flex items-center gap-1.5">
-                        <code className="text-xs font-mono break-all" style={{ color: '#4ade80', maxWidth: 180 }}>
-                          {revealedKeys[u.id]}
-                        </code>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(revealedKeys[u.id]).then(() => {
-                              setCopiedKey(u.id);
-                              setTimeout(() => setCopiedKey(null), 2000);
-                            });
-                          }}
-                          title="Скопировать"
-                          className="p-0.5 rounded transition-colors"
-                          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      <td className="px-3 py-2.5 text-center">
+                        <motion.div
+                          animate={{ rotate: isExpanded ? 90 : 0 }}
+                          transition={{ duration: 0.15 }}
+                          style={{ display: 'inline-flex' }}
                         >
-                          {copiedKey === u.id
-                            ? <Check className="w-3.5 h-3.5" style={{ color: '#4ade80' }} />
-                            : <Copy className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />}
-                        </button>
-                        <button onClick={() => toggleKeyReveal(u.id)} title="Скрыть">
-                          <EyeOff className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-xs font-mono" style={{ color: 'var(--text-ghost)' }}>••••••••</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => openEdit(u)}
-                        className="p-1.5 rounded-lg transition-colors"
-                        style={{ color: 'var(--text-muted)' }}
-                        title="Редактировать"
-                        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                      >
-                        <UsersIcon className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => openPassword(u)}
-                        className="p-1.5 rounded-lg transition-colors"
-                        style={{ color: 'var(--text-muted)' }}
-                        title="Сменить пароль"
-                        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                      >
-                        <Lock className="w-3.5 h-3.5" />
-                      </button>
-                      <motion.button
-                        onClick={() => handleDownloadExt(u)}
-                        disabled={(extStates[u.id] ?? 'idle') === 'loading' || !u.is_active}
-                        className="p-1.5 rounded-lg transition-colors relative"
-                        title="Скачать расширение"
-                        animate={{
-                          color:
-                            (extStates[u.id] ?? 'idle') === 'success'
-                              ? '#4ade80'
-                              : (extStates[u.id] ?? 'idle') === 'error'
-                                ? '#f87171'
-                                : undefined,
-                          background:
-                            (extStates[u.id] ?? 'idle') === 'success'
-                              ? 'rgba(34,197,94,0.1)'
-                              : (extStates[u.id] ?? 'idle') === 'error'
-                                ? 'rgba(239,68,68,0.1)'
-                                : 'transparent',
-                        }}
-                        transition={{ duration: 0.3 }}
-                        style={{ color: 'var(--text-muted)' }}
-                        onMouseEnter={(e) => {
-                          const st = extStates[u.id] ?? 'idle';
-                          if (st === 'idle') e.currentTarget.style.background = 'var(--bg-hover)';
-                        }}
-                        onMouseLeave={(e) => {
-                          const st = extStates[u.id] ?? 'idle';
-                          if (st === 'idle') e.currentTarget.style.background = 'transparent';
-                        }}
-                      >
-                        {(extStates[u.id] ?? 'idle') === 'loading' && (
-                          <motion.div
-                            className="absolute inset-0 rounded-lg"
-                            style={{ border: '1.5px solid rgba(34,197,94,0.5)' }}
-                            animate={{ opacity: [0.3, 1, 0.3] }}
-                            transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-                          />
+                          <ChevronRight className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
+                        </motion.div>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span style={{ color: 'var(--text-primary)' }} className="font-medium">{u.name}</span>
+                        {isSelf(u) && (
+                          <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,197,94,0.1)', color: '#4ade80' }}>
+                            вы
+                          </span>
                         )}
-                        <AnimatePresence mode="wait">
-                          <motion.span
-                            key={extStates[u.id] ?? 'idle'}
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.8 }}
-                            transition={{ duration: 0.15 }}
-                          >
-                            {(extStates[u.id] ?? 'idle') === 'loading' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                            {(extStates[u.id] ?? 'idle') === 'success' && <CheckCircle className="w-3.5 h-3.5" />}
-                            {(extStates[u.id] ?? 'idle') === 'error' && <XCircle className="w-3.5 h-3.5" />}
-                            {(extStates[u.id] ?? 'idle') === 'idle' && <Download className="w-3.5 h-3.5" />}
-                          </motion.span>
-                        </AnimatePresence>
-                      </motion.button>
-                      <button
-                        onClick={() => handleResetKey(u)}
-                        className="p-1.5 rounded-lg transition-colors"
-                        style={{ color: 'var(--text-muted)' }}
-                        title="Сбросить API ключ"
-                        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                      >
-                        <KeyRound className="w-3.5 h-3.5" />
-                      </button>
-                      {!isSelf(u) && (
-                        <button
-                          onClick={() => handleDelete(u)}
-                          className="p-1.5 rounded-lg transition-colors"
-                          style={{ color: 'var(--text-muted)' }}
-                          title="Деактивировать"
-                          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(239,68,68,0.1)')}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-xs">{u.email}</td>
+                      <td className="px-4 py-2.5">
+                        <span
+                          className="text-xs px-2 py-0.5 rounded-full"
+                          style={{
+                            background: u.role === 'admin' ? 'rgba(251,191,36,0.12)' : 'rgba(96,165,250,0.12)',
+                            color: u.role === 'admin' ? '#fbbf24' : '#60a5fa',
+                          }}
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                          {u.role}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-xs font-mono">{u.api_key_scope}</td>
+                      <td className="px-4 py-2.5">
+                        <span
+                          className="text-xs px-2 py-0.5 rounded-full"
+                          style={{
+                            background: u.is_active ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
+                            color: u.is_active ? '#4ade80' : '#f87171',
+                          }}
+                        >
+                          {u.is_active ? 'активен' : 'отключён'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {revealedKeys[u.id] ? (
+                          <div className="flex items-center gap-1.5">
+                            <code className="text-xs font-mono break-all" style={{ color: '#4ade80', maxWidth: 180 }}>
+                              {revealedKeys[u.id]}
+                            </code>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard.writeText(revealedKeys[u.id]).then(() => {
+                                  setCopiedKey(u.id);
+                                  setTimeout(() => setCopiedKey(null), 2000);
+                                });
+                              }}
+                              title="Скопировать"
+                              className="p-0.5 rounded transition-colors"
+                              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                            >
+                              {copiedKey === u.id
+                                ? <Check className="w-3.5 h-3.5" style={{ color: '#4ade80' }} />
+                                : <Copy className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />}
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); toggleKeyReveal(u.id); }}
+                              title="Скрыть"
+                            >
+                              <EyeOff className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs font-mono" style={{ color: 'var(--text-ghost)' }}>••••••••</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => openEdit(u)}
+                            className="p-1.5 rounded-lg transition-colors"
+                            style={{ color: 'var(--text-muted)' }}
+                            title="Редактировать"
+                            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                          >
+                            <UsersIcon className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => openPassword(u)}
+                            className="p-1.5 rounded-lg transition-colors"
+                            style={{ color: 'var(--text-muted)' }}
+                            title="Сменить пароль"
+                            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                          >
+                            <Lock className="w-3.5 h-3.5" />
+                          </button>
+                          <motion.button
+                            onClick={() => handleDownloadExt(u)}
+                            disabled={(extStates[u.id] ?? 'idle') === 'loading' || !u.is_active}
+                            className="p-1.5 rounded-lg transition-colors relative"
+                            title="Скачать расширение"
+                            animate={{
+                              color:
+                                (extStates[u.id] ?? 'idle') === 'success'
+                                  ? '#4ade80'
+                                  : (extStates[u.id] ?? 'idle') === 'error'
+                                    ? '#f87171'
+                                    : undefined,
+                              background:
+                                (extStates[u.id] ?? 'idle') === 'success'
+                                  ? 'rgba(34,197,94,0.1)'
+                                  : (extStates[u.id] ?? 'idle') === 'error'
+                                    ? 'rgba(239,68,68,0.1)'
+                                    : 'transparent',
+                            }}
+                            transition={{ duration: 0.3 }}
+                            style={{ color: 'var(--text-muted)' }}
+                            onMouseEnter={(e) => {
+                              const st = extStates[u.id] ?? 'idle';
+                              if (st === 'idle') e.currentTarget.style.background = 'var(--bg-hover)';
+                            }}
+                            onMouseLeave={(e) => {
+                              const st = extStates[u.id] ?? 'idle';
+                              if (st === 'idle') e.currentTarget.style.background = 'transparent';
+                            }}
+                          >
+                            {(extStates[u.id] ?? 'idle') === 'loading' && (
+                              <motion.div
+                                className="absolute inset-0 rounded-lg"
+                                style={{ border: '1.5px solid rgba(34,197,94,0.5)' }}
+                                animate={{ opacity: [0.3, 1, 0.3] }}
+                                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                              />
+                            )}
+                            <AnimatePresence mode="wait">
+                              <motion.span
+                                key={extStates[u.id] ?? 'idle'}
+                                initial={{ opacity: 0, scale: 0.8 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.8 }}
+                                transition={{ duration: 0.15 }}
+                              >
+                                {(extStates[u.id] ?? 'idle') === 'loading' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                {(extStates[u.id] ?? 'idle') === 'success' && <CheckCircle className="w-3.5 h-3.5" />}
+                                {(extStates[u.id] ?? 'idle') === 'error' && <XCircle className="w-3.5 h-3.5" />}
+                                {(extStates[u.id] ?? 'idle') === 'idle' && <Download className="w-3.5 h-3.5" />}
+                              </motion.span>
+                            </AnimatePresence>
+                          </motion.button>
+                          <button
+                            onClick={() => handleResetKey(u)}
+                            className="p-1.5 rounded-lg transition-colors"
+                            style={{ color: 'var(--text-muted)' }}
+                            title="Сбросить API ключ"
+                            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                          >
+                            <KeyRound className="w-3.5 h-3.5" />
+                          </button>
+                          {!isSelf(u) && (
+                            <button
+                              onClick={() => handleDelete(u)}
+                              className="p-1.5 rounded-lg transition-colors"
+                              style={{ color: 'var(--text-muted)' }}
+                              title="Деактивировать"
+                              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(239,68,68,0.1)')}
+                              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.tr
+                          key={`${u.id}-expanded`}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.15 }}
+                          style={{ borderBottom: '1px solid var(--border-subtle)' }}
+                        >
+                          <td colSpan={8} style={{ padding: 0 }}>
+                            <motion.div
+                              initial={{ height: 0 }}
+                              animate={{ height: 'auto' }}
+                              exit={{ height: 0 }}
+                              transition={{ duration: 0.2, ease: 'easeInOut' }}
+                              style={{ overflow: 'hidden' }}
+                            >
+                              <div
+                                className="px-6 py-4"
+                                style={{ background: 'var(--bg-hover)', borderTop: '1px solid var(--border-subtle)' }}
+                              >
+                                {buyersLoading ? (
+                                  <div className="flex items-center gap-2">
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: 'var(--text-muted)' }} />
+                                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Загрузка статистики...</span>
+                                  </div>
+                                ) : !b ? (
+                                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Нет данных по байеру</span>
+                                ) : (
+                                  <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+                                    <ExpandStat label="Аккаунты" value={String(b.total_accounts)} />
+                                    <ExpandStat label="Активные" value={String(b.active_accounts)} color="#4ade80" />
+                                    <ExpandStat label="Забанено" value={String(b.suspended_accounts)} color="#f87171" />
+                                    <ExpandStat label="Баны" value={String(b.total_bans)} color={b.total_bans > 0 ? '#f87171' : undefined} />
+                                    <ExpandStat
+                                      label="Ban rate"
+                                      value={`${parseFloat(b.ban_rate || '0').toFixed(1)}%`}
+                                      color={parseFloat(b.ban_rate || '0') > 50 ? '#ef4444' : parseFloat(b.ban_rate || '0') > 20 ? '#f59e0b' : '#22c55e'}
+                                    />
+                                    <ExpandStat
+                                      label="Avg Lifetime"
+                                      value={(() => { const h = parseFloat(b.avg_lifetime_hours || '0'); return h > 24 ? `${(h / 24).toFixed(1)}д` : `${h.toFixed(0)}ч`; })()}
+                                    />
+                                    <ExpandStat
+                                      label="Spend"
+                                      value={`$${parseFloat(b.total_spend || '0').toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                                      color="#60a5fa"
+                                    />
+                                    <div className="ml-auto flex items-center gap-4">
+                                      {b.last_activity && (
+                                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                          Активность: {timeAgo(b.last_activity)}
+                                        </span>
+                                      )}
+                                      <button
+                                        onClick={() => navigate(`/admin/buyers/${u.id}`)}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                                        style={{
+                                          background: 'rgba(99,102,241,0.1)',
+                                          color: '#818cf8',
+                                          border: '1px solid rgba(99,102,241,0.2)',
+                                        }}
+                                        onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(99,102,241,0.2)')}
+                                        onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(99,102,241,0.1)')}
+                                      >
+                                        <ExternalLink className="w-3.5 h-3.5" />
+                                        Открыть подробнее
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </motion.div>
+                          </td>
+                        </motion.tr>
                       )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </AnimatePresence>
+                  </Fragment>
+                );
+              })}
               {users.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
+                  <td colSpan={8} className="px-4 py-8 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
                     Нет пользователей
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
-        </div>
-      </StaggerItem>
-
-      {/* Buyer Performance Stats */}
-      <StaggerItem>
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <h2 className="text-sm font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Статистика байеров</h2>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Аккаунты, баны и активность по каждому пользователю</p>
-          </div>
-        </div>
-
-        {/* Summary cards */}
-        {!buyersLoading && buyers.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-            <div className="card-static px-4 py-3">
-              <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Всего аккаунтов</div>
-              <div className="text-lg font-bold font-mono mt-1" style={{ color: 'var(--text-primary)' }}>{totals.accounts}</div>
-            </div>
-            <div className="card-static px-4 py-3">
-              <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Активных</div>
-              <div className="text-lg font-bold font-mono mt-1" style={{ color: '#4ade80' }}>{totals.active}</div>
-            </div>
-            <div className="card-static px-4 py-3">
-              <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Всего банов</div>
-              <div className="text-lg font-bold font-mono mt-1" style={{ color: '#f87171' }}>{totals.bans}</div>
-            </div>
-            <div className="card-static px-4 py-3">
-              <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Общий spend</div>
-              <div className="text-lg font-bold font-mono mt-1" style={{ color: '#60a5fa' }}>${totals.spend.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
-            </div>
-          </div>
-        )}
-
-        <div className="card-static overflow-visible">
-          <div className="overflow-x-auto overflow-y-visible">
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                  {([
-                    { label: 'Байер', col: 'name', align: 'left' },
-                    { label: 'Аккаунты', col: 'total_accounts', align: 'center' },
-                    { label: 'Активные', col: 'active_accounts', align: 'center' },
-                    { label: 'Баны', col: 'total_bans', align: 'center' },
-                    { label: 'Ban rate', col: 'ban_rate', align: 'center' },
-                    { label: 'Avg Lifetime', col: 'avg_lifetime_hours', align: 'right' },
-                    { label: 'Spend', col: 'total_spend', align: 'right' },
-                  ] as Array<{ label: string; col: keyof BuyerPerformance; align: string }>).map(({ label, col, align }) => (
-                    <th
-                      key={col}
-                      className={`px-3 py-2 font-medium label-xs cursor-pointer select-none transition-colors text-${align}`}
-                      style={{ color: sortBy === col ? 'var(--text-primary)' : 'var(--text-muted)' }}
-                      onClick={() => handleSort(col)}
-                    >
-                      {label}{sortBy === col && <span className="ml-0.5">{sortDir === 'desc' ? '↓' : '↑'}</span>}
-                    </th>
-                  ))}
-                  <th className="px-3 py-2 text-right font-medium label-xs" style={{ color: 'var(--text-muted)' }}>Активность</th>
-                </tr>
-              </thead>
-              {buyersLoading ? (
-                <tbody><tr><td colSpan={8}><TableSkeleton rows={4} cols={7} /></td></tr></tbody>
-              ) : sortedBuyers.length === 0 ? (
-                <tbody><tr><td colSpan={8} className="py-10 text-center text-sm" style={{ color: 'var(--text-muted)' }}>Нет данных</td></tr></tbody>
-              ) : (
-                <tbody>
-                  {sortedBuyers.map((b) => {
-                    const banRate = parseFloat(b.ban_rate || '0');
-                    const lifetime = parseFloat(b.avg_lifetime_hours || '0');
-                    return (
-                      <AnimatedRow key={b.user_id} className="cursor-pointer" onClick={() => navigate(`/admin/buyers/${b.user_id}`)}>
-                        <td className="px-3 py-2.5">
-                          <div className="flex flex-col">
-                            <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{b.name}</span>
-                            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{b.email}</span>
-                          </div>
-                        </td>
-                        <td className="px-3 py-2.5 text-center">
-                          <span className="font-mono text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{b.total_accounts}</span>
-                        </td>
-                        <td className="px-3 py-2.5 text-center">
-                          <span className="font-mono text-xs" style={{ color: '#4ade80' }}>{b.active_accounts}</span>
-                        </td>
-                        <td className="px-3 py-2.5 text-center">
-                          {b.total_bans > 0
-                            ? <span className="font-mono text-xs font-semibold" style={{ color: '#f87171' }}>{b.total_bans}</span>
-                            : <span className="text-xs" style={{ color: 'var(--text-muted)' }}>0</span>}
-                        </td>
-                        <td className="px-3 py-2.5 text-center">
-                          <span
-                            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
-                            style={{
-                              background: banRate > 50 ? 'rgba(239,68,68,0.1)' : banRate > 20 ? 'rgba(245,158,11,0.1)' : 'rgba(34,197,94,0.1)',
-                              color: banRate > 50 ? '#ef4444' : banRate > 20 ? '#f59e0b' : '#22c55e',
-                            }}
-                          >
-                            {banRate > 50 ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
-                            {banRate}%
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5 text-right">
-                          <span className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
-                            {lifetime > 24 ? `${(lifetime / 24).toFixed(1)}д` : `${lifetime.toFixed(0)}ч`}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5 text-right">
-                          <span className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
-                            ${parseFloat(b.total_spend || '0').toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-xs" style={{ color: 'var(--text-muted)' }}>
-                          {timeAgo(b.last_activity)}
-                        </td>
-                      </AnimatedRow>
-                    );
-                  })}
-                </tbody>
-              )}
-            </table>
-          </div>
         </div>
       </StaggerItem>
 
@@ -835,5 +799,14 @@ export function UsersPage() {
         </div>
       )}
     </StaggerContainer>
+  );
+}
+
+function ExpandStat({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{label}</div>
+      <div className="text-sm font-bold font-mono mt-0.5" style={{ color: color ?? 'var(--text-primary)' }}>{value}</div>
+    </div>
   );
 }
