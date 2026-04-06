@@ -1,5 +1,6 @@
 import type { RpcContext } from './rpc-router.js';
 import { dig, resolveCid } from './rpc-router.js';
+import { autoNameAccount } from '../services/auto-name.service.js';
 
 /**
  * SettingsSummaryService/GetSummary
@@ -116,5 +117,6 @@ export async function parseTransactionsDetails(ctx: RpcContext): Promise<void> {
          updated_at = NOW()`,
       [cid, currency],
     );
+    autoNameAccount(pool, cid).catch(() => {});
   }
 }

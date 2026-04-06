@@ -1,5 +1,6 @@
 import type { RpcContext } from './rpc-router.js';
 import { dig, resolveCid } from './rpc-router.js';
+import { autoNameAccount } from '../services/auto-name.service.js';
 
 /**
  * CustomerService/List + CtCustomerService/List
@@ -73,6 +74,16 @@ export async function parseCustomerList(ctx: RpcContext): Promise<void> {
       updated++;
     } catch (err) {
       console.error(`[customer-parser] Failed to update account ${cid}:`, err instanceof Error ? err.message : err);
+    }
+  }
+
+  // Auto-name accounts that got new currency data
+  for (const customer of customerList) {
+    if (!customer || typeof customer !== 'object') continue;
+    const customerId = dig(customer, '1') as string | undefined;
+    const cid = resolveCid(ctx, { bodyCustomerId: customerId });
+    if (cid) {
+      autoNameAccount(pool, cid).catch(() => {});
     }
   }
 
