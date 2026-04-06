@@ -36,8 +36,8 @@ COPY package.json package-lock.json ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/server/package.json packages/server/
 
-# Install production dependencies only
-RUN npm ci --omit=dev
+# Install production dependencies only + curl for healthcheck
+RUN apk add --no-cache curl && npm ci --omit=dev
 
 # Copy built artifacts
 COPY --from=builder /app/packages/shared/dist/ packages/shared/dist/
@@ -51,5 +51,8 @@ ENV NODE_ENV=production
 ENV PORT=3000
 
 EXPOSE 3000
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:3000/api/v1/health || exit 1
 
 CMD ["node", "packages/server/dist/index.js"]
