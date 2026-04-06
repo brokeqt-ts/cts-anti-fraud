@@ -132,7 +132,6 @@ export async function processRpcPayload(
   rawData: Record<string, unknown>,
   profileId?: string | null,
   userId?: string,
-  profileName?: string | null,
 ): Promise<boolean> {
   // batchexecute from payment domains — may contain payment method data in request body
   if (sourceUrl.includes('batchexecute') && (sourceUrl.includes('payments.google.com') || sourceUrl.includes('pay.google.com'))) {
@@ -189,7 +188,7 @@ export async function processRpcPayload(
   // Google internal ID (GAIA, conversion tracking ID, etc.) that passes digit validation
   // but is not a real Google Ads customer ID.
   if (ctx.accountGoogleId) {
-    await ensureAccountExists(pool, ctx.accountGoogleId, userId, profileName);
+    await ensureAccountExists(pool, ctx.accountGoogleId, userId);
   }
 
   if (rpcPath.includes('SettingsSummaryService/GetSummary')) {

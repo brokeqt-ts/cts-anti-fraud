@@ -362,7 +362,7 @@ export class CollectService {
     const rawPayloadId = result.rows[0]?.['id'] as string | undefined;
     if (rawPayloadId && sourceUrl) {
       try {
-        await processRpcPayload(this.pool, rawPayloadId, sourceUrl, item.data as Record<string, unknown>, effectiveProfileId, userId, profileId);
+        await processRpcPayload(this.pool, rawPayloadId, sourceUrl, item.data as Record<string, unknown>, effectiveProfileId, userId);
       } catch (err) {
         console.warn('[RPC Parser] Failed to parse:', err);
       }
