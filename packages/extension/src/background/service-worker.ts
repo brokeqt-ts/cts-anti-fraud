@@ -201,6 +201,96 @@ async function detectProfileFromWindow(tabId: number): Promise<DetectedProfile |
   }
 }
 
+// ─── Antidetect browser detection via local HTTP API ────────────��───────────
+//
+// Many antidetect browsers expose a local HTTP API that returns profile info.
+// Service worker has no CORS restrictions, so we can probe these endpoints.
+
+interface LocalApiProbe {
+  browser: string;
+  url: string;
+  extract: (data: unknown) => string | null;
+}
+
+const LOCAL_API_PROBES: LocalApiProbe[] = [
+  {
+    browser: 'dolphin',
+    url: 'http://localhost:3001/v1.0/browser_profiles/active',
+    extract: (data) => {
+      const d = data as Record<string, unknown> | null;
+      if (!d) return null;
+      // Dolphin returns { data: { name: "ProfileName", ... } } or { name: "..." }
+      const inner = (d['data'] ?? d) as Record<string, unknown>;
+      return (inner['name'] as string) ?? null;
+    },
+  },
+  {
+    browser: 'adspower',
+    url: 'http://local.adspower.net:50325/api/v1/browser/active',
+    extract: (data) => {
+      const d = data as Record<string, unknown> | null;
+      if (!d) return null;
+      const inner = d['data'] as Record<string, unknown> | undefined;
+      return (inner?.['name'] as string) ?? (inner?.['serial_number'] as string) ?? null;
+    },
+  },
+  {
+    browser: 'multilogin',
+    url: 'http://127.0.0.1:35000/api/v1/profile/active',
+    extract: (data) => {
+      const d = data as Record<string, unknown> | null;
+      if (!d) return null;
+      return (d['name'] as string) ?? (d['uuid'] as string) ?? null;
+    },
+  },
+  {
+    browser: 'gologin',
+    url: 'http://localhost:36912/api/v1/profile/active',
+    extract: (data) => {
+      const d = data as Record<string, unknown> | null;
+      if (!d) return null;
+      return (d['name'] as string) ?? null;
+    },
+  },
+];
+
+/**
+ * Probe local antidetect browser APIs to detect the active profile.
+ * Tries all known endpoints in parallel with a short timeout.
+ */
+async function detectProfileFromLocalApi(): Promise<DetectedProfile | null> {
+  console.log('[CTS sw] Probing local antidetect APIs...');
+
+  const results = await Promise.allSettled(
+    LOCAL_API_PROBES.map(async (probe) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      try {
+        const response = await fetch(probe.url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (!response.ok) return null;
+        const json = await response.json();
+        const name = probe.extract(json);
+        if (name) {
+          console.log(`[CTS sw] Local API match: ${probe.browser} → "${name}"`);
+          return { browser: probe.browser, profileName: name } as DetectedProfile;
+        }
+        return null;
+      } catch {
+        clearTimeout(timeoutId);
+        return null;
+      }
+    }),
+  );
+
+  for (const r of results) {
+    if (r.status === 'fulfilled' && r.value) return r.value;
+  }
+
+  console.log('[CTS sw] No local antidetect API responded');
+  return null;
+}
+
 // ─── Proxy IP detection ─────────────────────────────────────────────────────
 //
 // Not in original spec — auto-detects the outbound proxy IP used by the
@@ -402,10 +492,14 @@ async function handleMessage(message: RuntimeMessage, tabId?: number): Promise<u
 
       const { url, method, status: httpStatus, body, timestamp, googleCid, requestBody } = message.payload;
 
-      // ── Detect antidetect browser from window tabs (once per SW lifetime) ──
+      // ── Detect antidetect browser (once per SW lifetime) ──
+      // Priority: 1) tab titles  2) local HTTP API  3) manual entry
       if (!profileDetected && tabId) {
-        console.log('[CTS sw] First intercept — attempting profile detection from window tabs');
-        const detected = await detectProfileFromWindow(tabId);
+        console.log('[CTS sw] First intercept — attempting profile detection');
+        let detected = await detectProfileFromWindow(tabId);
+        if (!detected) {
+          detected = await detectProfileFromLocalApi();
+        }
         if (detected) {
           status.profileName = detected.profileName;
           status.antidetectBrowser = detected.browser;
