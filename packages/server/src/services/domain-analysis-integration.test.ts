@@ -18,6 +18,7 @@ process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0';
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
+const IS_CI = Boolean(process.env['CI']);
 const HAS_SAFE_BROWSING = Boolean(process.env['GOOGLE_SAFE_BROWSING_KEY']);
 const HAS_VIRUSTOTAL = Boolean(process.env['VIRUSTOTAL_API_KEY']);
 const HAS_ABUSEIPDB = Boolean(process.env['ABUSEIPDB_API_KEY']);
@@ -52,7 +53,7 @@ beforeAll(async () => {
 
 // ─── No-key APIs (always run) ────────────────────────────────────────────────
 
-describe('crt.sh (real)', () => {
+describe.skipIf(IS_CI)('crt.sh (real)', () => {
   it('finds certificates for google.com', async () => {
     const result = await checkCrtSh('google.com');
     expect(result.checked).toBe(true);
@@ -67,7 +68,7 @@ describe('crt.sh (real)', () => {
   }, 15_000);
 });
 
-describe('Shodan InternetDB (real)', () => {
+describe.skipIf(IS_CI)('Shodan InternetDB (real)', () => {
   it('returns ports for Google DNS IP', async () => {
     const result = await checkShodan('8.8.8.8');
     expect(result.checked).toBe(true);
@@ -82,7 +83,7 @@ describe('Shodan InternetDB (real)', () => {
   }, 10_000);
 });
 
-describe('DNS Analysis (real)', () => {
+describe.skipIf(IS_CI)('DNS Analysis (real)', () => {
   it('finds SPF and MX for google.com', async () => {
     const result = await analyzeDns('google.com');
     expect(result.checked).toBe(true);
@@ -114,7 +115,7 @@ describe('DNS Analysis (real)', () => {
   }, 10_000);
 });
 
-describe('Blocklists (real)', () => {
+describe.skipIf(IS_CI)('Blocklists (real)', () => {
   it('example.com is not blocklisted', async () => {
     const result = await checkBlocklists('example.com', '93.184.216.34');
     expect(result.checked).toBe(true);
@@ -128,7 +129,7 @@ describe('Blocklists (real)', () => {
   }, 10_000);
 });
 
-describe('CommonCrawl (real)', () => {
+describe.skipIf(IS_CI)('CommonCrawl (real)', () => {
   it('finds google.com in index', async () => {
     const result = await checkCommonCrawl('google.com');
     expect(result.checked).toBe(true);
@@ -143,7 +144,7 @@ describe('CommonCrawl (real)', () => {
   }, 10_000);
 });
 
-describe('URLhaus (real)', () => {
+describe.skipIf(IS_CI)('URLhaus (real)', () => {
   it('google.com is not malware', async () => {
     const result = await checkUrlhaus('https://google.com');
     expect(result.checked).toBe(true);
@@ -153,7 +154,7 @@ describe('URLhaus (real)', () => {
 
 // ─── API-key dependent tests ─────────────────────────────────────────────────
 
-describe('Google Safe Browsing (real)', () => {
+describe.skipIf(IS_CI)('Google Safe Browsing (real)', () => {
   const describeOrSkip = HAS_SAFE_BROWSING ? describe : describe.skip;
 
   describeOrSkip('with API key', () => {
@@ -166,7 +167,7 @@ describe('Google Safe Browsing (real)', () => {
   });
 });
 
-describe('VirusTotal (real)', () => {
+describe.skipIf(IS_CI)('VirusTotal (real)', () => {
   const describeOrSkip = HAS_VIRUSTOTAL ? describe : describe.skip;
 
   describeOrSkip('with API key', () => {
@@ -192,7 +193,7 @@ describe('VirusTotal (real)', () => {
   });
 });
 
-describe('AbuseIPDB (real)', () => {
+describe.skipIf(IS_CI)('AbuseIPDB (real)', () => {
   const describeOrSkip = HAS_ABUSEIPDB ? describe : describe.skip;
 
   describeOrSkip('with API key', () => {
@@ -213,7 +214,7 @@ describe('AbuseIPDB (real)', () => {
   });
 });
 
-describe('SerpAPI (real)', () => {
+describe.skipIf(IS_CI)('SerpAPI (real)', () => {
   const describeOrSkip = HAS_SERPAPI ? describe : describe.skip;
 
   describeOrSkip('with API key', () => {
@@ -235,7 +236,7 @@ describe('SerpAPI (real)', () => {
 
 // ─── Full analysis integration tests ─────────────────────────────────────────
 
-describe('Full analyzeContent (real)', () => {
+describe.skipIf(IS_CI)('Full analyzeContent (real)', () => {
   it('analyzes example.com — low risk', async () => {
     const result = await analyzeContent('https://example.com');
 
@@ -321,7 +322,7 @@ describe('Full analyzeContent (real)', () => {
 
 // ─── Scoring model validation with real data ─────────────────────────────────
 
-describe.skipIf(!HAS_ANY_KEY)('Scoring validation (real APIs)', () => {
+describe.skipIf(IS_CI || !HAS_ANY_KEY)('Scoring validation (real APIs)', () => {
   it('safe domain scores < 15', async () => {
     const result = await analyzeContent('https://example.com');
     expect(result.contentRiskScore).toBeLessThanOrEqual(15);
@@ -337,7 +338,7 @@ describe.skipIf(!HAS_ANY_KEY)('Scoring validation (real APIs)', () => {
 // These tests verify that major legitimate platforms score ≤ 20.
 // They use real API keys and hit live sites — run manually only.
 
-describe('Trusted domain blocklist checks (real)', () => {
+describe.skipIf(IS_CI)('Trusted domain blocklist checks (real)', () => {
   it('github.com is not blocklisted', async () => {
     const result = await checkBlocklists('github.com');
     expect(result.checked).toBe(true);
@@ -363,7 +364,7 @@ describe('Trusted domain blocklist checks (real)', () => {
   }, 30_000);
 });
 
-describe('Trusted domain DNS checks (real)', () => {
+describe.skipIf(IS_CI)('Trusted domain DNS checks (real)', () => {
   // Use a hard AbortSignal timeout so slow DNS servers don't hang the test runner.
   async function dnsWithTimeout(domain: string, ms = 8000) {
     return Promise.race([
@@ -397,7 +398,7 @@ describe('Trusted domain DNS checks (real)', () => {
   }, 15_000);
 });
 
-describe('Trusted domain crt.sh checks (real)', () => {
+describe.skipIf(IS_CI)('Trusted domain crt.sh checks (real)', () => {
   it('github.com has many certificates (well-established)', async () => {
     const result = await checkCrtSh('github.com');
     if (!result.checked) return; // crt.sh unreachable — skip
@@ -411,7 +412,7 @@ describe('Trusted domain crt.sh checks (real)', () => {
   }, 30_000);
 });
 
-describe.skipIf(!HAS_VIRUSTOTAL)('Trusted domain VirusTotal (real)', () => {
+describe.skipIf(IS_CI || !HAS_VIRUSTOTAL)('Trusted domain VirusTotal (real)', () => {
   const domains = ['github.com', 'wikipedia.org', 'mozilla.org', 'stripe.com', 'apple.com'];
 
   for (const domain of domains) {
@@ -433,7 +434,7 @@ describe.skipIf(!HAS_VIRUSTOTAL)('Trusted domain VirusTotal (real)', () => {
   }
 });
 
-describe.skipIf(!HAS_ABUSEIPDB)('Trusted domain AbuseIPDB (real)', () => {
+describe.skipIf(IS_CI || !HAS_ABUSEIPDB)('Trusted domain AbuseIPDB (real)', () => {
   // Test known-good IPs used by major platforms
   const trustedIps: [string, string][] = [
     ['140.82.114.4', 'github.com IP'],       // GitHub
