@@ -7,7 +7,7 @@
 import { extractData } from '../collectors/data-extractor.js';
 import { extractAccountStatus, checkForStatusChange } from '../detectors/status-change-detector.js';
 import { enqueue, enqueueUrgent, getQueueSize } from '../transport/queue.js';
-import { sendBatch, sendUrgentItems, testConnectionDetailed } from '../transport/sender.js';
+import { sendBatch, sendUrgentItems, testConnectionDetailed, fetchProfileDefaults } from '../transport/sender.js';
 import { BUILD_CONFIG } from '../config.js';
 import { MessageType, DEFAULT_CONFIG } from '../types/messages.js';
 import type { ExtensionConfig, ExtensionStatus, RuntimeMessage } from '../types/messages.js';
@@ -604,6 +604,12 @@ async function handleMessage(message: RuntimeMessage, tabId?: number): Promise<u
       // Profile config is saved by popup directly to chrome.storage.local.
       // This message is a notification so the service worker can acknowledge it.
       return { ok: true };
+    }
+
+    case MessageType.FETCH_PROFILE_DEFAULTS: {
+      const cfg = await getConfig();
+      const defaults = await fetchProfileDefaults(cfg);
+      return defaults ?? { proxy_provider: null, account_type: null, payment_service: null };
     }
 
     case MessageType.STATUS_CHANGE: {

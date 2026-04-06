@@ -293,3 +293,28 @@ export async function testConnectionDetailed(config: ExtensionConfig): Promise<C
     return { ok: false, error: err instanceof Error ? err.message : 'Неизвестная ошибка' };
   }
 }
+
+export interface ProfileDefaults {
+  proxy_provider: string | null;
+  account_type: string | null;
+  payment_service: string | null;
+}
+
+export async function fetchProfileDefaults(config: ExtensionConfig): Promise<ProfileDefaults | null> {
+  if (!config.serverUrl || !config.apiKey) return null;
+  try {
+    const url = `${config.serverUrl.replace(/\/$/, '')}/api/v1/profile-defaults`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'X-API-Key': config.apiKey },
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!response.ok) return null;
+    return (await response.json()) as ProfileDefaults;
+  } catch {
+    return null;
+  }
+}

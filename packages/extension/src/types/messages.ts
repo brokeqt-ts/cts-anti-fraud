@@ -31,6 +31,7 @@ export enum MessageType {
   GET_STATUS = 'get_status',
   STATUS_CHANGE = 'status_change_detected',
   RETRY_CONNECTION = 'retry_connection',
+  FETCH_PROFILE_DEFAULTS = 'fetch_profile_defaults',
 }
 
 export interface ProfileConfig {
@@ -78,6 +79,10 @@ export interface RetryConnectionMessage {
   type: MessageType.RETRY_CONNECTION;
 }
 
+export interface FetchProfileDefaultsMessage {
+  type: MessageType.FETCH_PROFILE_DEFAULTS;
+}
+
 export type RuntimeMessage =
   | InterceptedMessage
   | SendBatchMessage
@@ -86,7 +91,8 @@ export type RuntimeMessage =
   | SetProfileConfigMessage
   | GetStatusMessage
   | StatusChangeMessage
-  | RetryConnectionMessage;
+  | RetryConnectionMessage
+  | FetchProfileDefaultsMessage;
 
 export interface ExtensionConfig {
   serverUrl: string;

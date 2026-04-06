@@ -369,6 +369,20 @@ async function init(): Promise<void> {
     setSelectWithCustom(proxyProviderSelect, proxyProviderCustom, config.proxy_provider);
     accountTypeSelect.value = config.account_type || '';
     setSelectWithCustom(paymentServiceSelect, paymentServiceCustom, config.payment_service);
+  } else {
+    // No saved config — fetch defaults from server (user's last-used config)
+    try {
+      const defaults = (await chrome.runtime.sendMessage({
+        type: MessageType.FETCH_PROFILE_DEFAULTS,
+      })) as { proxy_provider: string | null; account_type: string | null; payment_service: string | null } | undefined;
+      if (defaults) {
+        if (defaults.proxy_provider) setSelectWithCustom(proxyProviderSelect, proxyProviderCustom, defaults.proxy_provider);
+        if (defaults.account_type) accountTypeSelect.value = defaults.account_type;
+        if (defaults.payment_service) setSelectWithCustom(paymentServiceSelect, paymentServiceCustom, defaults.payment_service);
+      }
+    } catch {
+      // Server not reachable — leave fields empty
+    }
   }
 
   // Capture initial state for dirty tracking
