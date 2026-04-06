@@ -188,7 +188,7 @@ export async function processRpcPayload(
   // Google internal ID (GAIA, conversion tracking ID, etc.) that passes digit validation
   // but is not a real Google Ads customer ID.
   if (ctx.accountGoogleId) {
-    await ensureAccountExists(pool, ctx.accountGoogleId, userId);
+    await ensureAccountExists(pool, ctx.accountGoogleId, userId, profileId);
   }
 
   if (rpcPath.includes('SettingsSummaryService/GetSummary')) {
