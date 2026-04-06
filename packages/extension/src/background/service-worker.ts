@@ -224,33 +224,80 @@ async function probeUrl(url: string, timeoutMs = 2000): Promise<unknown | null> 
 /**
  * Try to detect the active AdsPower profile.
  * AdsPower exposes API on port 50325 — domain may be local.adspower.net or 127.0.0.1.
- * Uses /api/v1/browser/list and filters for running profiles.
+ *
+ * Strategy:
+ * 1. GET /api/v1/browser/list → get all profiles
+ * 2. For recent profiles, GET /api/v1/browser/active?user_id=X → check if running
+ * 3. The one with status "Active" is our profile
  */
 async function probeAdsPower(): Promise<DetectedProfile | null> {
   const hosts = ['local.adspower.net', '127.0.0.1', 'localhost'];
+  let baseUrl: string | null = null;
+  let profiles: Array<Record<string, unknown>> = [];
+
+  // Step 1: find a responding host and get profile list
   for (const host of hosts) {
     const data = await probeUrl(`http://${host}:50325/api/v1/browser/list?page_size=100`) as Record<string, unknown> | null;
     if (!data || data['code'] !== 0) continue;
     const inner = data['data'] as Record<string, unknown> | undefined;
     const list = inner?.['list'] as Array<Record<string, unknown>> | undefined;
-    if (!Array.isArray(list)) continue;
-    // Find profiles that are currently running (ws endpoint present = browser is open)
-    const running = list.filter(p => p['ws'] && typeof p['ws'] === 'object');
-    if (running.length === 1) {
-      const name = (running[0]['name'] as string) ?? (running[0]['serial_number'] as string) ?? null;
-      if (name) return { browser: 'adspower', profileName: name };
-    }
-    // If multiple running or none with ws — try first with a name
-    if (list.length > 0) {
-      // Return first profile name as fallback — better than nothing
-      const first = list[0];
-      const name = (first['name'] as string) ?? (first['serial_number'] as string);
-      if (name && list.length === 1) return { browser: 'adspower', profileName: name };
-    }
-    // API responded but can't determine which profile — return null
-    console.log(`[CTS sw] AdsPower API responded on ${host} with ${list.length} profiles, can't determine active`);
-    return null;
+    if (!Array.isArray(list) || list.length === 0) continue;
+    baseUrl = `http://${host}:50325`;
+    profiles = list;
+    console.log(`[CTS sw] AdsPower API on ${host}: ${list.length} profiles`);
+    break;
   }
+
+  if (!baseUrl || profiles.length === 0) return null;
+
+  // If only one profile exists, it's definitely ours
+  if (profiles.length === 1) {
+    const p = profiles[0];
+    const name = (p['name'] as string) || (p['serial_number'] as string) || null;
+    if (name) {
+      console.log(`[CTS sw] AdsPower: single profile → "${name}"`);
+      return { browser: 'adspower', profileName: name };
+    }
+  }
+
+  // Step 2: check which profiles are currently running
+  // Sort by last_open_time descending, check top 10
+  const sorted = [...profiles].sort((a, b) => {
+    const ta = String(a['last_open_time'] ?? '');
+    const tb = String(b['last_open_time'] ?? '');
+    return tb.localeCompare(ta);
+  }).slice(0, 10);
+
+  const activeChecks = await Promise.allSettled(
+    sorted.map(async (p) => {
+      const userId = p['user_id'] as string | undefined;
+      if (!userId) return null;
+      const data = await probeUrl(`${baseUrl}/api/v1/browser/active?user_id=${userId}`, 1500) as Record<string, unknown> | null;
+      if (!data || data['code'] !== 0) return null;
+      const status = (data['data'] as Record<string, unknown>)?.['status'];
+      if (status === 'Active') {
+        return (p['name'] as string) || (p['serial_number'] as string) || null;
+      }
+      return null;
+    }),
+  );
+
+  const activeNames: string[] = [];
+  for (const r of activeChecks) {
+    if (r.status === 'fulfilled' && r.value) activeNames.push(r.value);
+  }
+
+  if (activeNames.length === 1) {
+    console.log(`[CTS sw] AdsPower: active profile → "${activeNames[0]}"`);
+    return { browser: 'adspower', profileName: activeNames[0] };
+  }
+
+  if (activeNames.length > 1) {
+    console.log(`[CTS sw] AdsPower: ${activeNames.length} active profiles, can't determine which — [${activeNames.join(', ')}]`);
+  } else {
+    console.log('[CTS sw] AdsPower: no active profiles found via /browser/active');
+  }
+
   return null;
 }
 
