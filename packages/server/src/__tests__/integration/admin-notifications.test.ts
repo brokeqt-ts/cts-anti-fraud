@@ -559,7 +559,7 @@ describeIf('Admin Notifications', () => {
 
   describe('Settings integration with notifyOwnerAndAdmins', () => {
     it('skips notification when setting is disabled', async () => {
-      const admin = await createUser(adminData);
+      await createUser(adminData);
       const buyer = await createUser(buyerData);
       const buyerId = buyer['id'] as string;
       await seedSettings();
@@ -590,7 +590,7 @@ describeIf('Admin Notifications', () => {
     });
 
     it('sends notification when setting is enabled', async () => {
-      const admin = await createUser(adminData);
+      await createUser(adminData);
       const buyer = await createUser(buyerData);
       const buyerId = buyer['id'] as string;
       await seedSettings();

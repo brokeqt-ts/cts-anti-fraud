@@ -1249,10 +1249,10 @@ async function checkWayback(domain: string): Promise<WaybackResult> {
     const last = lastRes.ok ? await lastRes.json() as string[][] : [];
     const lastTs = last[1]?.[0];
 
-    function parseWaybackTs(ts: string): Date | null {
+    const parseWaybackTs = (ts: string): Date | null => {
       if (!ts || ts.length < 8) return null;
       return new Date(`${ts.slice(0, 4)}-${ts.slice(4, 6)}-${ts.slice(6, 8)}`);
-    }
+    };
 
     const firstDate = firstTs ? parseWaybackTs(firstTs) : null;
     const lastDate = lastTs ? parseWaybackTs(lastTs) : null;

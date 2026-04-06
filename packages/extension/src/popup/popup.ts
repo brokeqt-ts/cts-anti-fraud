@@ -8,7 +8,6 @@ const STATS_STORAGE_KEY = 'cts_stats';
 // ─── DOM Elements ───────────────────────────────────────────────────────────
 
 const statusEl = document.getElementById('status') as HTMLDivElement;
-const statusDot = document.getElementById('status-dot') as HTMLSpanElement;
 const statusText = document.getElementById('status-text') as HTMLSpanElement;
 
 const profileNameInput = document.getElementById('profileName') as HTMLInputElement;

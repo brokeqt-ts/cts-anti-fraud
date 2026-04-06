@@ -4,11 +4,10 @@ import type { PredictionResult } from '../ml/ban-predictor.js';
 import {
   ACCOUNT_ANALYSIS_SYSTEM,
   BAN_ANALYSIS_SYSTEM,
-  buildAccountAnalysisPrompt,
   buildBanAnalysisPrompt,
   buildComparisonPrompt,
 } from './prompts/account-analysis.prompt.js';
-import { parseAnalysisResponse, buildPostMortemFactors } from './analysis-utils.js';
+import { buildPostMortemFactors } from './analysis-utils.js';
 import type { AiAnalysisResult } from './analysis-utils.js';
 import { getAccountFeatures } from '../feature-extraction.service.js';
 import { BanPredictor } from '../ml/ban-predictor.js';

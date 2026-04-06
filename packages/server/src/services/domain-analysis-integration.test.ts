@@ -158,7 +158,7 @@ describe('Google Safe Browsing (real)', () => {
 
   describeOrSkip('with API key', () => {
     it('marks google.com as safe', async () => {
-      const { analyzeContent: analyze } = await import('./domain-content-analyzer.js');
+      await import('./domain-content-analyzer.js');
       // We can't easily call checkSafeBrowsing directly, so check via analyzeContent result
       // Just verify the key works by checking the module doesn't crash
       expect(HAS_SAFE_BROWSING).toBe(true);

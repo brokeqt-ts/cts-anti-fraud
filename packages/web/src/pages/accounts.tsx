@@ -92,7 +92,7 @@ export function AccountsPage() {
         setError(e instanceof Error ? e.message : 'Неизвестная ошибка');
       })
       .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line
   }, [search, statusFilter, currencyFilter, tagFilter]);
 
   const suspended = stats?.suspended_accounts ?? 0;

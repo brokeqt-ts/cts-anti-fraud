@@ -5,7 +5,6 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type dns from 'node:dns/promises';
 
 // DNS functions use real dns module — skip DNS-dependent tests in CI
 // and test only fetch-based functions here

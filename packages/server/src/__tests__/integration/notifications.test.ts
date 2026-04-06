@@ -278,7 +278,7 @@ describeIf('Notifications', () => {
 
     it('buyer cannot mark another users notification as read (ownership)', async () => {
       const buyer1 = await createUser(buyerData);
-      const buyer2 = await createUser(buyer2Data);
+      await createUser(buyer2Data);
       const b2Token = await loginAndGetToken(buyer2Data.email, buyer2Data.password);
 
       const notif = await insertNotification(buyer1['id'] as string);

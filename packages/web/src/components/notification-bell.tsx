@@ -49,7 +49,7 @@ export function NotificationBell() {
     poll();
     const id = setInterval(poll, POLL_INTERVAL);
     return () => { active = false; clearInterval(id); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line
   }, []);
 
   // Load notifications when dropdown opens

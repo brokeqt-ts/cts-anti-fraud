@@ -83,7 +83,7 @@ function getBaseUrl(): string {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(loadUser);
   const [accessToken, setAccessToken] = useState<string | null>(getStoredAccessToken);
-  const [refreshToken, setRefreshToken] = useState<string | null>(getStoredRefreshToken);
+  const [, setRefreshToken] = useState<string | null>(getStoredRefreshToken);
   const [isLoading, setIsLoading] = useState(true);
 
   const isAuthenticated = !!accessToken && !!user;
@@ -151,7 +151,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Network error — keep stored state, user may be offline
       })
       .finally(() => setIsLoading(false));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line
+  }, []);
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await fetch(`${getBaseUrl()}${API_PREFIX}/auth/login`, {

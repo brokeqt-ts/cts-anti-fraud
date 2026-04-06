@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { updateAccountAge, updatePaymentLimits } from '../services/account-auto-populate.js';
 
 // Mock pg.Pool
