@@ -206,85 +206,116 @@ async function detectProfileFromWindow(tabId: number): Promise<DetectedProfile |
 // Many antidetect browsers expose a local HTTP API that returns profile info.
 // Service worker has no CORS restrictions, so we can probe these endpoints.
 
-interface LocalApiProbe {
-  browser: string;
-  url: string;
-  extract: (data: unknown) => string | null;
+/** Try fetching a URL with a short timeout, return parsed JSON or null. */
+async function probeUrl(url: string, timeoutMs = 2000): Promise<unknown | null> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    clearTimeout(timeoutId);
+    return null;
+  }
 }
 
-const LOCAL_API_PROBES: LocalApiProbe[] = [
-  {
-    browser: 'dolphin',
-    url: 'http://localhost:3001/v1.0/browser_profiles/active',
-    extract: (data) => {
-      const d = data as Record<string, unknown> | null;
-      if (!d) return null;
-      // Dolphin returns { data: { name: "ProfileName", ... } } or { name: "..." }
-      const inner = (d['data'] ?? d) as Record<string, unknown>;
-      return (inner['name'] as string) ?? null;
-    },
-  },
-  {
-    browser: 'adspower',
-    url: 'http://local.adspower.net:50325/api/v1/browser/active',
-    extract: (data) => {
-      const d = data as Record<string, unknown> | null;
-      if (!d) return null;
-      const inner = d['data'] as Record<string, unknown> | undefined;
-      return (inner?.['name'] as string) ?? (inner?.['serial_number'] as string) ?? null;
-    },
-  },
-  {
-    browser: 'multilogin',
-    url: 'http://127.0.0.1:35000/api/v1/profile/active',
-    extract: (data) => {
-      const d = data as Record<string, unknown> | null;
-      if (!d) return null;
-      return (d['name'] as string) ?? (d['uuid'] as string) ?? null;
-    },
-  },
-  {
-    browser: 'gologin',
-    url: 'http://localhost:36912/api/v1/profile/active',
-    extract: (data) => {
-      const d = data as Record<string, unknown> | null;
-      if (!d) return null;
-      return (d['name'] as string) ?? null;
-    },
-  },
-];
+/**
+ * Try to detect the active AdsPower profile.
+ * AdsPower exposes API on port 50325 — domain may be local.adspower.net or 127.0.0.1.
+ * Uses /api/v1/browser/list and filters for running profiles.
+ */
+async function probeAdsPower(): Promise<DetectedProfile | null> {
+  const hosts = ['local.adspower.net', '127.0.0.1', 'localhost'];
+  for (const host of hosts) {
+    const data = await probeUrl(`http://${host}:50325/api/v1/browser/list?page_size=100`) as Record<string, unknown> | null;
+    if (!data || data['code'] !== 0) continue;
+    const inner = data['data'] as Record<string, unknown> | undefined;
+    const list = inner?.['list'] as Array<Record<string, unknown>> | undefined;
+    if (!Array.isArray(list)) continue;
+    // Find profiles that are currently running (ws endpoint present = browser is open)
+    const running = list.filter(p => p['ws'] && typeof p['ws'] === 'object');
+    if (running.length === 1) {
+      const name = (running[0]['name'] as string) ?? (running[0]['serial_number'] as string) ?? null;
+      if (name) return { browser: 'adspower', profileName: name };
+    }
+    // If multiple running or none with ws — try first with a name
+    if (list.length > 0) {
+      // Return first profile name as fallback — better than nothing
+      const first = list[0];
+      const name = (first['name'] as string) ?? (first['serial_number'] as string);
+      if (name && list.length === 1) return { browser: 'adspower', profileName: name };
+    }
+    // API responded but can't determine which profile — return null
+    console.log(`[CTS sw] AdsPower API responded on ${host} with ${list.length} profiles, can't determine active`);
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Dolphin Anty local API — port 3001.
+ * GET /v1.0/browser_profiles — returns list; we take first running.
+ */
+async function probeDolphin(): Promise<DetectedProfile | null> {
+  // Try the profiles list endpoint
+  const data = await probeUrl('http://localhost:3001/v1.0/browser_profiles') as Record<string, unknown> | null;
+  if (!data) return null;
+  const list = (data['data'] ?? data) as Array<Record<string, unknown>> | Record<string, unknown>;
+  if (Array.isArray(list) && list.length > 0) {
+    // Find running profile or take first
+    const running = list.find(p => p['status'] === 'running' || p['is_running'] === true);
+    const profile = running ?? list[0];
+    const name = (profile['name'] as string) ?? null;
+    if (name) return { browser: 'dolphin', profileName: name };
+  }
+  return null;
+}
+
+/**
+ * Multilogin (Mimic) local API — port 35000.
+ */
+async function probeMultilogin(): Promise<DetectedProfile | null> {
+  for (const port of [35000, 35100]) {
+    const data = await probeUrl(`http://127.0.0.1:${port}/api/v1/profile/active`) as Record<string, unknown> | null;
+    if (!data) continue;
+    const name = (data['name'] as string) ?? (data['uuid'] as string) ?? null;
+    if (name) return { browser: 'multilogin', profileName: name };
+  }
+  return null;
+}
+
+/**
+ * GoLogin local API — port 36912.
+ */
+async function probeGoLogin(): Promise<DetectedProfile | null> {
+  const data = await probeUrl('http://localhost:36912/api/v1/profile/active') as Record<string, unknown> | null;
+  if (!data) return null;
+  const name = (data['name'] as string) ?? null;
+  if (name) return { browser: 'gologin', profileName: name };
+  return null;
+}
 
 /**
  * Probe local antidetect browser APIs to detect the active profile.
- * Tries all known endpoints in parallel with a short timeout.
+ * Tries all known browsers in parallel.
  */
 async function detectProfileFromLocalApi(): Promise<DetectedProfile | null> {
   console.log('[CTS sw] Probing local antidetect APIs...');
 
-  const results = await Promise.allSettled(
-    LOCAL_API_PROBES.map(async (probe) => {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
-      try {
-        const response = await fetch(probe.url, { signal: controller.signal });
-        clearTimeout(timeoutId);
-        if (!response.ok) return null;
-        const json = await response.json();
-        const name = probe.extract(json);
-        if (name) {
-          console.log(`[CTS sw] Local API match: ${probe.browser} → "${name}"`);
-          return { browser: probe.browser, profileName: name } as DetectedProfile;
-        }
-        return null;
-      } catch {
-        clearTimeout(timeoutId);
-        return null;
-      }
-    }),
-  );
+  const results = await Promise.allSettled([
+    probeAdsPower(),
+    probeDolphin(),
+    probeMultilogin(),
+    probeGoLogin(),
+  ]);
 
   for (const r of results) {
-    if (r.status === 'fulfilled' && r.value) return r.value;
+    if (r.status === 'fulfilled' && r.value) {
+      console.log(`[CTS sw] Local API match: ${r.value.browser} → "${r.value.profileName}"`);
+      return r.value;
+    }
   }
 
   console.log('[CTS sw] No local antidetect API responded');
