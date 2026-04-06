@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, Bell, BellRing, Copy, MapPin, Database, Shield, LayoutList, Wallet, ExternalLink, Megaphone, Search, BarChart3, Tag, Eye, Star, Clock, Calendar, ShieldOff, AlertCircle, AlertTriangle, Bot, Link2, Globe, Loader2, Zap, Info } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Bell, BellRing, Copy, MapPin, Database, LayoutList, Wallet, ExternalLink, Megaphone, Search, BarChart3, Tag, Eye, Star, Clock, Calendar, ShieldOff, AlertCircle, AlertTriangle, Bot, Link2, Globe, Loader2, Zap, Info } from 'lucide-react';
 import { fetchAccount, patchAccount, analyzeAccount, fetchBanChain, fetchDomainDetail, generatePostMortem, fetchAccountCompetitiveIntelligence, fetchQualityDistribution, fetchLowQualityKeywords, fetchQualityHistory, ApiError, type AccountDetail, type AccountSummary, type AccountCompetitorRow, type PostMortemData, type CampaignRow, type CampaignMetric, type BillingRow, type AdRow, type KeywordRow, type KeywordDailyStat, type QualityDistributionEntry, type KeywordQualityRow, type QualityScoreSnapshot, type AiAnalyzeResponse, type BanChainData, type DomainContentAnalysis, timeAgo, formatDateRu, formatCid, riskLevel, effectiveStatus, isSuspendedFromSignal } from '../api.js';
 import { StatusBadge } from '../components/badge.js';
 import { TableSkeleton } from '../components/skeleton.js';

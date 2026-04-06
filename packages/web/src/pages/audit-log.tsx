@@ -47,8 +47,6 @@ export function AuditLogPage() {
       .finally(() => setLoading(false));
   }, [actionFilter, page]);
 
-  const actions = [...new Set(entries.map(e => e.action))].sort();
-
   return (
     <div className="py-5 px-6 space-y-3">
       <BlurFade>

@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Search, ChevronRight, Users, Download, Tag, Plus, X, CheckSquare, Square, Brain, ShieldCheck } from 'lucide-react';
+import { Search, ChevronRight, Users, Download, Tag, Plus, X, CheckSquare, Square, ShieldCheck } from 'lucide-react';
 import {
   fetchAccounts, ApiError, type AccountSummary, type OverviewStats, fetchOverview,
   timeAgo, formatCid, riskLevel, effectiveStatus,
