@@ -52,6 +52,17 @@ export async function parseSignals(ctx: RpcContext): Promise<void> {
 
     // Auto-ban detection: check account_suspended signals
     if (signalName === 'account_suspended') {
+      // Update account status to suspended
+      const isSuspended = signalValue === true
+        || (signalValue != null && typeof signalValue === 'object' && (signalValue as Record<string, unknown>)['1'] === true);
+      if (isSuspended) {
+        await pool.query(
+          `UPDATE accounts SET status = 'suspended', updated_at = NOW()
+           WHERE google_account_id = $1 AND status NOT IN ('suspended', 'banned')`,
+          [cid],
+        );
+      }
+
       try {
         await checkAndCreateBan(pool, cid, storedValue);
       } catch (err) {
