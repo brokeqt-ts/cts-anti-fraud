@@ -9,7 +9,6 @@ export interface AuthUser {
   role: 'admin' | 'buyer';
   api_key?: string | null;
   adspower_api_key?: string | null;
-  adspower_api_url?: string | null;
 }
 
 interface AuthState {

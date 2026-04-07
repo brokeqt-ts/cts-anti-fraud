@@ -234,18 +234,13 @@ async function probeUrl(url: string, timeoutMs = 2000): Promise<unknown | null> 
 async function probeAdsPower(): Promise<DetectedProfile | null> {
   const apiKey = BUILD_CONFIG.ADSPOWER_API_KEY || '';
 
-  // Use user-configured URL or try common defaults
-  const configuredUrl = BUILD_CONFIG.ADSPOWER_API_URL;
-  const hosts = configuredUrl
-    ? [configuredUrl.replace(/\/+$/, '')]
-    : ['http://local.adspower.net:50325', 'http://127.0.0.1:50325', 'http://localhost:50325'];
+  const hosts = ['http://local.adspower.net:50325', 'http://127.0.0.1:50325', 'http://localhost:50325'];
   let baseUrl: string | null = null;
   let profiles: Array<Record<string, unknown>> = [];
 
   // Step 1: find a responding host and get profile list
   for (const host of hosts) {
-    const base = host.startsWith('http') ? host : `http://${host}`;
-    const url = `${base}/api/v1/browser/list?page_size=100${apiKey ? `&api_key=${apiKey}` : ''}`;
+    const url = `${host}/api/v1/browser/list?page_size=100${apiKey ? `&api_key=${apiKey}` : ''}`;
     const data = await probeUrl(url) as Record<string, unknown> | null;
     if (!data || data['code'] !== 0) continue;
     const inner = data['data'] as Record<string, unknown> | undefined;

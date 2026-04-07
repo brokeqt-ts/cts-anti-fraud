@@ -20,14 +20,10 @@ const apiKey = process.env.EXT_API_KEY || API_KEY_PLACEHOLDER;
 const ADSPOWER_KEY_PLACEHOLDER = '__CTS_ADSPOWER_KEY_PLACEHOLDER__';
 const adspowerKey = process.env.ADSPOWER_API_KEY || ADSPOWER_KEY_PLACEHOLDER;
 
-const ADSPOWER_URL_PLACEHOLDER = '__CTS_ADSPOWER_URL_PLACEHOLDER__';
-const adspowerUrl = process.env.ADSPOWER_API_URL || ADSPOWER_URL_PLACEHOLDER;
-
 const buildDefine = {
   '__SERVER_URL__': JSON.stringify(serverUrl),
   '__API_KEY__': JSON.stringify(apiKey),
   '__ADSPOWER_API_KEY__': JSON.stringify(adspowerKey),
-  '__ADSPOWER_API_URL__': JSON.stringify(adspowerUrl),
 };
 
 async function build() {

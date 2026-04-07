@@ -383,7 +383,6 @@ export function SettingsPage() {
 
   // AdsPower settings
   const [adspowerKey, setAdspowerKeyLocal] = useState(user?.adspower_api_key ?? '');
-  const [adspowerUrl, setAdspowerUrlLocal] = useState(user?.adspower_api_url ?? '');
   const [adspowerSaving, setAdspowerSaving] = useState(false);
   const [adspowerStatus, setAdspowerStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [adspowerError, setAdspowerError] = useState<string | null>(null);
@@ -415,7 +414,7 @@ export function SettingsPage() {
     setAdspowerStatus('idle');
     setAdspowerError(null);
     try {
-      await updateAdspowerSettings({ adspower_api_key: adspowerKey, adspower_api_url: adspowerUrl });
+      await updateAdspowerSettings({ adspower_api_key: adspowerKey });
       setAdspowerStatus('success');
       setTimeout(() => setAdspowerStatus('idle'), 2000);
     } catch (err) {
@@ -426,7 +425,7 @@ export function SettingsPage() {
     } finally {
       setAdspowerSaving(false);
     }
-  }, [adspowerKey, adspowerUrl, adspowerSaving]);
+  }, [adspowerKey, adspowerSaving]);
 
   function handleCopyKey() {
     if (!user?.api_key) return;
@@ -559,30 +558,17 @@ export function SettingsPage() {
                   style={{ color: 'var(--text-muted)' }}
                   strokeWidth={1.5}
                 />
-                <span className="label-xs">AdsPower</span>
+                <span className="label-xs">AdsPower API ключ</span>
               </div>
-              <div>
-                <label className="block text-[11px] mb-1" style={{ color: 'var(--text-muted)' }}>Адрес API</label>
-                <input
-                  type="text"
-                  value={adspowerUrl}
-                  onChange={(e) => setAdspowerUrlLocal(e.target.value)}
-                  placeholder="http://localhost:50325"
-                  className="input-field font-mono text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] mb-1" style={{ color: 'var(--text-muted)' }}>API ключ (если включена авторизация)</label>
-                <input
-                  type="password"
-                  value={adspowerKey}
-                  onChange={(e) => setAdspowerKeyLocal(e.target.value)}
-                  placeholder="Необязательно"
-                  className="input-field font-mono text-sm"
-                />
-              </div>
+              <input
+                type="password"
+                value={adspowerKey}
+                onChange={(e) => setAdspowerKeyLocal(e.target.value)}
+                placeholder="Вставьте API ключ AdsPower"
+                className="input-field font-mono text-sm"
+              />
               <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                AdsPower &rarr; Настройки &rarr; API. Адрес и ключ запекаются в расширение при скачивании.
+                AdsPower &rarr; Настройки &rarr; API. Ключ запекается в расширение при скачивании.
               </p>
               <button
                 onClick={handleSaveAdspowerKey}
