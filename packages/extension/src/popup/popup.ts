@@ -1,7 +1,6 @@
 import { MessageType } from '../types/messages.js';
 import type { ExtensionStatus, ProfileConfig } from '../types/messages.js';
 
-const PROFILE_CACHE_KEY = 'cts_detected_profile';
 const PROFILE_CONFIG_KEY = 'profileConfig';
 const STATS_STORAGE_KEY = 'cts_stats';
 
@@ -9,9 +8,6 @@ const STATS_STORAGE_KEY = 'cts_stats';
 
 const statusEl = document.getElementById('status') as HTMLDivElement;
 const statusText = document.getElementById('status-text') as HTMLSpanElement;
-
-const profileNameInput = document.getElementById('profileName') as HTMLInputElement;
-const browserSelect = document.getElementById('browser') as HTMLSelectElement;
 
 const proxyProviderSelect = document.getElementById('proxyProvider') as HTMLSelectElement;
 const proxyProviderCustom = document.getElementById('proxyProviderCustom') as HTMLInputElement;
@@ -55,7 +51,6 @@ function updateFieldHighlight(field: HTMLInputElement | HTMLSelectElement): void
 }
 
 function updateAllFieldHighlights(): void {
-  updateFieldHighlight(profileNameInput);
   updateFieldHighlight(proxyProviderSelect);
   updateFieldHighlight(accountTypeSelect);
   updateFieldHighlight(paymentServiceSelect);
@@ -146,8 +141,6 @@ let initialSnapshot = '';
 
 function captureSnapshot(): string {
   return JSON.stringify({
-    profileName: profileNameInput.value.trim(),
-    browser: browserSelect.value,
     proxyProvider: getSelectValue(proxyProviderSelect, proxyProviderCustom),
     accountType: accountTypeSelect.value,
     paymentService: getSelectValue(paymentServiceSelect, paymentServiceCustom),
@@ -158,8 +151,6 @@ function enableSaveIfDirty(): void {
   saveBtn.disabled = captureSnapshot() === initialSnapshot;
 }
 
-profileNameInput.addEventListener('input', () => { enableSaveIfDirty(); updateFieldHighlight(profileNameInput); });
-browserSelect.addEventListener('change', enableSaveIfDirty);
 accountTypeSelect.addEventListener('change', () => { enableSaveIfDirty(); updateFieldHighlight(accountTypeSelect); });
 
 // ─── Status display ─────────────────────────────────────────────────────────
@@ -318,22 +309,8 @@ async function saveProfileConfig(config: ProfileConfig): Promise<void> {
 // ─── Save handler ───────────────────────────────────────────────────────────
 
 saveBtn.addEventListener('click', async () => {
-  const profileName = profileNameInput.value.trim();
-  const browser = browserSelect.value;
-
   saveBtn.textContent = 'Сохраняю...';
   saveBtn.disabled = true;
-
-  // Save profile to service worker
-  try {
-    await chrome.runtime.sendMessage({
-      type: MessageType.SET_PROFILE,
-      profileName,
-      browser,
-    });
-  } catch {
-    // Ignore
-  }
 
   // Save profile config (proxy, account type, payment)
   const profileConfig: ProfileConfig = {
@@ -354,14 +331,6 @@ saveBtn.addEventListener('click', async () => {
 // ─── Initialize ─────────────────────────────────────────────────────────────
 
 async function init(): Promise<void> {
-  // Load profile name & browser from cache
-  const cached = await chrome.storage.local.get(PROFILE_CACHE_KEY);
-  const profile = cached[PROFILE_CACHE_KEY] as { browser: string; profileName: string } | undefined;
-  if (profile) {
-    profileNameInput.value = profile.profileName || '';
-    browserSelect.value = profile.browser || 'octo';
-  }
-
   // Load profile config (proxy, account type, payment)
   const config = await loadProfileConfig();
   if (config) {
