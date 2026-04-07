@@ -228,84 +228,73 @@ async function probeUrl(url: string, timeoutMs = 2000): Promise<unknown | null> 
 
 /**
  * Try to detect the active AdsPower profile.
- * AdsPower exposes local API on port 50325.
- * Requires ADSPOWER_API_KEY (baked into extension at download time).
+ * AdsPower local API on port 50325: GET /api/v1/user/list
  *
  * Strategy:
- * 1. GET /api/v1/browser/list → get all profiles
- * 2. For recent profiles, GET /api/v1/browser/active?user_id=X → check if running
- * 3. The one with status "Active" is our profile
+ * 1. GET /api/v1/user/list → get all profiles with last_open_time
+ * 2. Match by user_id from start.adspower.net tab URL (most reliable)
+ * 3. Fallback: single profile or most recently opened
  */
 async function probeAdsPower(): Promise<DetectedProfile | null> {
   const apiKey = BUILD_CONFIG.ADSPOWER_API_KEY || '';
-
   const hosts = ['http://local.adspower.net:50325', 'http://127.0.0.1:50325', 'http://localhost:50325'];
-  let baseUrl: string | null = null;
-  let profiles: Array<Record<string, unknown>> = [];
 
-  // Step 1: find a responding host and get profile list
   for (const host of hosts) {
-    const url = `${host}/api/v1/browser/list?page_size=100${apiKey ? `&api_key=${apiKey}` : ''}`;
+    const url = `${host}/api/v1/user/list?page_size=100${apiKey ? `&api_key=${apiKey}` : ''}`;
     const data = await probeUrl(url) as Record<string, unknown> | null;
     if (!data || data['code'] !== 0) continue;
     const inner = data['data'] as Record<string, unknown> | undefined;
     const list = inner?.['list'] as Array<Record<string, unknown>> | undefined;
     if (!Array.isArray(list) || list.length === 0) continue;
-    baseUrl = `http://${host}:50325`;
-    profiles = list;
+
     console.log(`[CTS sw] AdsPower API on ${host}: ${list.length} profiles`);
-    break;
-  }
 
-  if (!baseUrl || profiles.length === 0) return null;
-
-  // If only one profile exists, it's definitely ours
-  if (profiles.length === 1) {
-    const p = profiles[0];
-    const name = (p['name'] as string) || (p['serial_number'] as string) || null;
-    if (name) {
-      console.log(`[CTS sw] AdsPower: single profile → "${name}"`);
-      return { browser: 'adspower', profileName: name };
-    }
-  }
-
-  // Step 2: check which profiles are currently running via /browser/active
-  const sorted = [...profiles].sort((a, b) => {
-    const ta = String(a['last_open_time'] ?? '');
-    const tb = String(b['last_open_time'] ?? '');
-    return tb.localeCompare(ta);
-  }).slice(0, 10);
-
-  const activeChecks = await Promise.allSettled(
-    sorted.map(async (p) => {
-      const userId = p['user_id'] as string | undefined;
-      if (!userId) return null;
-      const url = `${baseUrl}/api/v1/browser/active?user_id=${userId}${apiKey ? `&api_key=${apiKey}` : ''}`;
-      const data = await probeUrl(url, 1500) as Record<string, unknown> | null;
-      if (!data || data['code'] !== 0) return null;
-      const inner = data['data'] as Record<string, unknown> | undefined;
-      const st = inner?.['status'];
-      if (st === 'Active') {
-        return (p['name'] as string) || (p['serial_number'] as string) || null;
+    // Try to match by user_id from start.adspower.net tab URL
+    // Tab URL pattern: https://start.adspower.net/?id=k1b3xd1a&host=...
+    try {
+      const allTabs = await chrome.tabs.query({});
+      for (const t of allTabs) {
+        const tabUrl = t.url ?? '';
+        if (!tabUrl.includes('start.adspower.net')) continue;
+        const idMatch = tabUrl.match(/[?&]id=([^&]+)/);
+        if (!idMatch?.[1]) continue;
+        const tabUserId = idMatch[1];
+        const matched = list.find(p => p['user_id'] === tabUserId);
+        if (matched) {
+          const name = (matched['name'] as string) || (matched['serial_number'] as string) || null;
+          if (name) {
+            console.log(`[CTS sw] AdsPower: matched by tab user_id=${tabUserId} → "${name}"`);
+            return { browser: 'adspower', profileName: name };
+          }
+        }
       }
-      return null;
-    }),
-  );
+    } catch {
+      // tabs API may fail — continue with fallbacks
+    }
 
-  const activeNames: string[] = [];
-  for (const r of activeChecks) {
-    if (r.status === 'fulfilled' && r.value) activeNames.push(r.value);
-  }
+    // Fallback: single profile
+    if (list.length === 1) {
+      const name = (list[0]['name'] as string) || (list[0]['serial_number'] as string) || null;
+      if (name) {
+        console.log(`[CTS sw] AdsPower: single profile → "${name}"`);
+        return { browser: 'adspower', profileName: name };
+      }
+    }
 
-  if (activeNames.length === 1) {
-    console.log(`[CTS sw] AdsPower: active profile → "${activeNames[0]}"`);
-    return { browser: 'adspower', profileName: activeNames[0] };
-  }
+    // Fallback: most recently opened
+    const sorted = [...list].sort((a, b) => {
+      const ta = Number(a['last_open_time'] ?? 0);
+      const tb = Number(b['last_open_time'] ?? 0);
+      return tb - ta;
+    });
+    const recent = sorted[0];
+    const recentName = (recent['name'] as string) || (recent['serial_number'] as string) || null;
+    if (recentName) {
+      console.log(`[CTS sw] AdsPower: most recent profile → "${recentName}" (${sorted.length} total)`);
+      return { browser: 'adspower', profileName: recentName };
+    }
 
-  if (activeNames.length > 1) {
-    console.log(`[CTS sw] AdsPower: ${activeNames.length} active profiles, can't determine which — [${activeNames.join(', ')}]`);
-  } else {
-    console.log('[CTS sw] AdsPower: no active profiles found via /browser/active');
+    return null;
   }
 
   return null;
