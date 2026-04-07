@@ -26,18 +26,18 @@ export class CollectService {
     }
 
     // Auto-link antidetect profile to accounts found in the batch
-    if (antidetectBrowser && antidetectBrowser !== 'unknown') {
+    if (profileId) {
       try {
-        await this.upsertAntidetectProfile(profileId, antidetectBrowser, batch);
+        await this.upsertAntidetectProfile(profileId, antidetectBrowser || 'unknown', batch);
       } catch (err) {
         console.warn('[Collect] Failed to upsert antidetect profile:', err);
       }
     }
 
     // Update fingerprint hash on antidetect profile
-    if (fingerprintHash && antidetectBrowser && antidetectBrowser !== 'unknown') {
+    if (fingerprintHash && profileId) {
       try {
-        await this.updateFingerprintHash(profileId, antidetectBrowser, fingerprintHash);
+        await this.updateFingerprintHash(profileId, antidetectBrowser || 'unknown', fingerprintHash);
       } catch (err) {
         console.warn('[Collect] Failed to update fingerprint:', err);
       }

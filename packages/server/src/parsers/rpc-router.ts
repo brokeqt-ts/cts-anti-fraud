@@ -42,11 +42,12 @@ export function dig(obj: unknown, ...keys: string[]): unknown {
   return current;
 }
 
-/** Extract Google Ads CID from URL params (ocid first, then __c). */
+/** Extract Google Ads CID from URL param ocid only.
+ *  __c is an internal Google customer ID, NOT the Ads account CID. */
 function extractCid(url: string): string | null {
   try {
     const parsed = new URL(url);
-    return parsed.searchParams.get('ocid') ?? parsed.searchParams.get('__c') ?? null;
+    return parsed.searchParams.get('ocid') ?? null;
   } catch {
     return null;
   }
