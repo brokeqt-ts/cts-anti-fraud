@@ -12,7 +12,6 @@ import {
   Download,
   MessageCircle,
   Unlink,
-  Key,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -22,7 +21,6 @@ import {
   setApiKey,
   checkHealth,
   downloadExtension,
-  updateAdspowerSettings,
   fetchTelegramBotInfo,
   startTelegramConnect,
   fetchTelegramConnectStatus,
@@ -381,12 +379,6 @@ export function SettingsPage() {
   const [keyVisible, setKeyVisible] = useState(false);
   const [keyCopied, setKeyCopied] = useState(false);
 
-  // AdsPower settings
-  const [adspowerKey, setAdspowerKeyLocal] = useState(user?.adspower_api_key ?? '');
-  const [adspowerSaving, setAdspowerSaving] = useState(false);
-  const [adspowerStatus, setAdspowerStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [adspowerError, setAdspowerError] = useState<string | null>(null);
-
   // Extension download
   const [extState, setExtState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [extError, setExtError] = useState<string | null>(null);
@@ -407,25 +399,6 @@ export function SettingsPage() {
       setTimeout(() => setExtState('idle'), 2000);
     }
   }, [extState]);
-
-  const handleSaveAdspowerKey = useCallback(async () => {
-    if (adspowerSaving) return;
-    setAdspowerSaving(true);
-    setAdspowerStatus('idle');
-    setAdspowerError(null);
-    try {
-      await updateAdspowerSettings({ adspower_api_key: adspowerKey });
-      setAdspowerStatus('success');
-      setTimeout(() => setAdspowerStatus('idle'), 2000);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Ошибка сохранения';
-      setAdspowerError(msg);
-      setAdspowerStatus('error');
-      setTimeout(() => setAdspowerStatus('idle'), 3000);
-    } finally {
-      setAdspowerSaving(false);
-    }
-  }, [adspowerKey, adspowerSaving]);
 
   function handleCopyKey() {
     if (!user?.api_key) return;
@@ -548,54 +521,6 @@ export function SettingsPage() {
               </div>
             </StaggerItem>
           )}
-
-          {/* AdsPower API key */}
-          <StaggerItem>
-            <div className="card-static p-[12px_14px] space-y-3">
-              <div className="flex items-center gap-2">
-                <Key
-                  className="w-4 h-4"
-                  style={{ color: 'var(--text-muted)' }}
-                  strokeWidth={1.5}
-                />
-                <span className="label-xs">AdsPower API ключ</span>
-              </div>
-              <input
-                type="password"
-                value={adspowerKey}
-                onChange={(e) => setAdspowerKeyLocal(e.target.value)}
-                placeholder="Вставьте API ключ AdsPower"
-                className="input-field font-mono text-sm"
-              />
-              <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                AdsPower &rarr; Настройки &rarr; API. Ключ запекается в расширение при скачивании.
-              </p>
-              <button
-                onClick={handleSaveAdspowerKey}
-                disabled={adspowerSaving}
-                className="btn-ghost-green w-full py-2"
-              >
-                {adspowerSaving ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Сохранение...
-                  </span>
-                ) : adspowerStatus === 'success' ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <CheckCircle className="w-4 h-4" />
-                    Сохранено!
-                  </span>
-                ) : adspowerStatus === 'error' ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <XCircle className="w-4 h-4" />
-                    {adspowerError ?? 'Ошибка'}
-                  </span>
-                ) : (
-                  'Сохранить'
-                )}
-              </button>
-            </div>
-          </StaggerItem>
 
           {/* Extension download */}
           <StaggerItem>

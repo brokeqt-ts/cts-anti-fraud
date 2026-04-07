@@ -236,11 +236,10 @@ async function probeUrl(url: string, timeoutMs = 2000): Promise<unknown | null> 
  * 3. Fallback: single profile or most recently opened
  */
 async function probeAdsPower(): Promise<DetectedProfile | null> {
-  const apiKey = BUILD_CONFIG.ADSPOWER_API_KEY || '';
   const hosts = ['http://local.adspower.net:50325', 'http://127.0.0.1:50325', 'http://localhost:50325'];
 
   for (const host of hosts) {
-    const url = `${host}/api/v1/user/list?page_size=100${apiKey ? `&api_key=${apiKey}` : ''}`;
+    const url = `${host}/api/v1/user/list?page_size=100`;
     const data = await probeUrl(url) as Record<string, unknown> | null;
     if (!data || data['code'] !== 0) continue;
     const inner = data['data'] as Record<string, unknown> | undefined;
