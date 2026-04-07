@@ -8,6 +8,7 @@ import { env } from '../config/env.js';
 
 const API_KEY_PLACEHOLDER = '__CTS_API_KEY_PLACEHOLDER__';
 const SERVER_URL_PLACEHOLDER = '__CTS_SERVER_URL_PLACEHOLDER__';
+const ADSPOWER_KEY_PLACEHOLDER = '__CTS_ADSPOWER_KEY_PLACEHOLDER__';
 
 function getExtensionDistPath(): string {
   // __dirname in compiled CJS = packages/server/dist/handlers/
@@ -72,8 +73,9 @@ async function streamExtensionZip(
   // Resolve server URL: EXT_SERVER_URL env var → fallback to request origin
   const serverUrl = process.env['EXT_SERVER_URL']
     || `${request.protocol}://${request.hostname}`;
+  const adspowerKey = process.env['ADSPOWER_API_KEY'] || '';
 
-  addDirectoryToArchive(archive, extDistPath, 'cts-extension', apiKey, serverUrl);
+  addDirectoryToArchive(archive, extDistPath, 'cts-extension', apiKey, serverUrl, adspowerKey);
   await archive.finalize();
 }
 
@@ -106,6 +108,7 @@ function addDirectoryToArchive(
   archivePrefix: string,
   apiKey: string,
   serverUrl: string,
+  adspowerKey: string,
 ): void {
   const entries = fs.readdirSync(dirPath, { withFileTypes: true });
 
@@ -114,12 +117,13 @@ function addDirectoryToArchive(
     const archivePath = `${archivePrefix}/${entry.name}`;
 
     if (entry.isDirectory()) {
-      addDirectoryToArchive(archive, fullPath, archivePath, apiKey, serverUrl);
+      addDirectoryToArchive(archive, fullPath, archivePath, apiKey, serverUrl, adspowerKey);
     } else if (entry.name.endsWith('.js')) {
       const content = fs.readFileSync(fullPath, 'utf-8');
       const replaced = content
         .replaceAll(API_KEY_PLACEHOLDER, apiKey)
-        .replaceAll(SERVER_URL_PLACEHOLDER, serverUrl);
+        .replaceAll(SERVER_URL_PLACEHOLDER, serverUrl)
+        .replaceAll(ADSPOWER_KEY_PLACEHOLDER, adspowerKey);
       archive.append(replaced, { name: archivePath });
     } else {
       archive.file(fullPath, { name: archivePath });

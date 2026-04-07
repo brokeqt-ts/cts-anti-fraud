@@ -16,9 +16,14 @@ const serverUrl = process.env.EXT_SERVER_URL || SERVER_URL_PLACEHOLDER;
 const API_KEY_PLACEHOLDER = '__CTS_API_KEY_PLACEHOLDER__';
 const apiKey = process.env.EXT_API_KEY || API_KEY_PLACEHOLDER;
 
+// AdsPower local API key — replaced at download time from ADSPOWER_API_KEY env var
+const ADSPOWER_KEY_PLACEHOLDER = '__CTS_ADSPOWER_KEY_PLACEHOLDER__';
+const adspowerKey = process.env.ADSPOWER_API_KEY || ADSPOWER_KEY_PLACEHOLDER;
+
 const buildDefine = {
   '__SERVER_URL__': JSON.stringify(serverUrl),
   '__API_KEY__': JSON.stringify(apiKey),
+  '__ADSPOWER_API_KEY__': JSON.stringify(adspowerKey),
 };
 
 async function build() {

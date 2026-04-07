@@ -223,7 +223,8 @@ async function probeUrl(url: string, timeoutMs = 2000): Promise<unknown | null> 
 
 /**
  * Try to detect the active AdsPower profile.
- * AdsPower exposes API on port 50325 — domain may be local.adspower.net or 127.0.0.1.
+ * AdsPower exposes local API on port 50325.
+ * Requires ADSPOWER_API_KEY (baked into extension at download time).
  *
  * Strategy:
  * 1. GET /api/v1/browser/list → get all profiles
@@ -231,13 +232,20 @@ async function probeUrl(url: string, timeoutMs = 2000): Promise<unknown | null> 
  * 3. The one with status "Active" is our profile
  */
 async function probeAdsPower(): Promise<DetectedProfile | null> {
+  const apiKey = BUILD_CONFIG.ADSPOWER_API_KEY;
+  if (!apiKey) {
+    console.log('[CTS sw] AdsPower: no API key configured, skipping');
+    return null;
+  }
+
   const hosts = ['local.adspower.net', '127.0.0.1', 'localhost'];
   let baseUrl: string | null = null;
   let profiles: Array<Record<string, unknown>> = [];
 
   // Step 1: find a responding host and get profile list
   for (const host of hosts) {
-    const data = await probeUrl(`http://${host}:50325/api/v1/browser/list?page_size=100`) as Record<string, unknown> | null;
+    const url = `http://${host}:50325/api/v1/browser/list?page_size=100&api_key=${apiKey}`;
+    const data = await probeUrl(url) as Record<string, unknown> | null;
     if (!data || data['code'] !== 0) continue;
     const inner = data['data'] as Record<string, unknown> | undefined;
     const list = inner?.['list'] as Array<Record<string, unknown>> | undefined;
@@ -260,8 +268,7 @@ async function probeAdsPower(): Promise<DetectedProfile | null> {
     }
   }
 
-  // Step 2: check which profiles are currently running
-  // Sort by last_open_time descending, check top 10
+  // Step 2: check which profiles are currently running via /browser/active
   const sorted = [...profiles].sort((a, b) => {
     const ta = String(a['last_open_time'] ?? '');
     const tb = String(b['last_open_time'] ?? '');
@@ -272,10 +279,12 @@ async function probeAdsPower(): Promise<DetectedProfile | null> {
     sorted.map(async (p) => {
       const userId = p['user_id'] as string | undefined;
       if (!userId) return null;
-      const data = await probeUrl(`${baseUrl}/api/v1/browser/active?user_id=${userId}`, 1500) as Record<string, unknown> | null;
+      const url = `${baseUrl}/api/v1/browser/active?user_id=${userId}&api_key=${apiKey}`;
+      const data = await probeUrl(url, 1500) as Record<string, unknown> | null;
       if (!data || data['code'] !== 0) return null;
-      const status = (data['data'] as Record<string, unknown>)?.['status'];
-      if (status === 'Active') {
+      const inner = data['data'] as Record<string, unknown> | undefined;
+      const st = inner?.['status'];
+      if (st === 'Active') {
         return (p['name'] as string) || (p['serial_number'] as string) || null;
       }
       return null;
