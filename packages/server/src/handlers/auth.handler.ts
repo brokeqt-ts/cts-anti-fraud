@@ -246,7 +246,7 @@ export async function meHandler(
   }
 
   const result = await pool.query(
-    `SELECT id, name, email, role, api_key FROM users WHERE id = $1`,
+    `SELECT id, name, email, role, api_key, antidetect_browser FROM users WHERE id = $1`,
     [userId],
   );
 
@@ -264,6 +264,7 @@ export async function meHandler(
     email: string;
     role: string;
     api_key: string | null;
+    antidetect_browser: string | null;
   };
 
   // Mask API key: first 8 chars + ***
@@ -277,5 +278,22 @@ export async function meHandler(
     email: user.email,
     role: user.role,
     api_key: maskedKey,
+    antidetect_browser: user.antidetect_browser,
   });
+}
+
+// PATCH /auth/antidetect-browser
+export async function updateAntidetectBrowserHandler(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const userId = request.user!.id;
+  const { antidetect_browser } = request.body as { antidetect_browser: string };
+
+  await pool.query(
+    `UPDATE users SET antidetect_browser = $1 WHERE id = $2`,
+    [antidetect_browser || null, userId],
+  );
+
+  await reply.status(200).send({ status: 'ok' });
 }

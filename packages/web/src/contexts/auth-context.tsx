@@ -8,6 +8,7 @@ export interface AuthUser {
   email: string | null;
   role: 'admin' | 'buyer';
   api_key?: string | null;
+  antidetect_browser?: string | null;
 }
 
 interface AuthState {

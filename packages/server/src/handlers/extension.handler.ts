@@ -8,6 +8,7 @@ import { env } from '../config/env.js';
 
 const API_KEY_PLACEHOLDER = '__CTS_API_KEY_PLACEHOLDER__';
 const SERVER_URL_PLACEHOLDER = '__CTS_SERVER_URL_PLACEHOLDER__';
+const ANTIDETECT_BROWSER_PLACEHOLDER = '__CTS_ANTIDETECT_BROWSER_PLACEHOLDER__';
 
 function getExtensionDistPath(): string {
   // __dirname in compiled CJS = packages/server/dist/handlers/
@@ -23,11 +24,11 @@ async function streamExtensionZip(
 ): Promise<void> {
   const pool = getPool(env.DATABASE_URL);
   const result = await pool.query(
-    'SELECT api_key, name FROM users WHERE id = $1 AND is_active = true',
+    'SELECT api_key, name, antidetect_browser FROM users WHERE id = $1 AND is_active = true',
     [userId],
   );
 
-  const row = result.rows[0] as { api_key?: string; name?: string } | undefined;
+  const row = result.rows[0] as { api_key?: string; name?: string; antidetect_browser?: string | null } | undefined;
   if (!row) {
     await reply.status(404).send({
       error: 'User not found or inactive',
@@ -72,7 +73,8 @@ async function streamExtensionZip(
   // Resolve server URL: EXT_SERVER_URL env var → fallback to request origin
   const serverUrl = process.env['EXT_SERVER_URL']
     || `${request.protocol}://${request.hostname}`;
-  addDirectoryToArchive(archive, extDistPath, 'cts-extension', apiKey, serverUrl);
+  const antidetectBrowser = row.antidetect_browser ?? '';
+  addDirectoryToArchive(archive, extDistPath, 'cts-extension', apiKey, serverUrl, antidetectBrowser);
   await archive.finalize();
 }
 
@@ -105,6 +107,7 @@ function addDirectoryToArchive(
   archivePrefix: string,
   apiKey: string,
   serverUrl: string,
+  antidetectBrowser: string,
 ): void {
   const entries = fs.readdirSync(dirPath, { withFileTypes: true });
 
@@ -113,12 +116,13 @@ function addDirectoryToArchive(
     const archivePath = `${archivePrefix}/${entry.name}`;
 
     if (entry.isDirectory()) {
-      addDirectoryToArchive(archive, fullPath, archivePath, apiKey, serverUrl);
+      addDirectoryToArchive(archive, fullPath, archivePath, apiKey, serverUrl, antidetectBrowser);
     } else if (entry.name.endsWith('.js')) {
       const content = fs.readFileSync(fullPath, 'utf-8');
       const replaced = content
         .replaceAll(API_KEY_PLACEHOLDER, apiKey)
-        .replaceAll(SERVER_URL_PLACEHOLDER, serverUrl);
+        .replaceAll(SERVER_URL_PLACEHOLDER, serverUrl)
+        .replaceAll(ANTIDETECT_BROWSER_PLACEHOLDER, antidetectBrowser);
       archive.append(replaced, { name: archivePath });
     } else {
       archive.file(fullPath, { name: archivePath });

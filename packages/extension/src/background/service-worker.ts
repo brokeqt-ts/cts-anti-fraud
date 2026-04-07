@@ -300,71 +300,61 @@ async function probeAdsPower(): Promise<DetectedProfile | null> {
 }
 
 /**
- * Dolphin Anty local API — port 3001.
- * GET /v1.0/browser_profiles — returns list; we take first running.
+ * Undetectable Browser local API — port 25325.
+ * GET /list — no auth needed. Returns profile map with names and status.
  */
-async function probeDolphin(): Promise<DetectedProfile | null> {
-  // Try the profiles list endpoint
-  const data = await probeUrl('http://localhost:3001/v1.0/browser_profiles') as Record<string, unknown> | null;
-  if (!data) return null;
-  const list = (data['data'] ?? data) as Array<Record<string, unknown>> | Record<string, unknown>;
-  if (Array.isArray(list) && list.length > 0) {
-    // Find running profile or take first
-    const running = list.find(p => p['status'] === 'running' || p['is_running'] === true);
-    const profile = running ?? list[0];
-    const name = (profile['name'] as string) ?? null;
-    if (name) return { browser: 'dolphin', profileName: name };
-  }
-  return null;
-}
-
-/**
- * Multilogin (Mimic) local API — port 35000.
- */
-async function probeMultilogin(): Promise<DetectedProfile | null> {
-  for (const port of [35000, 35100]) {
-    const data = await probeUrl(`http://127.0.0.1:${port}/api/v1/profile/active`) as Record<string, unknown> | null;
-    if (!data) continue;
-    const name = (data['name'] as string) ?? (data['uuid'] as string) ?? null;
-    if (name) return { browser: 'multilogin', profileName: name };
-  }
-  return null;
-}
-
-/**
- * GoLogin local API — port 36912.
- */
-async function probeGoLogin(): Promise<DetectedProfile | null> {
-  const data = await probeUrl('http://localhost:36912/api/v1/profile/active') as Record<string, unknown> | null;
-  if (!data) return null;
-  const name = (data['name'] as string) ?? null;
-  if (name) return { browser: 'gologin', profileName: name };
-  return null;
-}
-
-/**
- * Probe local antidetect browser APIs to detect the active profile.
- * Tries all known browsers in parallel.
- */
-async function detectProfileFromLocalApi(): Promise<DetectedProfile | null> {
-  console.log('[CTS sw] Probing local antidetect APIs...');
-
-  const results = await Promise.allSettled([
-    probeAdsPower(),
-    probeDolphin(),
-    probeMultilogin(),
-    probeGoLogin(),
-  ]);
-
-  for (const r of results) {
-    if (r.status === 'fulfilled' && r.value) {
-      console.log(`[CTS sw] Local API match: ${r.value.browser} → "${r.value.profileName}"`);
-      return r.value;
+async function probeUndetectable(): Promise<DetectedProfile | null> {
+  const data = await probeUrl('http://localhost:25325/list') as Record<string, unknown> | null;
+  if (!data?.['data']) return null;
+  const profiles = data['data'] as Record<string, Record<string, unknown>>;
+  // Find running profile (has debug_port set or status Started)
+  for (const [, profile] of Object.entries(profiles)) {
+    if (profile['status'] === 'Started' || (profile['debug_port'] && profile['debug_port'] !== '')) {
+      const name = profile['name'] as string;
+      if (name) return { browser: 'undetectable', profileName: name };
     }
   }
-
-  console.log('[CTS sw] No local antidetect API responded');
+  // Fallback: if only one profile
+  const entries = Object.entries(profiles);
+  if (entries.length === 1) {
+    const name = entries[0][1]['name'] as string;
+    if (name) return { browser: 'undetectable', profileName: name };
+  }
   return null;
+}
+
+/**
+ * Detect antidetect browser profile via local HTTP API.
+ * Uses BUILD_CONFIG.ANTIDETECT_BROWSER to call only the correct API
+ * instead of probing all browsers.
+ *
+ * Only AdsPower and Undetectable have reliable unauthenticated local APIs.
+ * All other browsers either require auth tokens, have no list endpoint,
+ * or are cloud-only — they rely on tab title detection as fallback.
+ */
+async function detectProfileFromLocalApi(): Promise<DetectedProfile | null> {
+  const browser = BUILD_CONFIG.ANTIDETECT_BROWSER;
+  if (!browser || browser.startsWith('__CTS_')) return null;
+  console.log(`[CTS sw] Probing ${browser} local API...`);
+
+  switch (browser) {
+    case 'adspower': return probeAdsPower();
+    case 'undetectable': return probeUndetectable();
+    // These browsers don't have reliable unauthenticated local APIs.
+    // Detection falls back to tab title parsing (detectProfileFromWindow).
+    case 'dolphin':
+    case 'multilogin':
+    case 'gologin':
+    case 'octo':
+    case 'incogniton':
+    case 'vmlogin':
+    case 'morelogin':
+    case 'kameleo':
+    case 'octium':
+    case 'other':
+    default:
+      return null;
+  }
 }
 
 // ─── Proxy IP detection ─────────────────────────────────────────────────────

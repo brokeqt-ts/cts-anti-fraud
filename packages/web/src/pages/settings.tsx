@@ -12,6 +12,7 @@ import {
   Download,
   MessageCircle,
   Unlink,
+  Monitor,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -21,6 +22,7 @@ import {
   setApiKey,
   checkHealth,
   downloadExtension,
+  updateAntidetectBrowser,
   fetchTelegramBotInfo,
   startTelegramConnect,
   fetchTelegramConnectStatus,
@@ -379,6 +381,32 @@ export function SettingsPage() {
   const [keyVisible, setKeyVisible] = useState(false);
   const [keyCopied, setKeyCopied] = useState(false);
 
+  // Antidetect browser selection
+  const [selectedBrowser, setSelectedBrowser] = useState<string>(user?.antidetect_browser ?? '');
+  const [browserSaving, setBrowserSaving] = useState(false);
+  const [browserSaved, setBrowserSaved] = useState(false);
+  const [browserError, setBrowserError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.antidetect_browser) {
+      setSelectedBrowser(user.antidetect_browser);
+    }
+  }, [user?.antidetect_browser]);
+
+  const handleSaveBrowser = useCallback(async () => {
+    setBrowserSaving(true);
+    setBrowserError(null);
+    try {
+      await updateAntidetectBrowser(selectedBrowser);
+      setBrowserSaved(true);
+      setTimeout(() => setBrowserSaved(false), 2000);
+    } catch (err) {
+      setBrowserError(err instanceof Error ? err.message : 'Ошибка сохранения');
+    } finally {
+      setBrowserSaving(false);
+    }
+  }, [selectedBrowser]);
+
   // Extension download
   const [extState, setExtState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [extError, setExtError] = useState<string | null>(null);
@@ -521,6 +549,62 @@ export function SettingsPage() {
               </div>
             </StaggerItem>
           )}
+
+          {/* Antidetect browser selection */}
+          <StaggerItem>
+            <div className="card-static p-[12px_14px] space-y-3">
+              <div className="flex items-center gap-2">
+                <Monitor
+                  className="w-4 h-4"
+                  style={{ color: 'var(--text-muted)' }}
+                  strokeWidth={1.5}
+                />
+                <span className="label-xs">Антидетект-браузер</span>
+              </div>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                Выберите антидетект-браузер для автоматического определения профиля. После изменения скачайте расширение заново.
+              </p>
+              <select
+                value={selectedBrowser}
+                onChange={(e) => setSelectedBrowser(e.target.value)}
+                className="input-field text-sm w-full"
+              >
+                <option value="">Не выбран</option>
+                <option value="adspower">AdsPower</option>
+                <option value="dolphin">Dolphin Anty</option>
+                <option value="multilogin">Multilogin (Mimic)</option>
+                <option value="gologin">GoLogin</option>
+                <option value="octo">Octo Browser</option>
+                <option value="incogniton">Incogniton</option>
+                <option value="vmlogin">VMLogin</option>
+                <option value="undetectable">Undetectable</option>
+                <option value="morelogin">MoreLogin</option>
+                <option value="kameleo">Kameleo</option>
+                <option value="octium">Octium</option>
+                <option value="other">Другой</option>
+              </select>
+              <button
+                onClick={handleSaveBrowser}
+                disabled={browserSaving}
+                className="btn-ghost-green w-full py-2 text-sm font-medium"
+              >
+                {browserSaving ? (
+                  <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+                ) : browserSaved ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Check className="w-4 h-4" /> Сохранено!
+                  </span>
+                ) : (
+                  'Сохранить'
+                )}
+              </button>
+              {browserError && (
+                <div className="flex items-center gap-2 text-xs" style={{ color: '#f87171' }}>
+                  <XCircle className="w-3.5 h-3.5" /> {browserError}
+                </div>
+              )}
+            </div>
+          </StaggerItem>
 
           {/* Extension download */}
           <StaggerItem>

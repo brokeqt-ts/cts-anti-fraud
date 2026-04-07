@@ -53,6 +53,7 @@ const updateUserBodySchema = {
     role: { type: 'string', enum: ['admin', 'buyer'] },
     is_active: { type: 'boolean' },
     api_key_scope: { type: 'string', enum: ['full', 'collect_only'] },
+    antidetect_browser: { type: 'string' },
   },
   minProperties: 1,
 } as const;

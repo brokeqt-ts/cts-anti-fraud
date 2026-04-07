@@ -16,9 +16,14 @@ const serverUrl = process.env.EXT_SERVER_URL || SERVER_URL_PLACEHOLDER;
 const API_KEY_PLACEHOLDER = '__CTS_API_KEY_PLACEHOLDER__';
 const apiKey = process.env.EXT_API_KEY || API_KEY_PLACEHOLDER;
 
+// Antidetect browser — placeholder replaced at download time with user's selection.
+const ANTIDETECT_BROWSER_PLACEHOLDER = '__CTS_ANTIDETECT_BROWSER_PLACEHOLDER__';
+const antidetectBrowser = process.env.EXT_ANTIDETECT_BROWSER || ANTIDETECT_BROWSER_PLACEHOLDER;
+
 const buildDefine = {
   '__SERVER_URL__': JSON.stringify(serverUrl),
   '__API_KEY__': JSON.stringify(apiKey),
+  '__ANTIDETECT_BROWSER__': JSON.stringify(antidetectBrowser),
 };
 
 async function build() {

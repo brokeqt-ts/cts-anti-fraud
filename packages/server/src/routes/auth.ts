@@ -4,6 +4,7 @@ import {
   refreshHandler,
   logoutHandler,
   meHandler,
+  updateAntidetectBrowserHandler,
 } from '../handlers/auth.handler.js';
 
 const loginBodySchema = {
@@ -67,6 +68,24 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       preHandler: [fastify.authenticate],
     },
     meHandler,
+  );
+
+  // Authenticated — update antidetect browser preference
+  fastify.patch(
+    '/auth/antidetect-browser',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['antidetect_browser'],
+          properties: {
+            antidetect_browser: { type: 'string' },
+          },
+        },
+      },
+      preHandler: [fastify.authenticate],
+    },
+    updateAntidetectBrowserHandler,
   );
 
 }

@@ -1609,6 +1609,14 @@ export const changeMyPassword = (
     body: JSON.stringify({ current_password, new_password }),
   });
 
+// --- Auth: Antidetect browser preference ---
+
+export const updateAntidetectBrowser = (browser: string): Promise<{ status: string }> =>
+  apiFetch('/auth/antidetect-browser', {
+    method: 'PATCH',
+    body: JSON.stringify({ antidetect_browser: browser }),
+  });
+
 // --- Global Search ---
 
 export interface SearchResult {
