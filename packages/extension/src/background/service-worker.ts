@@ -179,20 +179,25 @@ async function detectProfileFromWindow(tabId: number): Promise<DetectedProfile |
 
     for (const t of allTabs) {
       const title = t.title ?? '';
-      const urlSnippet = (t.url ?? '').substring(0, 80);
+      const tabUrl = t.url ?? '';
+      const urlSnippet = tabUrl.substring(0, 80);
       console.log(`[CTS sw]   tab ${t.id}: ${JSON.stringify(title)} (${urlSnippet})`);
 
+      // Check title-based detection (Octium, Dolphin, etc.)
       const result = parseTitle(title);
       if (result) {
         console.log('[CTS sw] MATCH on tab', t.id, ':', result.browser, '/', result.profileName);
         return result;
       }
+
+      // AdsPower: start page URL contains start.adspower.net, tab title = profile name
+      if (tabUrl.includes('start.adspower.net') && title && title !== 'New Tab') {
+        console.log('[CTS sw] MATCH AdsPower start page → profile name:', JSON.stringify(title));
+        return { browser: 'adspower', profileName: title };
+      }
     }
 
-    console.log('[CTS sw] No antidetect signature found in any tab title.');
-    console.log('[CTS sw] If you see "ATVanya333 - Octium" in the window title bar');
-    console.log('[CTS sw] but not in any tab title above — the antidetect browser');
-    console.log('[CTS sw] only sets the OS window title, which Chrome API cannot read.');
+    console.log('[CTS sw] No antidetect signature found in any tab title or URL.');
     console.log('[CTS sw] === PROFILE DETECTION END ===');
     return null;
   } catch (err) {
