@@ -95,12 +95,13 @@ export async function updateUserHandler(
   reply: FastifyReply,
 ): Promise<void> {
   const { id } = request.params as { id: string };
-  const { name, email, role, is_active, api_key_scope } = request.body as {
+  const { name, email, role, is_active, api_key_scope, adspower_api_key } = request.body as {
     name?: string;
     email?: string;
     role?: string;
     is_active?: boolean;
     api_key_scope?: string;
+    adspower_api_key?: string;
   };
 
   // Prevent self-deactivation
@@ -174,6 +175,10 @@ export async function updateUserHandler(
     // Auto-sync scope with role when scope not explicitly provided
     sets.push(`api_key_scope = $${idx++}`);
     values.push(role === 'admin' ? 'full' : 'collect_only');
+  }
+  if (adspower_api_key !== undefined) {
+    sets.push(`adspower_api_key = $${idx++}`);
+    values.push(adspower_api_key);
   }
 
   if (sets.length === 0) {

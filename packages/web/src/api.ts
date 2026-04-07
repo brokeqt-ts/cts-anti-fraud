@@ -214,6 +214,15 @@ export async function downloadExtensionForUser(userId: string): Promise<void> {
   await downloadBlob(`/extension/download/${userId}`, 'cts-extension.zip');
 }
 
+// --- Auth: self-service ---
+
+/** Update the current user's AdsPower API key. */
+export const updateAdspowerKey = (adspower_api_key: string): Promise<{ status: string }> =>
+  apiFetch('/auth/adspower-key', {
+    method: 'PATCH',
+    body: JSON.stringify({ adspower_api_key }),
+  });
+
 // --- Types ---
 
 export interface ActivityEvent {

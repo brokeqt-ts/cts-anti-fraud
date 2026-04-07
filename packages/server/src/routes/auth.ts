@@ -4,6 +4,7 @@ import {
   refreshHandler,
   logoutHandler,
   meHandler,
+  updateAdspowerKeyHandler,
 } from '../handlers/auth.handler.js';
 
 const loginBodySchema = {
@@ -67,6 +68,24 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       preHandler: [fastify.authenticate],
     },
     meHandler,
+  );
+
+  // Authenticated — update own AdsPower API key
+  fastify.patch(
+    '/auth/adspower-key',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['adspower_api_key'],
+          properties: {
+            adspower_api_key: { type: 'string' },
+          },
+        },
+      },
+      preHandler: [fastify.authenticate],
+    },
+    updateAdspowerKeyHandler,
   );
 
 }

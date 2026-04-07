@@ -24,11 +24,11 @@ async function streamExtensionZip(
 ): Promise<void> {
   const pool = getPool(env.DATABASE_URL);
   const result = await pool.query(
-    'SELECT api_key, name FROM users WHERE id = $1 AND is_active = true',
+    'SELECT api_key, name, adspower_api_key FROM users WHERE id = $1 AND is_active = true',
     [userId],
   );
 
-  const row = result.rows[0] as { api_key?: string; name?: string } | undefined;
+  const row = result.rows[0] as { api_key?: string; name?: string; adspower_api_key?: string } | undefined;
   if (!row) {
     await reply.status(404).send({
       error: 'User not found or inactive',
@@ -73,7 +73,7 @@ async function streamExtensionZip(
   // Resolve server URL: EXT_SERVER_URL env var → fallback to request origin
   const serverUrl = process.env['EXT_SERVER_URL']
     || `${request.protocol}://${request.hostname}`;
-  const adspowerKey = process.env['ADSPOWER_API_KEY'] || '';
+  const adspowerKey = row.adspower_api_key ?? '';
 
   addDirectoryToArchive(archive, extDistPath, 'cts-extension', apiKey, serverUrl, adspowerKey);
   await archive.finalize();

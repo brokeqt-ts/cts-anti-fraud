@@ -226,6 +226,22 @@ export async function changePasswordHandler(
   await reply.send({ message: 'Password updated' });
 }
 
+// PATCH /auth/adspower-key
+export async function updateAdspowerKeyHandler(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const userId = request.user!.id;
+  const { adspower_api_key } = request.body as { adspower_api_key: string };
+
+  await pool.query(
+    `UPDATE users SET adspower_api_key = $1 WHERE id = $2`,
+    [adspower_api_key, userId],
+  );
+
+  await reply.status(200).send({ status: 'ok' });
+}
+
 // GET /auth/me
 export async function meHandler(
   request: FastifyRequest,
@@ -246,7 +262,7 @@ export async function meHandler(
   }
 
   const result = await pool.query(
-    `SELECT id, name, email, role, api_key FROM users WHERE id = $1`,
+    `SELECT id, name, email, role, api_key, adspower_api_key FROM users WHERE id = $1`,
     [userId],
   );
 
@@ -264,6 +280,7 @@ export async function meHandler(
     email: string;
     role: string;
     api_key: string | null;
+    adspower_api_key: string | null;
   };
 
   // Mask API key: first 8 chars + ***
@@ -277,5 +294,6 @@ export async function meHandler(
     email: user.email,
     role: user.role,
     api_key: maskedKey,
+    adspower_api_key: user.adspower_api_key ?? null,
   });
 }
