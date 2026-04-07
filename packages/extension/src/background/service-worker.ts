@@ -232,19 +232,20 @@ async function probeUrl(url: string, timeoutMs = 2000): Promise<unknown | null> 
  * 3. The one with status "Active" is our profile
  */
 async function probeAdsPower(): Promise<DetectedProfile | null> {
-  const apiKey = BUILD_CONFIG.ADSPOWER_API_KEY;
-  if (!apiKey) {
-    console.log('[CTS sw] AdsPower: no API key configured, skipping');
-    return null;
-  }
+  const apiKey = BUILD_CONFIG.ADSPOWER_API_KEY || '';
 
-  const hosts = ['local.adspower.net', '127.0.0.1', 'localhost'];
+  // Use user-configured URL or try common defaults
+  const configuredUrl = BUILD_CONFIG.ADSPOWER_API_URL;
+  const hosts = configuredUrl
+    ? [configuredUrl.replace(/\/+$/, '')]
+    : ['http://local.adspower.net:50325', 'http://127.0.0.1:50325', 'http://localhost:50325'];
   let baseUrl: string | null = null;
   let profiles: Array<Record<string, unknown>> = [];
 
   // Step 1: find a responding host and get profile list
   for (const host of hosts) {
-    const url = `http://${host}:50325/api/v1/browser/list?page_size=100&api_key=${apiKey}`;
+    const base = host.startsWith('http') ? host : `http://${host}`;
+    const url = `${base}/api/v1/browser/list?page_size=100${apiKey ? `&api_key=${apiKey}` : ''}`;
     const data = await probeUrl(url) as Record<string, unknown> | null;
     if (!data || data['code'] !== 0) continue;
     const inner = data['data'] as Record<string, unknown> | undefined;
@@ -279,7 +280,7 @@ async function probeAdsPower(): Promise<DetectedProfile | null> {
     sorted.map(async (p) => {
       const userId = p['user_id'] as string | undefined;
       if (!userId) return null;
-      const url = `${baseUrl}/api/v1/browser/active?user_id=${userId}&api_key=${apiKey}`;
+      const url = `${baseUrl}/api/v1/browser/active?user_id=${userId}${apiKey ? `&api_key=${apiKey}` : ''}`;
       const data = await probeUrl(url, 1500) as Record<string, unknown> | null;
       if (!data || data['code'] !== 0) return null;
       const inner = data['data'] as Record<string, unknown> | undefined;

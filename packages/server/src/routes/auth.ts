@@ -77,9 +77,9 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       schema: {
         body: {
           type: 'object',
-          required: ['adspower_api_key'],
           properties: {
             adspower_api_key: { type: 'string' },
+            adspower_api_url: { type: 'string' },
           },
         },
       },

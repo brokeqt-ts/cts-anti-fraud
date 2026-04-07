@@ -216,11 +216,11 @@ export async function downloadExtensionForUser(userId: string): Promise<void> {
 
 // --- Auth: self-service ---
 
-/** Update the current user's AdsPower API key. */
-export const updateAdspowerKey = (adspower_api_key: string): Promise<{ status: string }> =>
+/** Update the current user's AdsPower settings. */
+export const updateAdspowerSettings = (params: { adspower_api_key?: string; adspower_api_url?: string }): Promise<{ status: string }> =>
   apiFetch('/auth/adspower-key', {
     method: 'PATCH',
-    body: JSON.stringify({ adspower_api_key }),
+    body: JSON.stringify(params),
   });
 
 // --- Types ---

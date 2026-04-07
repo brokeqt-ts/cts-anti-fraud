@@ -232,13 +232,20 @@ export async function updateAdspowerKeyHandler(
   reply: FastifyReply,
 ): Promise<void> {
   const userId = request.user!.id;
-  const { adspower_api_key } = request.body as { adspower_api_key: string };
+  const { adspower_api_key, adspower_api_url } = request.body as {
+    adspower_api_key?: string;
+    adspower_api_url?: string;
+  };
 
-  await pool.query(
-    `UPDATE users SET adspower_api_key = $1 WHERE id = $2`,
-    [adspower_api_key, userId],
-  );
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  let idx = 1;
+  if (adspower_api_key !== undefined) { sets.push(`adspower_api_key = $${idx++}`); values.push(adspower_api_key); }
+  if (adspower_api_url !== undefined) { sets.push(`adspower_api_url = $${idx++}`); values.push(adspower_api_url); }
+  if (sets.length === 0) { await reply.status(400).send({ error: 'No fields', code: 'NO_FIELDS' }); return; }
 
+  values.push(userId);
+  await pool.query(`UPDATE users SET ${sets.join(', ')} WHERE id = $${idx}`, values);
   await reply.status(200).send({ status: 'ok' });
 }
 
@@ -262,7 +269,7 @@ export async function meHandler(
   }
 
   const result = await pool.query(
-    `SELECT id, name, email, role, api_key, adspower_api_key FROM users WHERE id = $1`,
+    `SELECT id, name, email, role, api_key, adspower_api_key, adspower_api_url FROM users WHERE id = $1`,
     [userId],
   );
 
@@ -281,6 +288,7 @@ export async function meHandler(
     role: string;
     api_key: string | null;
     adspower_api_key: string | null;
+    adspower_api_url: string | null;
   };
 
   // Mask API key: first 8 chars + ***
@@ -295,5 +303,6 @@ export async function meHandler(
     role: user.role,
     api_key: maskedKey,
     adspower_api_key: user.adspower_api_key ?? null,
+    adspower_api_url: user.adspower_api_url ?? null,
   });
 }
