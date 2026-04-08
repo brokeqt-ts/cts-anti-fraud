@@ -5,6 +5,7 @@ import * as bansRepo from '../repositories/bans.repository.js';
 import * as accountsRepo from '../repositories/accounts.repository.js';
 import { getUserIdFilter } from '../utils/user-scope.js';
 import { audit } from '../services/audit.service.js';
+import { recordBanForRetrain } from '../services/ml-auto-retrain.service.js';
 
 export async function createBanHandler(
   request: FastifyRequest,
@@ -70,6 +71,7 @@ export async function createBanHandler(
   });
 
   audit(pool, request, 'ban.create', { entityType: 'ban', entityId: ban.id as string, details: { account_google_id, ban_reason_google } });
+  recordBanForRetrain(pool, request.log);
   await reply.status(201).send(ban);
 }
 

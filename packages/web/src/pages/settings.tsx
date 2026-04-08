@@ -13,6 +13,8 @@ import {
   MessageCircle,
   Unlink,
   Monitor,
+  Brain,
+  RefreshCw,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -27,8 +29,11 @@ import {
   startTelegramConnect,
   fetchTelegramConnectStatus,
   disconnectTelegram,
+  trainMlModel,
+  fetchMlStatus,
   type HealthCheck,
   type TelegramConnectStatus,
+  type MlTrainResult,
 } from '../api.js';
 import { useAuth } from '../contexts/auth-context.js';
 import { StaggerContainer, StaggerItem, BlurFade } from '../components/ui/animations.js';
@@ -375,6 +380,116 @@ const ROLE_LABELS: Record<string, string> = {
   buyer: 'Байер',
 };
 
+function MlRetrainCard() {
+  const [status, setStatus] = useState<{ available: boolean; model_ready?: boolean; model_version?: string; sample_count?: number } | null>(null);
+  const [trainState, setTrainState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [trainResult, setTrainResult] = useState<MlTrainResult | null>(null);
+  const [trainError, setTrainError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchMlStatus().then(setStatus).catch(() => setStatus({ available: false }));
+  }, []);
+
+  async function handleRetrain() {
+    setTrainState('loading');
+    setTrainError(null);
+    setTrainResult(null);
+    try {
+      const result = await trainMlModel();
+      setTrainResult(result);
+      setTrainState('success');
+      fetchMlStatus().then(setStatus).catch(() => {});
+      setTimeout(() => setTrainState('idle'), 5000);
+    } catch (err) {
+      setTrainError(err instanceof Error ? err.message : 'Ошибка обучения');
+      setTrainState('error');
+      setTimeout(() => setTrainState('idle'), 4000);
+    }
+  }
+
+  return (
+    <StaggerItem>
+      <div className="card-static p-[12px_14px] space-y-3">
+        <div className="flex items-center gap-2">
+          <Brain className="w-4 h-4" style={{ color: 'var(--text-muted)' }} strokeWidth={1.5} />
+          <span className="label-xs">ML модель</span>
+        </div>
+
+        {/* Status */}
+        <div className="space-y-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+          {status === null ? (
+            <div className="flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Проверка...</div>
+          ) : status.available ? (
+            <>
+              <div className="flex items-center justify-between">
+                <span>Статус</span>
+                <span style={{ color: status.model_ready ? '#4ade80' : '#fbbf24' }}>
+                  {status.model_ready ? '● Модель готова' : '● Не обучена'}
+                </span>
+              </div>
+              {status.model_version && (
+                <div className="flex items-center justify-between">
+                  <span>Версия</span>
+                  <span className="font-mono text-[11px]" style={{ color: 'var(--text-secondary)' }}>{status.model_version}</span>
+                </div>
+              )}
+              {status.sample_count != null && (
+                <div className="flex items-center justify-between">
+                  <span>Обучено на</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>{status.sample_count} аккаунтах</span>
+                </div>
+              )}
+            </>
+          ) : (
+            <div style={{ color: '#f87171' }}>XGBoost сервис недоступен — будет использована TS модель</div>
+          )}
+        </div>
+
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          Модель переобучается автоматически раз в неделю и после каждых 50 новых банов.
+        </p>
+
+        {/* Result */}
+        {trainState === 'success' && trainResult && (
+          <div className="text-xs p-2.5 rounded-lg space-y-1" style={{ background: 'rgba(74,222,128,0.08)', color: '#4ade80' }}>
+            <div className="font-medium">Обучение завершено ({trainResult.engine})</div>
+            {trainResult.accuracy != null && (
+              <div style={{ color: 'var(--text-secondary)' }}>
+                Accuracy: {(trainResult.accuracy * 100).toFixed(1)}%
+                {trainResult.f1 != null && ` · F1: ${(trainResult.f1 * 100).toFixed(1)}%`}
+                {trainResult.sample_count != null && ` · ${trainResult.sample_count} сэмплов`}
+              </div>
+            )}
+            {trainResult.warnings?.map((w, i) => (
+              <div key={i} style={{ color: '#fbbf24' }}>⚠ {w}</div>
+            ))}
+          </div>
+        )}
+
+        {trainState === 'error' && trainError && (
+          <div className="flex items-center gap-2 text-xs" style={{ color: '#f87171' }}>
+            <XCircle className="w-3.5 h-3.5" /> {trainError}
+          </div>
+        )}
+
+        <button
+          onClick={handleRetrain}
+          disabled={trainState === 'loading'}
+          className="btn-ghost-green w-full py-2 text-sm font-medium flex items-center justify-center gap-2"
+        >
+          {trainState === 'loading' ? (
+            <><Loader2 className="w-4 h-4 animate-spin" /> Обучение...</>
+          ) : trainState === 'success' ? (
+            <><CheckCircle className="w-4 h-4" /> Готово!</>
+          ) : (
+            <><RefreshCw className="w-4 h-4" /> Переобучить сейчас</>
+          )}
+        </button>
+      </div>
+    </StaggerItem>
+  );
+}
+
 export function SettingsPage() {
   const { user, isAuthenticated } = useAuth();
 
@@ -695,6 +810,9 @@ export function SettingsPage() {
               </motion.button>
             </div>
           </StaggerItem>
+
+          {/* ML Model — admin only */}
+          {user.role === 'admin' && <MlRetrainCard />}
 
           {/* Telegram Connect */}
           <TelegramConnectCard />

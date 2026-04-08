@@ -41,6 +41,7 @@ import { scoreSurvivedAccounts } from './services/ai/leaderboard.service.js';
 import { deleteOldNotifications } from './services/notification.service.js';
 import { startBotPolling, stopBotPolling, registerBotCommands } from './services/telegram-bot.service.js';
 import { snapshotCreativePerformance, runDecayScanWithAlerts } from './services/creative-decay.service.js';
+import { runMlRetrain } from './services/ml-auto-retrain.service.js';
 import { API_PREFIX, RATE_LIMIT_PER_MINUTE } from '@cts/shared';
 import './types.js';
 
@@ -265,6 +266,13 @@ async function start() {
       .then((r) => app.log.info(`[cron] Domain content analysis: analyzed=${r.analyzed}, errors=${r.errors}`))
       .catch((err) => app.log.error('[cron] Enrichment failed after retries: %s', err instanceof Error ? err.message : err));
   }, 6 * 60 * 60 * 1000)); // Every 6 hours
+
+  // АВТОМАТИЗАЦИЯ ML: Weekly retrain — every 7 days
+  intervals.push(setInterval(() => {
+    app.log.info('[cron] Weekly ML retrain starting...');
+    runMlRetrain(pool, app.log, 'weekly_schedule')
+      .catch((err) => app.log.error('[cron] Weekly ML retrain failed: %s', err instanceof Error ? err.message : err));
+  }, 7 * 24 * 60 * 60 * 1000)); // Every 7 days
 
   // АВТОМАТИЗАЦИЯ 3: Catch-up scan for suspended accounts (auto-ban + post-mortem)
   timers.push(setTimeout(() => {

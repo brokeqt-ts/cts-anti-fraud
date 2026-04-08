@@ -1677,3 +1677,25 @@ export const toggleRule = (id: string, is_active: boolean): Promise<{ rule: Expe
 
 export const reorderRules = (updates: { id: string; priority: number }[]): Promise<{ ok: boolean }> =>
   apiFetch('/admin/rules/reorder', { method: 'POST', body: JSON.stringify({ updates }) });
+
+// ─── ML ───────────────────────────────────────────────────────────────────────
+
+export interface MlTrainResult {
+  engine: string;
+  model_version?: string;
+  sample_count?: number;
+  accuracy?: number;
+  f1?: number;
+  warnings?: string[];
+}
+
+export const trainMlModel = (): Promise<MlTrainResult> =>
+  apiFetch('/ml/train', { method: 'POST' });
+
+export const fetchMlStatus = (): Promise<{
+  available: boolean;
+  model_ready?: boolean;
+  model_version?: string;
+  sample_count?: number;
+  reason?: string;
+}> => apiFetch('/ml/xgboost-status');
