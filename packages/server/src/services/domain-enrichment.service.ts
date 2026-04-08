@@ -2,6 +2,7 @@ import dns from 'node:dns/promises';
 import tls from 'node:tls';
 import type pg from 'pg';
 import { analyzeCloaking, saveCloakingAnalysis, needsCloakingCheck } from './cloaking-detector.js';
+import { analyzeAndSave } from './domain-content-analyzer.js';
 
 /** Rate-limit helper: sleep ms */
 function sleep(ms: number): Promise<void> {
@@ -578,7 +579,6 @@ export function upsertDomainAndEnrich(pool: pg.Pool, url: string): void {
   try {
     hostname = new URL(url).hostname;
   } catch {
-    // Try raw extraction for non-URL strings
     hostname = url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
   }
   if (!hostname || hostname.includes('localhost') || hostname.includes('google.com')) return;
@@ -586,17 +586,55 @@ export function upsertDomainAndEnrich(pool: pg.Pool, url: string): void {
   pool.query(
     `INSERT INTO domains (domain_name) VALUES ($1) ON CONFLICT (domain_name) DO NOTHING RETURNING id`,
     [hostname],
-  ).then((result) => {
-    if (result.rowCount && result.rowCount > 0) {
-      console.log(`[auto-enrich] New domain discovered: ${hostname}, scheduling enrichment`);
-      // New domain — enrich in background with delay to not block request
-      setTimeout(() => {
-        const service = new DomainEnrichmentService(pool);
-        service.enrichDomain(hostname)
-          .then((data) => service['saveDomainData'](hostname, data))
-          .then(() => console.log(`[auto-enrich] Enriched: ${hostname}`))
-          .catch((err) => console.error(`[auto-enrich] Failed for ${hostname}:`, err instanceof Error ? err.message : err));
-      }, 2000);
+  ).then(async (result) => {
+    if (!result.rowCount || result.rowCount === 0) return;
+
+    const domainId = result.rows[0]?.id as string | undefined;
+    console.log(`[auto-enrich] New domain discovered: ${hostname}, running full check pipeline`);
+
+    // Small delay to not block the request that triggered discovery
+    await sleep(2000);
+
+    const service = new DomainEnrichmentService(pool);
+
+    // Step 1: Basic enrichment (DNS, SSL, HTTP, RDAP, Safe Page Score)
+    try {
+      const data = await service.enrichDomain(hostname);
+      await service['saveDomainData'](hostname, data);
+      console.log(`[auto-enrich] Basic enrichment done: ${hostname} (score=${data.safe_page_quality_score})`);
+    } catch (err) {
+      console.error(`[auto-enrich] Basic enrichment failed for ${hostname}:`, err instanceof Error ? err.message : err);
+      await pool.query(
+        `UPDATE domains SET last_checked_at = NOW(), site_status = 'error' WHERE domain_name = $1`,
+        [hostname],
+      ).catch(() => {});
+      return; // No point continuing if we can't reach the site
+    }
+
+    // Step 2: Cloaking check
+    try {
+      if (await needsCloakingCheck(pool, hostname)) {
+        const cloakingResult = await analyzeCloaking(hostname);
+        await saveCloakingAnalysis(pool, hostname, cloakingResult);
+        console.log(`[auto-enrich] Cloaking check done: ${hostname} (cloaked=${cloakingResult.is_cloaked})`);
+      }
+    } catch (err) {
+      console.warn(`[auto-enrich] Cloaking check failed for ${hostname}:`, err instanceof Error ? err.message : err);
+    }
+
+    // Step 3: Content analysis (AI-powered page scan)
+    try {
+      const id = domainId ?? await pool.query(
+        `SELECT id FROM domains WHERE domain_name = $1`,
+        [hostname],
+      ).then(r => r.rows[0]?.id as string | undefined);
+
+      if (id) {
+        await analyzeAndSave(pool, id, `https://${hostname}`);
+        console.log(`[auto-enrich] Content analysis done: ${hostname}`);
+      }
+    } catch (err) {
+      console.warn(`[auto-enrich] Content analysis failed for ${hostname}:`, err instanceof Error ? err.message : err);
     }
   }).catch((err) => {
     console.error(`[auto-enrich] Domain upsert failed for ${hostname}:`, err instanceof Error ? err.message : err);
