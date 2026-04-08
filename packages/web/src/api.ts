@@ -1630,3 +1630,51 @@ export interface SearchResult {
 
 export const globalSearch = (q: string): Promise<{ results: SearchResult[] }> =>
   apiFetch(`/search?q=${encodeURIComponent(q)}`);
+
+// --- Expert Rules ---
+
+export interface ExpertRule {
+  id: string;
+  name: string;
+  description: string | null;
+  category: 'bin' | 'domain' | 'account' | 'geo' | 'vertical' | 'spend';
+  condition: unknown;
+  severity: 'block' | 'warning' | 'info';
+  message_template: string;
+  is_active: boolean;
+  priority: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateRuleRequest {
+  name: string;
+  description?: string | null;
+  category: ExpertRule['category'];
+  condition: unknown;
+  severity: ExpertRule['severity'];
+  message_template: string;
+  is_active?: boolean;
+  priority?: number;
+}
+
+export type UpdateRuleRequest = Partial<Omit<CreateRuleRequest, 'name'>> & { name?: string };
+
+export const fetchRules = (): Promise<{ rules: ExpertRule[] }> =>
+  apiFetch('/admin/rules');
+
+export const createRule = (data: CreateRuleRequest): Promise<{ rule: ExpertRule }> =>
+  apiFetch('/admin/rules', { method: 'POST', body: JSON.stringify(data) });
+
+export const updateRule = (id: string, data: UpdateRuleRequest): Promise<{ rule: ExpertRule }> =>
+  apiFetch(`/admin/rules/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+
+export const deleteRule = (id: string): Promise<void> =>
+  apiFetch(`/admin/rules/${id}`, { method: 'DELETE' });
+
+export const toggleRule = (id: string, is_active: boolean): Promise<{ rule: ExpertRule }> =>
+  apiFetch(`/admin/rules/${id}/toggle`, { method: 'PATCH', body: JSON.stringify({ is_active }) });
+
+export const reorderRules = (updates: { id: string; priority: number }[]): Promise<{ ok: boolean }> =>
+  apiFetch('/admin/rules/reorder', { method: 'POST', body: JSON.stringify({ updates }) });

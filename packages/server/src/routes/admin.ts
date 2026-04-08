@@ -31,6 +31,14 @@ import {
   notificationHistoryHandler,
 } from '../handlers/admin-notifications.handler.js';
 import { listAuditHandler } from '../handlers/audit.handler.js';
+import {
+  listRulesHandler,
+  createRuleHandler,
+  updateRuleHandler,
+  deleteRuleHandler,
+  toggleRuleHandler,
+  reorderRulesHandler,
+} from '../handlers/admin-rules.handler.js';
 
 // --- JSON Schemas for user management ---
 
@@ -369,5 +377,118 @@ export async function adminRoutes(fastify: FastifyInstance): Promise<void> {
       preHandler: [fastify.authenticate, fastify.requireRole('admin')],
     },
     listAuditHandler,
+  );
+
+  // --- Expert Rules CRUD (admin only) ---
+
+  fastify.get(
+    '/admin/rules',
+    { preHandler: [fastify.authenticate, fastify.requireRole('admin')] },
+    listRulesHandler,
+  );
+
+  fastify.post(
+    '/admin/rules',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['name', 'category', 'condition', 'severity', 'message_template'],
+          properties: {
+            name: { type: 'string', minLength: 1, maxLength: 200 },
+            description: { type: ['string', 'null'] },
+            category: { type: 'string', enum: ['bin', 'domain', 'account', 'geo', 'vertical', 'spend'] },
+            condition: { type: 'object' },
+            severity: { type: 'string', enum: ['block', 'warning', 'info'] },
+            message_template: { type: 'string', minLength: 1 },
+            is_active: { type: 'boolean' },
+            priority: { type: 'integer' },
+          },
+          additionalProperties: false,
+        },
+      },
+      preHandler: [fastify.authenticate, fastify.requireRole('admin')],
+    },
+    createRuleHandler,
+  );
+
+  fastify.patch(
+    '/admin/rules/:id',
+    {
+      schema: {
+        params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+        body: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', minLength: 1, maxLength: 200 },
+            description: { type: ['string', 'null'] },
+            category: { type: 'string', enum: ['bin', 'domain', 'account', 'geo', 'vertical', 'spend'] },
+            condition: { type: 'object' },
+            severity: { type: 'string', enum: ['block', 'warning', 'info'] },
+            message_template: { type: 'string', minLength: 1 },
+            is_active: { type: 'boolean' },
+            priority: { type: 'integer' },
+          },
+          minProperties: 1,
+          additionalProperties: false,
+        },
+      },
+      preHandler: [fastify.authenticate, fastify.requireRole('admin')],
+    },
+    updateRuleHandler,
+  );
+
+  fastify.delete(
+    '/admin/rules/:id',
+    {
+      schema: {
+        params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+      },
+      preHandler: [fastify.authenticate, fastify.requireRole('admin')],
+    },
+    deleteRuleHandler,
+  );
+
+  fastify.patch(
+    '/admin/rules/:id/toggle',
+    {
+      schema: {
+        params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+        body: {
+          type: 'object',
+          required: ['is_active'],
+          properties: { is_active: { type: 'boolean' } },
+        },
+      },
+      preHandler: [fastify.authenticate, fastify.requireRole('admin')],
+    },
+    toggleRuleHandler,
+  );
+
+  fastify.post(
+    '/admin/rules/reorder',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['updates'],
+          properties: {
+            updates: {
+              type: 'array',
+              items: {
+                type: 'object',
+                required: ['id', 'priority'],
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  priority: { type: 'integer' },
+                },
+              },
+            },
+          },
+        },
+      },
+      preHandler: [fastify.authenticate, fastify.requireRole('admin')],
+    },
+    reorderRulesHandler,
   );
 }

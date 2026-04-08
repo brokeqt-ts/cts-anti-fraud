@@ -1,6 +1,7 @@
 import type pg from 'pg';
 import * as assessmentRepo from '../repositories/assessment.repository.js';
-import { evaluateRules, getBudgetRecommendation, type AssessmentContext, type RuleResult } from './rules-engine.js';
+import { getBudgetRecommendation, type AssessmentContext, type RuleResult } from './rules-engine.js';
+import { evaluateRulesV2 } from './rules-engine-v2.js';
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 
@@ -241,7 +242,7 @@ export async function assess(pool: pg.Pool, req: AssessmentRequest): Promise<Ass
     geoBanRate: geoStats?.banRate ?? null,
   };
 
-  const ruleResults = evaluateRules(rulesCtx);
+  const ruleResults = await evaluateRulesV2(pool, rulesCtx);
 
   // If any rule has severity 'block', bump score to at least 80
   const hasBlocker = ruleResults.some(r => r.severity === 'block');
