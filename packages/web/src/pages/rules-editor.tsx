@@ -46,10 +46,10 @@ const METRICS: Record<string, MetricOption[]> = {
       unit: '%',
       type: 'number',
       defaultValue: '50',
-      directions: [{ operator: '>', label: 'больше' }, { operator: '<', label: 'меньше' }],
-      describe: (op, val) => `Ban rate по BIN ${op === '>' ? 'больше' : 'меньше'} ${val}%`,
-      suggest: (op, val) => ({
-        name: `BIN ban rate ${op} ${val}%`,
+      directions: [{ operator: '>', label: 'больше' }],
+      describe: (_op, val) => `Ban rate по BIN больше ${val}%`,
+      suggest: (_op, val) => ({
+        name: `BIN ban rate > ${val}%`,
         message: `BIN {bin} имеет повышенный ban rate {binBanRate}% — рассмотрите альтернативу`,
       }),
     },
@@ -73,10 +73,10 @@ const METRICS: Record<string, MetricOption[]> = {
       unit: 'дней',
       type: 'number',
       defaultValue: '14',
-      directions: [{ operator: '<', label: 'меньше' }, { operator: '>', label: 'больше' }],
-      describe: (op, val) => `Возраст домена ${op === '<' ? 'меньше' : 'больше'} ${val} дней`,
-      suggest: (op, val) => ({
-        name: `Домен ${op === '<' ? 'моложе' : 'старше'} ${val} дней`,
+      directions: [{ operator: '<', label: 'меньше' }],
+      describe: (_op, val) => `Возраст домена меньше ${val} дней`,
+      suggest: (_op, val) => ({
+        name: `Домен моложе ${val} дней`,
         message: `Домен слишком молодой ({domainAgeDays} дн.) — проверьте вертикальный минимум`,
       }),
     },
@@ -86,10 +86,10 @@ const METRICS: Record<string, MetricOption[]> = {
       unit: '/100',
       type: 'number',
       defaultValue: '40',
-      directions: [{ operator: '<', label: 'меньше' }, { operator: '>', label: 'больше' }],
-      describe: (op, val) => `Safe Page Score ${op === '<' ? 'меньше' : 'больше'} ${val}`,
-      suggest: (op, val) => ({
-        name: `Safe Page Score ${op} ${val}`,
+      directions: [{ operator: '<', label: 'меньше' }],
+      describe: (_op, val) => `Safe Page Score меньше ${val}`,
+      suggest: (_op, val) => ({
+        name: `Safe Page Score < ${val}`,
         message: `Низкий Safe Page Score домена ({domainSafePageScore}/100) — высокий риск бана`,
       }),
     },
@@ -101,10 +101,10 @@ const METRICS: Record<string, MetricOption[]> = {
       unit: 'дней',
       type: 'number',
       defaultValue: '7',
-      directions: [{ operator: '<', label: 'меньше' }, { operator: '>', label: 'больше' }],
-      describe: (op, val) => `Возраст аккаунта ${op === '<' ? 'меньше' : 'больше'} ${val} дней`,
-      suggest: (op, val) => ({
-        name: `Аккаунт ${op === '<' ? 'моложе' : 'старше'} ${val} дней`,
+      directions: [{ operator: '<', label: 'меньше' }],
+      describe: (_op, val) => `Возраст аккаунта меньше ${val} дней`,
+      suggest: (_op, val) => ({
+        name: `Аккаунт моложе ${val} дней`,
         message: `Аккаунт очень молодой ({accountAgeDays} дн.) — высокий риск мгновенного бана`,
       }),
     },
@@ -128,8 +128,8 @@ const METRICS: Record<string, MetricOption[]> = {
       unit: '%',
       type: 'number',
       defaultValue: '40',
-      directions: [{ operator: '>', label: 'больше' }, { operator: '<', label: 'меньше' }],
-      describe: (op, val) => `Ban rate по ГЕО ${op === '>' ? 'больше' : 'меньше'} ${val}%`,
+      directions: [{ operator: '>', label: 'больше' }],
+      describe: (_op, val) => `Ban rate по ГЕО больше ${val}%`,
       suggest: (_op, val) => ({
         name: `ГЕО ban rate > ${val}%`,
         message: `Гео {geo} имеет повышенный процент банов {geoBanRate}%`,
@@ -143,8 +143,8 @@ const METRICS: Record<string, MetricOption[]> = {
       unit: '%',
       type: 'number',
       defaultValue: '50',
-      directions: [{ operator: '>', label: 'больше' }, { operator: '<', label: 'меньше' }],
-      describe: (op, val) => `Ban rate по вертикали ${op === '>' ? 'больше' : 'меньше'} ${val}%`,
+      directions: [{ operator: '>', label: 'больше' }],
+      describe: (_op, val) => `Ban rate по вертикали больше ${val}%`,
       suggest: (_op, val) => ({
         name: `Вертикаль ban rate > ${val}%`,
         message: `Вертикаль {vertical} имеет процент банов {verticalBanRate}% — будьте осторожны`,
@@ -158,8 +158,8 @@ const METRICS: Record<string, MetricOption[]> = {
       unit: 'дней',
       type: 'number',
       defaultValue: '7',
-      directions: [{ operator: '<', label: 'меньше' }, { operator: '>', label: 'больше' }],
-      describe: (op, val) => `Возраст аккаунта ${op === '<' ? 'меньше' : 'больше'} ${val} дней`,
+      directions: [{ operator: '<', label: 'меньше' }],
+      describe: (_op, val) => `Возраст аккаунта меньше ${val} дней`,
       suggest: (_op, val) => ({
         name: `Рекомендация бюджета (аккаунт < ${val} дней)`,
         message: `Рекомендуемый бюджет: не более $30/день (аккаунт моложе ${val} дней)`,
