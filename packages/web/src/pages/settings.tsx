@@ -441,7 +441,7 @@ function MlRetrainCard() {
               )}
             </>
           ) : (
-            <div style={{ color: '#f87171' }}>XGBoost сервис недоступен — будет использована TS модель</div>
+            <div style={{ color: '#fbbf24' }}>⚠ ML сервис недоступен</div>
           )}
         </div>
 
