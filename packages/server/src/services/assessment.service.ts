@@ -244,10 +244,6 @@ export async function assess(pool: pg.Pool, req: AssessmentRequest): Promise<Ass
 
   const ruleResults = await evaluateRulesV2(pool, rulesCtx);
 
-  // If any rule has severity 'block', bump score to at least 80
-  const hasBlocker = ruleResults.some(r => r.severity === 'block');
-  const finalScore = hasBlocker ? Math.max(riskScore, 80) : riskScore;
-
   // 5. Build recommendations from rule messages
   const recommendations = buildRecommendations(ruleResults, rulesCtx);
 
@@ -260,8 +256,8 @@ export async function assess(pool: pg.Pool, req: AssessmentRequest): Promise<Ass
     : 0;
 
   return {
-    risk_score: finalScore,
-    risk_level: riskLevel(finalScore),
+    risk_score: riskScore,
+    risk_level: riskLevel(riskScore),
     factors,
     recommendations,
     comparable_accounts: {
@@ -279,13 +275,8 @@ export async function assess(pool: pg.Pool, req: AssessmentRequest): Promise<Ass
 function buildRecommendations(rules: RuleResult[], ctx: AssessmentContext): string[] {
   const recs: string[] = [];
 
-  // Add all rule messages as recommendations, ordered by severity
-  const severityOrder = { block: 0, warning: 1, info: 2 };
-  const sorted = [...rules].sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
-
-  for (const r of sorted) {
-    const prefix = r.severity === 'block' ? '🚫 ' : r.severity === 'warning' ? '⚠️ ' : 'ℹ️ ';
-    recs.push(`${prefix}${r.message}`);
+  for (const r of rules) {
+    recs.push(r.message);
   }
 
   // If no domain provided but everything else is fine, suggest adding one

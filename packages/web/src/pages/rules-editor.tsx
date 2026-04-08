@@ -23,17 +23,6 @@ const CATEGORIES = [
 
 type Category = typeof CATEGORIES[number]['value'];
 
-// ─── Severity ─────────────────────────────────────────────────────────────────
-
-const SEVERITIES = [
-  { value: 'block',   label: 'Заблокировать', icon: '🚫', color: '#f87171', bg: 'rgba(239,68,68,0.12)',  border: 'rgba(239,68,68,0.4)' },
-  { value: 'warning', label: 'Предупредить',  icon: '⚠️', color: '#fbbf24', bg: 'rgba(251,191,36,0.12)', border: 'rgba(251,191,36,0.4)' },
-  { value: 'info',    label: 'Инфо',          icon: 'ℹ️', color: '#60a5fa', bg: 'rgba(96,165,250,0.12)', border: 'rgba(96,165,250,0.4)' },
-] as const;
-
-type Severity = typeof SEVERITIES[number]['value'];
-
-function sevInfo(s: string) { return SEVERITIES.find(x => x.value === s) ?? SEVERITIES[1]; }
 function catInfo(c: string) { return CATEGORIES.find(x => x.value === c) ?? CATEGORIES[0]; }
 
 // ─── Метрики ──────────────────────────────────────────────────────────────────
@@ -46,7 +35,7 @@ interface MetricOption {
   defaultValue: string;
   directions?: { operator: string; label: string }[];
   describe: (op: string, val: string) => string;
-  suggest: (op: string, val: string, sev: Severity) => { name: string; message: string };
+  suggest: (op: string, val: string) => { name: string; message: string };
 }
 
 const METRICS: Record<string, MetricOption[]> = {
@@ -59,11 +48,9 @@ const METRICS: Record<string, MetricOption[]> = {
       defaultValue: '50',
       directions: [{ operator: '>', label: 'больше' }, { operator: '<', label: 'меньше' }],
       describe: (op, val) => `Ban rate по BIN ${op === '>' ? 'больше' : 'меньше'} ${val}%`,
-      suggest: (op, val, sev) => ({
+      suggest: (op, val) => ({
         name: `BIN ban rate ${op} ${val}%`,
-        message: sev === 'block'
-          ? `BIN {bin} имеет критический ban rate ({binBanRate}%) — НЕ ИСПОЛЬЗОВАТЬ`
-          : `BIN {bin} имеет повышенный ban rate {binBanRate}% — рассмотрите альтернативу`,
+        message: `BIN {bin} имеет повышенный ban rate {binBanRate}% — рассмотрите альтернативу`,
       }),
     },
     {
@@ -73,7 +60,7 @@ const METRICS: Record<string, MetricOption[]> = {
       defaultValue: '404038, 431274',
       directions: [{ operator: 'starts_with_any', label: 'входит в список' }],
       describe: (_op, val) => `BIN начинается с одного из: ${val}`,
-      suggest: (_op, val, _sev) => ({
+      suggest: (_op, _val) => ({
         name: `Рискованные BIN префиксы`,
         message: `BIN {bin} входит в список рискованных (виртуальные/предоплаченные карты)`,
       }),
@@ -88,7 +75,7 @@ const METRICS: Record<string, MetricOption[]> = {
       defaultValue: '14',
       directions: [{ operator: '<', label: 'меньше' }, { operator: '>', label: 'больше' }],
       describe: (op, val) => `Возраст домена ${op === '<' ? 'меньше' : 'больше'} ${val} дней`,
-      suggest: (op, val, _sev) => ({
+      suggest: (op, val) => ({
         name: `Домен ${op === '<' ? 'моложе' : 'старше'} ${val} дней`,
         message: `Домен слишком молодой ({domainAgeDays} дн.) — проверьте вертикальный минимум`,
       }),
@@ -101,11 +88,9 @@ const METRICS: Record<string, MetricOption[]> = {
       defaultValue: '40',
       directions: [{ operator: '<', label: 'меньше' }, { operator: '>', label: 'больше' }],
       describe: (op, val) => `Safe Page Score ${op === '<' ? 'меньше' : 'больше'} ${val}`,
-      suggest: (op, val, sev) => ({
+      suggest: (op, val) => ({
         name: `Safe Page Score ${op} ${val}`,
-        message: sev === 'block'
-          ? `Критически низкий Safe Page Score ({domainSafePageScore}/100) — запуск не рекомендуется`
-          : `Низкий Safe Page Score домена ({domainSafePageScore}/100) — высокий риск бана`,
+        message: `Низкий Safe Page Score домена ({domainSafePageScore}/100) — высокий риск бана`,
       }),
     },
   ],
@@ -118,7 +103,7 @@ const METRICS: Record<string, MetricOption[]> = {
       defaultValue: '7',
       directions: [{ operator: '<', label: 'меньше' }, { operator: '>', label: 'больше' }],
       describe: (op, val) => `Возраст аккаунта ${op === '<' ? 'меньше' : 'больше'} ${val} дней`,
-      suggest: (op, val, _sev) => ({
+      suggest: (op, val) => ({
         name: `Аккаунт ${op === '<' ? 'моложе' : 'старше'} ${val} дней`,
         message: `Аккаунт очень молодой ({accountAgeDays} дн.) — высокий риск мгновенного бана`,
       }),
@@ -130,7 +115,7 @@ const METRICS: Record<string, MetricOption[]> = {
       defaultValue: 'true',
       directions: [{ operator: '==', label: 'есть' }],
       describe: (_op, val) => val === 'true' ? 'На аккаунте есть активные нарушения' : 'На аккаунте нет нарушений',
-      suggest: (_op, _val, _sev) => ({
+      suggest: (_op, _val) => ({
         name: 'Активные нарушения политики',
         message: 'Аккаунт имеет активные нарушения политики — запуск заблокирован',
       }),
@@ -145,7 +130,7 @@ const METRICS: Record<string, MetricOption[]> = {
       defaultValue: '40',
       directions: [{ operator: '>', label: 'больше' }, { operator: '<', label: 'меньше' }],
       describe: (op, val) => `Ban rate по ГЕО ${op === '>' ? 'больше' : 'меньше'} ${val}%`,
-      suggest: (_op, val, _sev) => ({
+      suggest: (_op, val) => ({
         name: `ГЕО ban rate > ${val}%`,
         message: `Гео {geo} имеет повышенный процент банов {geoBanRate}%`,
       }),
@@ -160,7 +145,7 @@ const METRICS: Record<string, MetricOption[]> = {
       defaultValue: '50',
       directions: [{ operator: '>', label: 'больше' }, { operator: '<', label: 'меньше' }],
       describe: (op, val) => `Ban rate по вертикали ${op === '>' ? 'больше' : 'меньше'} ${val}%`,
-      suggest: (_op, val, _sev) => ({
+      suggest: (_op, val) => ({
         name: `Вертикаль ban rate > ${val}%`,
         message: `Вертикаль {vertical} имеет процент банов {verticalBanRate}% — будьте осторожны`,
       }),
@@ -175,7 +160,7 @@ const METRICS: Record<string, MetricOption[]> = {
       defaultValue: '7',
       directions: [{ operator: '<', label: 'меньше' }, { operator: '>', label: 'больше' }],
       describe: (op, val) => `Возраст аккаунта ${op === '<' ? 'меньше' : 'больше'} ${val} дней`,
-      suggest: (_op, val, _sev) => ({
+      suggest: (_op, val) => ({
         name: `Рекомендация бюджета (аккаунт < ${val} дней)`,
         message: `Рекомендуемый бюджет: не более $30/день (аккаунт моложе ${val} дней)`,
       }),
@@ -224,7 +209,6 @@ interface FormState {
   operator: string;
   value: string;         // For number / boolean
   tags: string[];        // For tags type
-  severity: Severity;
   messageTemplate: string;
   priority: number;
 }
@@ -242,7 +226,6 @@ function makeDefaultState(cat: Category = 'bin'): FormState {
     operator: m.directions?.[0]?.operator ?? '>',
     value: m.defaultValue,
     tags: m.type === 'tags' ? m.defaultValue.split(',').map(s => s.trim()) : [],
-    severity: 'warning',
     messageTemplate: '',
     priority: 0,
   };
@@ -289,7 +272,6 @@ function ruleToFormState(rule: ExpertRule): FormState {
     operator: op,
     value,
     tags,
-    severity: rule.severity as Severity,
     messageTemplate: rule.message_template,
     priority: rule.priority,
   };
@@ -350,7 +332,7 @@ export function RulesEditorPage() {
     const m = METRICS[form.category]?.find(x => x.field === form.metricField);
     if (!m) return;
     const val = m.type === 'tags' ? form.tags.join(', ') : form.value;
-    const { name, message } = m.suggest(form.operator, val, form.severity);
+    const { name, message } = m.suggest(form.operator, val);
     pf({ name: form.name || name, messageTemplate: message });
   }
 
@@ -391,7 +373,6 @@ export function RulesEditorPage() {
         name: form.name,
         category: form.category,
         condition: stateToApiCondition(form),
-        severity: form.severity,
         message_template: form.messageTemplate,
         priority: form.priority,
       };
@@ -467,7 +448,7 @@ export function RulesEditorPage() {
               Правила оценки рисков
             </h1>
             <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-              Настройте, когда система должна предупреждать или блокировать запуск
+              Настройте, когда система должна предупреждать аналитика
             </p>
           </div>
           <button onClick={openCreate} className="btn-ghost-green px-3 py-1.5 text-sm flex items-center gap-1.5">
@@ -515,7 +496,6 @@ export function RulesEditorPage() {
         <div className="flex gap-5 text-xs" style={{ color: 'var(--text-muted)' }}>
           <span>Всего: <strong style={{ color: 'var(--text-primary)' }}>{rules.length}</strong></span>
           <span>Активных: <strong style={{ color: '#4ade80' }}>{rules.filter(r => r.is_active).length}</strong></span>
-          <span>Блокировок: <strong style={{ color: '#f87171' }}>{rules.filter(r => r.severity === 'block' && r.is_active).length}</strong></span>
         </div>
       )}
 
@@ -527,7 +507,6 @@ export function RulesEditorPage() {
       ) : (
         <StaggerContainer className="space-y-2" staggerDelay={0.03}>
           {filtered.map((rule, idx) => {
-            const sev = sevInfo(rule.severity);
             const cat = catInfo(rule.category);
             return (
               <StaggerItem key={rule.id}>
@@ -562,11 +541,6 @@ export function RulesEditorPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{rule.name}</span>
-                        {/* Severity badge */}
-                        <span className="text-[11px] px-2 py-0.5 rounded-full font-medium"
-                          style={{ background: sev.bg, color: sev.color }}>
-                          {sev.icon} {sev.label}
-                        </span>
                       </div>
                       {/* Friendly condition */}
                       <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
@@ -795,35 +769,11 @@ export function RulesEditorPage() {
                 </div>
               </div>
 
-              {/* ── Шаг 3: Реакция ── */}
+              {/* ── Шаг 3: Сообщение ── */}
               <div>
                 <div className="text-xs font-semibold mb-2.5 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
                   <span className="w-4 h-4 rounded-full text-[10px] flex items-center justify-center font-bold"
                     style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>3</span>
-                  Что должна сделать система?
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {SEVERITIES.map(sev => (
-                    <button key={sev.value} type="button"
-                      onClick={() => pf({ severity: sev.value as Severity })}
-                      className="flex flex-col items-center gap-1.5 py-3.5 rounded-xl text-xs font-semibold transition-all"
-                      style={{
-                        background: form.severity === sev.value ? sev.bg : 'var(--bg-hover)',
-                        border: `1.5px solid ${form.severity === sev.value ? sev.border : 'var(--border-subtle)'}`,
-                        color: form.severity === sev.value ? sev.color : 'var(--text-secondary)',
-                      }}>
-                      <span className="text-xl">{sev.icon}</span>
-                      {sev.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* ── Шаг 4: Сообщение ── */}
-              <div>
-                <div className="text-xs font-semibold mb-2.5 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
-                  <span className="w-4 h-4 rounded-full text-[10px] flex items-center justify-center font-bold"
-                    style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>4</span>
                   Сообщение пользователю
                 </div>
                 <div className="space-y-2">

@@ -1653,7 +1653,6 @@ export interface CreateRuleRequest {
   description?: string | null;
   category: ExpertRule['category'];
   condition: unknown;
-  severity: ExpertRule['severity'];
   message_template: string;
   is_active?: boolean;
   priority?: number;

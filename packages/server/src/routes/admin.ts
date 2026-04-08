@@ -393,13 +393,12 @@ export async function adminRoutes(fastify: FastifyInstance): Promise<void> {
       schema: {
         body: {
           type: 'object',
-          required: ['name', 'category', 'condition', 'severity', 'message_template'],
+          required: ['name', 'category', 'condition', 'message_template'],
           properties: {
             name: { type: 'string', minLength: 1, maxLength: 200 },
             description: { type: ['string', 'null'] },
             category: { type: 'string', enum: ['bin', 'domain', 'account', 'geo', 'vertical', 'spend'] },
             condition: { type: 'object' },
-            severity: { type: 'string', enum: ['block', 'warning', 'info'] },
             message_template: { type: 'string', minLength: 1 },
             is_active: { type: 'boolean' },
             priority: { type: 'integer' },
@@ -424,7 +423,6 @@ export async function adminRoutes(fastify: FastifyInstance): Promise<void> {
             description: { type: ['string', 'null'] },
             category: { type: 'string', enum: ['bin', 'domain', 'account', 'geo', 'vertical', 'spend'] },
             condition: { type: 'object' },
-            severity: { type: 'string', enum: ['block', 'warning', 'info'] },
             message_template: { type: 'string', minLength: 1 },
             is_active: { type: 'boolean' },
             priority: { type: 'integer' },
