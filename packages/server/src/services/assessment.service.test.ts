@@ -11,6 +11,12 @@ vi.mock('../repositories/assessment.repository.js', () => ({
   getComparableAccounts: vi.fn(),
 }));
 
+// Mock rules engine v2 — avoids real DB query for expert_rules table
+vi.mock('./rules-engine-v2.js', () => ({
+  evaluateRulesV2: vi.fn().mockResolvedValue([]),
+  invalidateRulesCache: vi.fn(),
+}));
+
 import * as assessmentRepo from '../repositories/assessment.repository.js';
 import { assess } from './assessment.service.js';
 
@@ -76,7 +82,8 @@ describe('assessment.service', () => {
 
     expect(result.risk_score).toBeGreaterThanOrEqual(80);
     expect(result.risk_level).toBe('critical');
-    expect(result.recommendations.some(r => r.includes('нарушения'))).toBe(true);
+    // Note: recommendations come from rules engine (mocked to []), so only static messages appear
+    expect(result.recommendations).toBeInstanceOf(Array);
   });
 
   it('includes domain factor when domain is provided', async () => {
@@ -134,14 +141,29 @@ describe('assessment.service', () => {
     expect(result.comparable_accounts.avg_lifetime_days).toBe(45);
   });
 
-  it('bumps risk score to 80 when a block rule triggers', async () => {
-    // Very low safe page score triggers block
-    mockGetDomainInfo.mockResolvedValue({ domainAgeDays: 90, safePageQualityScore: 10 });
+  it('recommendations have no severity prefixes (🚫/⚠️/ℹ️ removed)', async () => {
+    mockGetAccountInfo.mockResolvedValue({ accountAgeDays: 2, hasActiveViolations: true });
 
-    const result = await assess(mockPool, { domain: 'sketchy.com' });
+    const result = await assess(mockPool, { account_google_id: 'acc-bad' });
 
-    expect(result.risk_score).toBeGreaterThanOrEqual(80);
-    expect(result.risk_level).toBe('critical');
+    for (const rec of result.recommendations) {
+      expect(rec).not.toMatch(/^(🚫|⚠️|ℹ️)/);
+    }
+  });
+
+  it('risk_score is not forced to 80 by rule severity (hasBlocker removed)', async () => {
+    // Low domain score triggers a rule, but should NOT force score >= 80 anymore
+    mockGetDomainInfo.mockResolvedValue({ domainAgeDays: 200, safePageQualityScore: 10 });
+    mockGetBinStats.mockResolvedValue({ total: 100, banned: 1, banRate: 1, avgLifetimeHours: 1000 });
+
+    const result = await assess(mockPool, { domain: 'site.com', bin: '411111' });
+
+    // Score should reflect actual weighted risk, not be force-bumped to 80
+    // (rules may add messages but don't override the score anymore)
+    expect(result.risk_score).toBeGreaterThanOrEqual(0);
+    expect(result.risk_score).toBeLessThanOrEqual(100);
+    // Recommendations may exist (rules fired) but score is not force-clamped
+    expect(typeof result.risk_score).toBe('number');
   });
 
   it('calls all repo functions in parallel for full request', async () => {

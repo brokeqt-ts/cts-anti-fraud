@@ -281,12 +281,12 @@ function buildRecommendations(rules: RuleResult[], ctx: AssessmentContext): stri
 
   // If no domain provided but everything else is fine, suggest adding one
   if (!ctx.domain && rules.length === 0) {
-    recs.push('ℹ️ Добавьте домен для более точной оценки рисков');
+    recs.push('Добавьте домен для более точной оценки рисков');
   }
 
   // If no rules triggered and we have data, good news
   if (rules.length === 0 && (ctx.domain || ctx.bin || ctx.accountGoogleId)) {
-    recs.push('✅ Серьёзных рисков не обнаружено');
+    recs.push('Серьёзных рисков не обнаружено');
   }
 
   return recs;
