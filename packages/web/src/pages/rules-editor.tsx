@@ -18,7 +18,7 @@ const CATEGORIES = [
   { value: 'account',  label: 'Аккаунт',        icon: '👤' },
   { value: 'geo',      label: 'ГЕО',            icon: '🌍' },
   { value: 'vertical', label: 'Вертикаль',      icon: '📊' },
-  { value: 'spend',    label: 'Бюджет',         icon: '💰' },
+  { value: 'spend',    label: 'Возраст аккаунта', icon: '📅' },
 ] as const;
 
 type Category = typeof CATEGORIES[number]['value'];
