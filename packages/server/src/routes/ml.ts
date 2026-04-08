@@ -8,6 +8,7 @@ import {
   trainingStatsHandler,
   trainingExportHandler,
   bootstrapTrainHandler,
+  mlStatusHandler,
 } from '../handlers/ml.handler.js';
 
 export async function mlRoutes(fastify: FastifyInstance): Promise<void> {
@@ -59,5 +60,12 @@ export async function mlRoutes(fastify: FastifyInstance): Promise<void> {
     '/ml/history/:accountId',
     { preHandler: [fastify.authenticate] },
     predictionHistoryHandler,
+  );
+
+  // XGBoost service health (admin only)
+  fastify.get(
+    '/ml/xgboost-status',
+    { preHandler: [fastify.authenticate, fastify.requireRole('admin')] },
+    mlStatusHandler,
   );
 }

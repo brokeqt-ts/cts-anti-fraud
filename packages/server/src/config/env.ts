@@ -22,6 +22,7 @@ export interface EnvConfig {
   TELEGRAM_ADMIN_CHAT_ID: string | null;
   TELEGRAM_ENABLED: boolean;
   DASHBOARD_URL: string;
+  ML_SERVICE_URL: string | null;
 }
 
 function requireEnv(key: string): string {
@@ -48,4 +49,5 @@ export const env: EnvConfig = {
   TELEGRAM_ADMIN_CHAT_ID: process.env['TELEGRAM_ADMIN_CHAT_ID'] ?? null,
   TELEGRAM_ENABLED: process.env['TELEGRAM_ENABLED'] === 'true',
   DASHBOARD_URL: process.env['DASHBOARD_URL'] ?? 'http://localhost:5173',
+  ML_SERVICE_URL: process.env['ML_SERVICE_URL'] ?? null,
 };
