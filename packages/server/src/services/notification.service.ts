@@ -97,6 +97,7 @@ const TYPE_TO_SETTINGS_KEY: Record<string, string> = {
   ban_resolved: 'auto_ban_resolved',
   risk_elevated: 'auto_risk_elevated',
   account_connected: 'auto_account_connected',
+  predictive_ban_alert: 'auto_predictive_ban_alert',
 };
 
 export interface NotifyResult {

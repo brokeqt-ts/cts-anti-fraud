@@ -43,6 +43,7 @@ import { deleteOldNotifications } from './services/notification.service.js';
 import { startBotPolling, stopBotPolling, registerBotCommands } from './services/telegram-bot.service.js';
 import { snapshotCreativePerformance, runDecayScanWithAlerts } from './services/creative-decay.service.js';
 import { runMlRetrain } from './services/ml-auto-retrain.service.js';
+import { runPredictiveAlertScan } from './services/predictive-alert.service.js';
 import { API_PREFIX, RATE_LIMIT_PER_MINUTE } from '@cts/shared';
 import './types.js';
 
@@ -392,6 +393,29 @@ async function start() {
       })
       .catch((err) => app.log.error('[cron] Creative decay scan failed: %s', err instanceof Error ? err.message : err));
   }, 6 * 60 * 60 * 1000)); // Every 6 hours
+
+  // PREDICTIVE BAN ALERTS: Scan accounts for high ban risk — 3 min after start, then every hour
+  timers.push(setTimeout(() => {
+    app.log.info('[cron] Initial predictive ban alert scan starting...');
+    runPredictiveAlertScan(pool)
+      .then((r) => {
+        if (r.alerted > 0) {
+          app.log.info(`[cron] Predictive alerts: scanned=${r.scanned}, alerted=${r.alerted}`);
+        }
+      })
+      .catch((err) => app.log.error('[cron] Predictive alert scan failed: %s', err instanceof Error ? err.message : err));
+  }, 180_000)); // 3 min after start
+
+  intervals.push(setInterval(() => {
+    app.log.info('[cron] Periodic predictive ban alert scan starting...');
+    runPredictiveAlertScan(pool)
+      .then((r) => {
+        if (r.alerted > 0) {
+          app.log.info(`[cron] Predictive alerts: scanned=${r.scanned}, alerted=${r.alerted}`);
+        }
+      })
+      .catch((err) => app.log.error('[cron] Predictive alert scan failed: %s', err instanceof Error ? err.message : err));
+  }, 60 * 60 * 1000)); // Every hour
 
   // --- Graceful shutdown ---
   const shutdown = async (signal: string) => {

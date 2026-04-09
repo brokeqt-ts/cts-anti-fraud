@@ -25,6 +25,14 @@ export interface StatusChangeAlertData {
   newStatus: string;
 }
 
+export interface PredictiveBanAlertData {
+  accountGoogleId: string;
+  banProbability: number;
+  riskLevel: string;
+  topFactors: string[];
+  daysToExpectedBan: number | null;
+}
+
 export interface CreativeDecayAlertData {
   accountGoogleId: string;
   campaignName: string;
@@ -271,6 +279,31 @@ export async function sendCreativeDecayAlert(data: CreativeDecayAlertData): Prom
     '💡 Рекомендация: обновить креативы',
     `🔗 <a href="${dashUrl}">Открыть в Dashboard</a>`,
   ].join('\n');
+
+  await sendAlertToAll(text);
+}
+
+export async function sendPredictiveBanAlert(data: PredictiveBanAlertData): Promise<void> {
+  const cid = formatCid(data.accountGoogleId);
+  const pct = (data.banProbability * 100).toFixed(0);
+  const factorsList = data.topFactors.map((f) => `  • ${escapeHtml(f)}`).join('\n');
+  const dashUrl = `${env.DASHBOARD_URL}/accounts/${data.accountGoogleId}`;
+  const daysLine = data.daysToExpectedBan != null
+    ? `⏳ Прогноз: бан через ~${data.daysToExpectedBan} дн.`
+    : '';
+
+  const text = [
+    '⚠️ <b>ПРЕДУПРЕЖДЕНИЕ: ВОЗМОЖНЫЙ БАН</b>',
+    '',
+    `Аккаунт: <code>${cid}</code>`,
+    `Вероятность бана: <b>${pct}%</b> (${escapeHtml(data.riskLevel)})`,
+    '',
+    'Основные факторы риска:',
+    factorsList,
+    '',
+    daysLine,
+    `🔗 <a href="${dashUrl}">Открыть в Dashboard</a>`,
+  ].filter(Boolean).join('\n');
 
   await sendAlertToAll(text);
 }
