@@ -110,10 +110,13 @@ cts-antifraud/
 | POST | `/auth/logout` | Отзыв refresh token |
 | GET | `/auth/me` | Текущий пользователь |
 | PATCH | `/auth/me/password` | Смена пароля |
+| PATCH | `/auth/antidetect-browser` | Обновить антидетект-браузер |
 
 ---
 
 ## 4. API Reference
+
+**Итого: 133 API endpoints**
 
 Полная интерактивная документация: **`/docs`** (Swagger UI)
 
@@ -207,6 +210,10 @@ cts-antifraud/
 | POST | `/ml/retrain` | Admin | Ручной retrain модели |
 | GET | `/ml/features/:accountId` | JWT/Key | Feature vector аккаунта |
 | GET | `/ml/feature-importance` | JWT/Key | Важность фичей модели |
+| GET | `/ml/xgboost-status` | Admin | Статус XGBoost сервиса |
+| GET | `/ml/training-stats` | Admin | Статистика обучения |
+| GET | `/ml/training-export` | Admin | Экспорт training data (CSV) |
+| POST | `/ml/bootstrap` | Admin | Bootstrap ML pipeline |
 
 ### Notifications
 
@@ -244,6 +251,7 @@ cts-antifraud/
 | Метод | Путь | Auth | Описание |
 |-------|------|------|----------|
 | POST | `/collect` | API Key | Приём данных от Chrome Extension |
+| GET | `/profile-defaults` | API Key | Дефолтная конфигурация профиля |
 
 ### Stats
 

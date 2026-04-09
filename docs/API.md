@@ -83,7 +83,7 @@ Content-Type: application/json
 | Best Practices | 4 | Методички CRUD |
 | Extension | 2 | Скачивание CRX |
 
-**Итого: ~100+ endpoints**
+**Итого: 133 endpoints**
 
 Подробное описание каждого endpoint — в [PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md) или в Swagger UI (`/docs`).
 
