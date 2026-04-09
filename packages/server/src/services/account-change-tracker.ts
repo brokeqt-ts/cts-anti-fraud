@@ -93,7 +93,112 @@ export async function trackAccountChanges(
 }
 
 /**
- * Track campaign-level changes: budget, status, domain.
+ * Track keyword-level changes: status, quality score.
+ */
+export async function trackKeywordChanges(
+  pool: pg.Pool,
+  accountGoogleId: string,
+  keywordId: string,
+  keywordText: string | null,
+  incomingFields: Record<string, unknown>,
+): Promise<void> {
+  const result = await pool.query(
+    `SELECT status, quality_score
+     FROM keywords WHERE account_google_id = $1 AND keyword_id = $2`,
+    [accountGoogleId, keywordId],
+  );
+
+  if (result.rowCount === 0) return;
+  const current = result.rows[0] as Record<string, unknown>;
+  const label = keywordText ?? keywordId;
+
+  // Status change
+  if (incomingFields['status'] != null && current['status'] != null && String(incomingFields['status']) !== String(current['status'])) {
+    const STATUS_LABELS: Record<string, string> = { '2': 'paused', '3': 'enabled', '4': 'removed' };
+    const oldLabel = STATUS_LABELS[String(current['status'])] ?? String(current['status']);
+    const newLabel = STATUS_LABELS[String(incomingFields['status'])] ?? String(incomingFields['status']);
+    await pool.query(
+      `INSERT INTO account_events (account_google_id, event_type, field_name, old_value, new_value, detail)
+       VALUES ($1, 'keyword_status', $2, $3, $4, $5)`,
+      [accountGoogleId, 'Статус ключевого слова', oldLabel, newLabel, `Ключ "${label}": ${oldLabel} → ${newLabel}`],
+    );
+  }
+
+  // Quality Score change
+  if (incomingFields['quality_score'] != null && current['quality_score'] != null) {
+    const oldQs = Number(current['quality_score']);
+    const newQs = Number(incomingFields['quality_score']);
+    if (oldQs > 0 && newQs > 0 && oldQs !== newQs) {
+      await pool.query(
+        `INSERT INTO account_events (account_google_id, event_type, field_name, old_value, new_value, detail)
+         VALUES ($1, 'qs_change', $2, $3, $4, $5)`,
+        [accountGoogleId, 'Quality Score', String(oldQs), String(newQs), `Ключ "${label}": QS ${oldQs} → ${newQs}`],
+      );
+    }
+  }
+}
+
+/**
+ * Track ad-level changes: review_status.
+ */
+export async function trackAdChanges(
+  pool: pg.Pool,
+  accountGoogleId: string,
+  adId: string,
+  incomingReviewStatus: string | null,
+): Promise<void> {
+  if (!incomingReviewStatus) return;
+
+  const result = await pool.query(
+    `SELECT review_status FROM ads WHERE account_google_id = $1 AND ad_id = $2
+     ORDER BY captured_at DESC LIMIT 1`,
+    [accountGoogleId, adId],
+  );
+
+  if (result.rowCount === 0) return;
+  const oldStatus = result.rows[0]!['review_status'] as string | null;
+  if (!oldStatus || oldStatus === incomingReviewStatus) return;
+
+  const REVIEW_LABELS: Record<string, string> = {
+    '0': 'unknown', '2': 'approved', '3': 'disapproved',
+    '4': 'under_review', '5': 'approved_limited', '6': 'eligible',
+  };
+  const oldLabel = REVIEW_LABELS[oldStatus] ?? oldStatus;
+  const newLabel = REVIEW_LABELS[incomingReviewStatus] ?? incomingReviewStatus;
+
+  await pool.query(
+    `INSERT INTO account_events (account_google_id, event_type, field_name, old_value, new_value, detail)
+     VALUES ($1, 'ad_review', $2, $3, $4, $5)`,
+    [accountGoogleId, 'Статус объявления', oldLabel, newLabel, `Объявление ${adId}: ${oldLabel} → ${newLabel}`],
+  );
+}
+
+/**
+ * Track verification status changes.
+ */
+export async function trackVerificationChange(
+  pool: pg.Pool,
+  accountGoogleId: string,
+  newStatus: string,
+): Promise<void> {
+  const result = await pool.query(
+    `SELECT verification_status FROM accounts WHERE google_account_id = $1`,
+    [accountGoogleId],
+  );
+
+  if (result.rowCount === 0) return;
+  const oldStatus = result.rows[0]!['verification_status'] as string | null;
+  if (!oldStatus || oldStatus === newStatus) return;
+
+  await pool.query(
+    `INSERT INTO account_events (account_google_id, event_type, field_name, old_value, new_value, detail)
+     VALUES ($1, 'verification_change', $2, $3, $4, $5)`,
+    [accountGoogleId, 'Верификация', oldStatus, newStatus, `Верификация: ${oldStatus} → ${newStatus}`],
+  );
+}
+
+/**
+ * Track campaign-level changes: budget, status, domain, bidding strategy.
  */
 export async function trackCampaignChanges(
   pool: pg.Pool,
@@ -103,8 +208,9 @@ export async function trackCampaignChanges(
   incomingFields: Record<string, unknown>,
 ): Promise<void> {
   const result = await pool.query(
-    `SELECT status, budget_micros, domain_name
-     FROM campaigns WHERE account_google_id = $1 AND campaign_id = $2`,
+    `SELECT status, budget_micros, domain_name, bidding_strategy_type
+     FROM campaigns WHERE account_google_id = $1 AND campaign_id = $2
+     ORDER BY captured_at DESC LIMIT 1`,
     [accountGoogleId, campaignId],
   );
 
@@ -162,5 +268,28 @@ export async function trackCampaignChanges(
         `Кампания "${label}": домен ${current['domain_name']} → ${incomingFields['domain_name']}`,
       ],
     );
+  }
+
+  // Bidding strategy change
+  if (incomingFields['bidding_strategy_type'] != null && current['bidding_strategy_type'] != null) {
+    if (String(incomingFields['bidding_strategy_type']) !== String(current['bidding_strategy_type'])) {
+      const BIDDING_LABELS: Record<string, string> = {
+        '2': 'Manual CPC', '10': 'Max Conversions', '12': 'Target CPA',
+        '13': 'Target ROAS', '14': 'Max Clicks', '15': 'Max Conv Value',
+      };
+      const oldLabel = BIDDING_LABELS[String(current['bidding_strategy_type'])] ?? String(current['bidding_strategy_type']);
+      const newLabel = BIDDING_LABELS[String(incomingFields['bidding_strategy_type'])] ?? String(incomingFields['bidding_strategy_type']);
+      await pool.query(
+        `INSERT INTO account_events (account_google_id, event_type, field_name, old_value, new_value, detail)
+         VALUES ($1, 'bidding_change', $2, $3, $4, $5)`,
+        [
+          accountGoogleId,
+          'Стратегия ставок',
+          oldLabel,
+          newLabel,
+          `Кампания "${label}": стратегия ${oldLabel} → ${newLabel}`,
+        ],
+      );
+    }
   }
 }

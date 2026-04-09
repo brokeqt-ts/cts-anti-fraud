@@ -1,6 +1,7 @@
 import type { RpcContext } from './rpc-router.js';
 import { dig, resolveCid } from './rpc-router.js';
 import { upsertDomainAndEnrich } from '../services/domain-enrichment.service.js';
+import { trackAdChanges } from '../services/account-change-tracker.js';
 
 /**
  * BatchService/Batch
@@ -94,6 +95,11 @@ export async function parseBatch(ctx: RpcContext): Promise<void> {
       // Extract review status if available (field 13.3)
       const reviewStatusRaw = dig(ad, '13', '3') as number | undefined;
       const reviewStatus = reviewStatusRaw != null ? String(reviewStatusRaw) : null;
+
+      // Track ad review status changes (non-blocking)
+      if (reviewStatus && cid && adId) {
+        trackAdChanges(pool, cid, String(adId), reviewStatus).catch(() => {});
+      }
 
       try {
         await pool.query(

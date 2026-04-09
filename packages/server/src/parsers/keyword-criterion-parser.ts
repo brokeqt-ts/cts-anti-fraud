@@ -1,6 +1,7 @@
 import type { RpcContext } from './rpc-router.js';
 import { dig, resolveCid } from './rpc-router.js';
 import { upsertDomainAndEnrich } from '../services/domain-enrichment.service.js';
+import { trackKeywordChanges } from '../services/account-change-tracker.js';
 
 /**
  * Keyword Criterion Parser with daily stats — extends spec with granular data.
@@ -152,6 +153,12 @@ async function upsertKeyword(
   const maxCpcMicros = maxCpcRaw != null ? parseMetricValue(maxCpcRaw) : null;
 
   const metrics = buildMetrics(metricsRaw, columnMap);
+
+  // Track keyword changes (non-blocking)
+  const incomingKw: Record<string, unknown> = {};
+  if (status != null) incomingKw['status'] = status;
+  if (qualityScore != null) incomingKw['quality_score'] = qualityScore;
+  trackKeywordChanges(pool, cid, String(keywordId), keywordText, incomingKw).catch(() => {});
 
   try {
     await pool.query(

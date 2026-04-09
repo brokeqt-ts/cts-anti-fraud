@@ -68,6 +68,7 @@ export async function parseCampaigns(ctx: RpcContext): Promise<void> {
       const incomingCampaign: Record<string, unknown> = {};
       if (status != null) incomingCampaign['status'] = status;
       if (budgetMicros != null) incomingCampaign['budget_micros'] = budgetMicros;
+      if (biddingStrategyType != null) incomingCampaign['bidding_strategy_type'] = biddingStrategyType;
       trackCampaignChanges(pool, cid, String(campaignId), campaignName ?? null, incomingCampaign).catch(() => {});
 
       await pool.query(

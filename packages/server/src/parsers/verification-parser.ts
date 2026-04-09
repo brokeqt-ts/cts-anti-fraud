@@ -1,5 +1,6 @@
 import type { RpcContext } from './rpc-router.js';
 import { dig, resolveCid } from './rpc-router.js';
+import { trackVerificationChange } from '../services/account-change-tracker.js';
 
 /**
  * Verification Eligibility Parser — not in original spec.
@@ -41,6 +42,9 @@ export async function parseVerificationEligibility(ctx: RpcContext): Promise<voi
       '0': 'not_started',
     };
     const verificationStatus = statusMap[String(verificationRaw)] ?? 'not_started';
+
+    // Track verification status change (non-blocking)
+    trackVerificationChange(pool, cid, verificationStatus).catch(() => {});
 
     try {
       await pool.query(
