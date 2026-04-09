@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, ShieldBan, Globe, Settings, Plus, Shield, Link2, BarChart3, ShieldCheck, Brain, LogOut, UserCog, Bell, BellRing, BookOpen, Search, SlidersHorizontal } from 'lucide-react';
+import { LayoutDashboard, Users, ShieldBan, Globe, Settings, Plus, Shield, Link2, BarChart3, ShieldCheck, Brain, LogOut, UserCog, Bell, BellRing, BookOpen, Search, SlidersHorizontal, FileCode2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useCallback } from 'react';
 import { AnimatedThemeToggler } from './ui/animated-theme-toggler.js';
@@ -20,6 +20,7 @@ const baseNavItems = [
   { to: '/domains', label: 'Домены', icon: Globe },
   { to: '/cts', label: 'CTS Интеграция', icon: Link2 },
   { to: '/notifications', label: 'Уведомления', icon: Bell },
+  { to: '/api-docs', label: 'API Docs', icon: FileCode2 },
   { to: '/settings', label: 'Настройки', icon: Settings },
 ];
 
