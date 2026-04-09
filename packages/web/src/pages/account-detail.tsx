@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, Bell, BellRing, Copy, MapPin, Database, LayoutList, Wallet, ExternalLink, Megaphone, Search, BarChart3, Tag, Eye, Star, Clock, Calendar, ShieldOff, AlertCircle, AlertTriangle, Bot, Link2, Globe, Loader2, Zap, Info } from 'lucide-react';
-import { fetchAccount, patchAccount, analyzeAccount, fetchBanChain, fetchDomainDetail, generatePostMortem, fetchAccountCompetitiveIntelligence, fetchQualityDistribution, fetchLowQualityKeywords, fetchQualityHistory, ApiError, type AccountDetail, type AccountSummary, type AccountCompetitorRow, type PostMortemData, type CampaignRow, type CampaignMetric, type BillingRow, type AdRow, type KeywordRow, type KeywordDailyStat, type QualityDistributionEntry, type KeywordQualityRow, type QualityScoreSnapshot, type AiAnalyzeResponse, type BanChainData, type DomainContentAnalysis, timeAgo, formatDateRu, formatCid, riskLevel, effectiveStatus, isSuspendedFromSignal } from '../api.js';
+import { ArrowLeft, CheckCircle, Bell, BellRing, Copy, MapPin, Database, LayoutList, Wallet, ExternalLink, Megaphone, Search, BarChart3, Tag, Eye, Star, Clock, Calendar, ShieldOff, AlertCircle, AlertTriangle, Bot, Link2, Globe, Loader2, Zap, Info, RefreshCw } from 'lucide-react';
+import { fetchAccount, patchAccount, analyzeAccount, fetchBanChain, fetchDomainDetail, generatePostMortem, fetchAccountCompetitiveIntelligence, fetchQualityDistribution, fetchLowQualityKeywords, fetchQualityHistory, ApiError, type AccountDetail, type AccountSummary, type AccountCompetitorRow, type PostMortemData, type CampaignRow, type CampaignMetric, type BillingRow, type AdRow, type KeywordRow, type KeywordDailyStat, type QualityDistributionEntry, type KeywordQualityRow, type QualityScoreSnapshot, type AiAnalyzeResponse, type BanChainData, type DomainContentAnalysis, type AccountEvent, timeAgo, formatDateRu, formatCid, riskLevel, effectiveStatus, isSuspendedFromSignal } from '../api.js';
 import { StatusBadge } from '../components/badge.js';
 import { TableSkeleton } from '../components/skeleton.js';
 import {
@@ -217,6 +217,7 @@ export function AccountDetailPage() {
           signals={data.signals}
           notifCards={allNotifCards}
           campaigns={data.campaigns ?? []}
+          accountEvents={data.account_events}
         />
       </StaggerItem>
 
@@ -391,7 +392,7 @@ export function AccountDetailPage() {
 
 // ── Event Timeline ────────────────────────────────────────
 
-type EventKind = 'created' | 'campaign' | 'ban' | 'ban_resolved' | 'suspended' | 'restored' | 'critical' | 'warning' | 'info';
+type EventKind = 'created' | 'campaign' | 'ban' | 'ban_resolved' | 'suspended' | 'restored' | 'critical' | 'warning' | 'info' | 'change';
 
 interface LifeEvent {
   id: string;
@@ -411,6 +412,7 @@ const EVENT_STYLE: Record<EventKind, { color: string; bg: string; label: string 
   critical:     { color: '#f87171', bg: 'rgba(239,68,68,0.10)', label: 'Уведомления' },
   warning:      { color: '#fbbf24', bg: 'rgba(245,158,11,0.10)', label: 'Уведомления' },
   info:         { color: '#94a3b8', bg: 'rgba(148,163,184,0.08)', label: 'Уведомления' },
+  change:       { color: '#a78bfa', bg: 'rgba(139,92,246,0.10)', label: 'Изменения' },
 };
 
 const TIMELINE_FILTER_GROUPS = [
@@ -419,6 +421,7 @@ const TIMELINE_FILTER_GROUPS = [
   { key: 'signals', label: 'Сигналы', kinds: new Set<EventKind>(['suspended', 'restored']) },
   { key: 'notifications', label: 'Уведомления', kinds: new Set<EventKind>(['critical', 'warning', 'info']) },
   { key: 'campaigns', label: 'Кампании', kinds: new Set<EventKind>(['campaign']) },
+  { key: 'changes', label: 'Изменения', kinds: new Set<EventKind>(['change']) },
 ];
 
 function EventIcon({ kind, size = 14 }: { kind: EventKind; size?: number }) {
@@ -432,6 +435,7 @@ function EventIcon({ kind, size = 14 }: { kind: EventKind; size?: number }) {
   if (kind === 'restored')     return <CheckCircle {...props} />;
   if (kind === 'critical')     return <AlertCircle {...props} />;
   if (kind === 'info')         return <Info {...props} />;
+  if (kind === 'change')       return <RefreshCw {...props} />;
   return <AlertTriangle {...props} />;
 }
 
@@ -441,6 +445,7 @@ function buildLifeEvents(
   signals: AccountDetail['signals'],
   notifCards: Array<NotifCard & { id: string; captured_at: string }>,
   campaigns: CampaignRow[],
+  accountEvents?: AccountEvent[],
 ): LifeEvent[] {
   const events: LifeEvent[] = [];
 
@@ -527,6 +532,19 @@ function buildLifeEvents(
     });
   }
 
+  // Account change events (domain, BIN, budget, status, etc.)
+  if (accountEvents) {
+    for (const ev of accountEvents) {
+      events.push({
+        id: `change-${ev.id}`,
+        ts: new Date(ev.created_at),
+        kind: 'change',
+        title: ev.field_name,
+        detail: ev.detail ?? `${ev.old_value ?? '—'} → ${ev.new_value ?? '—'}`,
+      });
+    }
+  }
+
   // Sort descending (newest first)
   return events.sort((a, b) => b.ts.getTime() - a.ts.getTime());
 }
@@ -537,18 +555,20 @@ function EventTimeline({
   signals,
   notifCards,
   campaigns,
+  accountEvents,
 }: {
   account: Record<string, unknown>;
   bans: import('../api.js').BanSummary[];
   signals: AccountDetail['signals'];
   notifCards: Array<NotifCard & { id: string; captured_at: string }>;
   campaigns: CampaignRow[];
+  accountEvents?: AccountEvent[];
 }) {
   const [expanded, setExpanded] = useState(false);
   const [filterKey, setFilterKey] = useState('all');
   const LIMIT = 10;
 
-  const allEvents = buildLifeEvents(account, bans, signals, notifCards, campaigns);
+  const allEvents = buildLifeEvents(account, bans, signals, notifCards, campaigns, accountEvents);
   if (allEvents.length === 0) return null;
 
   const activeFilter = TIMELINE_FILTER_GROUPS.find(g => g.key === filterKey);

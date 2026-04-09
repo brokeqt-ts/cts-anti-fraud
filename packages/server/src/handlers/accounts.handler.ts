@@ -83,6 +83,7 @@ export async function getAccountHandler(
       keywords: detail.keywords,
       keyword_daily_stats: detail.keywordDailyStats,
       campaign_metrics: detail.campaignMetrics,
+      account_events: detail.accountEvents,
     });
   } catch (err: unknown) {
     request.log.error({ err, handler: 'getAccountHandler', google_id }, 'Failed to get account');

@@ -418,6 +418,17 @@ export interface AccountDetail {
   keywords?: KeywordRow[];
   keyword_daily_stats?: KeywordDailyStat[];
   campaign_metrics?: CampaignMetric[];
+  account_events?: AccountEvent[];
+}
+
+export interface AccountEvent {
+  id: string;
+  event_type: string;
+  field_name: string;
+  old_value: string | null;
+  new_value: string | null;
+  detail: string | null;
+  created_at: string;
 }
 
 export interface ParsedData {

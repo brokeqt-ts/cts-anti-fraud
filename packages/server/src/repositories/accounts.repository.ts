@@ -33,6 +33,7 @@ export interface AccountDetailResult {
   keywordDailyStats: Record<string, unknown>[];
   campaignMetrics: Record<string, unknown>[];
   antidetectProfile: Record<string, unknown> | undefined;
+  accountEvents: Record<string, unknown>[];
 }
 
 export interface PatchAccountParams {
@@ -199,7 +200,7 @@ export async function getAccountDetail(pool: pg.Pool, googleId: string, userId?:
     accountParams.push(userId);
   }
 
-  const [account, signals, notifications, bans, payloadStats, campaigns, billing, notificationDetails, metrics, ads, adGroups, keywords, keywordDailyStats, campaignMetrics, antidetectProfile] = await Promise.all([
+  const [account, signals, notifications, bans, payloadStats, campaigns, billing, notificationDetails, metrics, ads, adGroups, keywords, keywordDailyStats, campaignMetrics, antidetectProfile, accountEvents] = await Promise.all([
     pool.query(
       `SELECT a.*,
               a.status AS account_status,
@@ -346,6 +347,14 @@ export async function getAccountDetail(pool: pg.Pool, googleId: string, userId?:
        LIMIT 1`,
       [googleId],
     ),
+    pool.query(
+      `SELECT id, event_type, field_name, old_value, new_value, detail, created_at
+       FROM account_events
+       WHERE account_google_id = $1
+       ORDER BY created_at DESC
+       LIMIT 100`,
+      [googleId],
+    ).catch(() => ({ rows: [] as Record<string, unknown>[] })),
   ]);
 
   if (account.rowCount === 0) return null;
@@ -366,6 +375,7 @@ export async function getAccountDetail(pool: pg.Pool, googleId: string, userId?:
     keywordDailyStats: keywordDailyStats.rows,
     campaignMetrics: campaignMetrics.rows,
     antidetectProfile: antidetectProfile.rows[0],
+    accountEvents: accountEvents.rows,
   };
 }
 

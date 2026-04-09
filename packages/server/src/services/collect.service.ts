@@ -8,6 +8,7 @@ import { checkAndCreateBan } from './auto-ban-detector.js';
 import { classifyAndUpdateVertical } from './offer-vertical-classifier.js';
 import { autoPopulateAccount } from './account-auto-populate.js';
 import { ensureAccountExists } from './ensure-account.js';
+import { trackAccountChanges } from './account-change-tracker.js';
 
 
 export class CollectService {
@@ -322,6 +323,14 @@ export class CollectService {
     if (accountResult.rows.length > 0) {
       const accountId = accountResult.rows[0]['id'] as string;
 
+      // Track payment changes
+      const incomingPayment: Record<string, unknown> = {};
+      if (parsed.bin6) incomingPayment['payment_bin'] = parsed.bin6;
+      if (parsed.countryCode) incomingPayment['payment_card_country'] = parsed.countryCode;
+      trackAccountChanges(this.pool, effectiveProfileId, incomingPayment).catch((err) => {
+        console.warn('[Collect] Payment change tracking failed:', err);
+      });
+
       // Update accounts.payment_bin, accounts.payment_card_country
       await this.pool.query(
         `UPDATE accounts SET
@@ -379,6 +388,14 @@ export class CollectService {
     const accountId = await ensureAccountExists(this.pool, googleAccountId, userId);
     if (!accountId) return;
 
+    // Track changes before update
+    const incomingAccount: Record<string, unknown> = {};
+    if (data['displayName']) incomingAccount['display_name'] = data['displayName'];
+    if (data['status']) incomingAccount['status'] = data['status'];
+    trackAccountChanges(this.pool, googleAccountId, incomingAccount).catch((err) => {
+      console.warn('[Collect] Change tracking failed:', err);
+    });
+
     // Update with richer data from the structured 'account' item
     await this.pool.query(
       `UPDATE accounts SET
@@ -401,6 +418,15 @@ export class CollectService {
     const googleAccountId = data['accountId'] as string | undefined;
 
     if (!googleAccountId) return;
+
+    // Track billing field changes
+    const incomingBilling: Record<string, unknown> = {};
+    if (data['totalSpend']) incomingBilling['total_spend'] = data['totalSpend'];
+    if (data['paymentBin']) incomingBilling['payment_bin'] = data['paymentBin'];
+    if (data['paymentBank']) incomingBilling['payment_bank'] = data['paymentBank'];
+    trackAccountChanges(this.pool, googleAccountId, incomingBilling).catch((err) => {
+      console.warn('[Collect] Billing change tracking failed:', err);
+    });
 
     await this.pool.query(
       `UPDATE accounts SET

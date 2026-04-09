@@ -1,5 +1,6 @@
 import type { RpcContext } from './rpc-router.js';
 import { dig, resolveCid } from './rpc-router.js';
+import { trackCampaignChanges } from '../services/account-change-tracker.js';
 
 /**
  * CampaignService/List
@@ -62,6 +63,12 @@ export async function parseCampaigns(ctx: RpcContext): Promise<void> {
       const biddingStrategyType = biddingObj ? (dig(biddingObj, '1') as number | undefined) : undefined;
 
       const budgetMicros = budgetMicrosRaw ? parseInt(budgetMicrosRaw, 10) : null;
+
+      // Track campaign changes (non-blocking)
+      const incomingCampaign: Record<string, unknown> = {};
+      if (status != null) incomingCampaign['status'] = status;
+      if (budgetMicros != null) incomingCampaign['budget_micros'] = budgetMicros;
+      trackCampaignChanges(pool, cid, String(campaignId), campaignName ?? null, incomingCampaign).catch(() => {});
 
       await pool.query(
         `INSERT INTO campaigns (
