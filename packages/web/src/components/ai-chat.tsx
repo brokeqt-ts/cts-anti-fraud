@@ -95,7 +95,7 @@ export function AiChatPanel({ accountId, accountName }: AiChatProps) {
       style={{
         width: panelWidth,
         height: panelHeight,
-        background: 'var(--bg-primary)',
+        background: 'var(--bg-base)',
         border: '1px solid var(--border-subtle)',
       }}
     >
@@ -144,7 +144,7 @@ export function AiChatPanel({ accountId, accountName }: AiChatProps) {
                   }}
                   className="w-full text-left px-3 py-2 rounded-lg text-xs transition hover:brightness-110"
                   style={{
-                    background: 'var(--bg-card)',
+                    background: 'var(--bg-card-hover, #1e1e2e)',
                     color: 'var(--text-secondary)',
                     border: '1px solid var(--border-subtle)',
                   }}
@@ -168,14 +168,14 @@ export function AiChatPanel({ accountId, accountName }: AiChatProps) {
               className="max-w-[85%] px-3 py-2 rounded-xl text-sm whitespace-pre-wrap"
               style={msg.role === 'user'
                 ? { background: '#6366f1', color: '#fff', borderBottomRightRadius: 4 }
-                : { background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', borderBottomLeftRadius: 4 }
+                : { background: 'var(--bg-card-hover, #1e1e2e)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', borderBottomLeftRadius: 4 }
               }
             >
               {msg.content}
             </div>
             {msg.role === 'user' && (
               <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center mt-1"
-                style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)' }}>
+                style={{ background: 'var(--bg-card-hover, #1e1e2e)', border: '1px solid var(--border-subtle)' }}>
                 <User size={14} style={{ color: 'var(--text-muted)' }} />
               </div>
             )}
@@ -189,7 +189,7 @@ export function AiChatPanel({ accountId, accountName }: AiChatProps) {
               <Bot size={14} color="#fff" />
             </div>
             <div className="px-3 py-2 rounded-xl text-sm flex items-center gap-2"
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
+              style={{ background: 'var(--bg-card-hover, #1e1e2e)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
               <Loader2 size={14} className="animate-spin" />
               Анализирую...
             </div>
@@ -225,7 +225,7 @@ export function AiChatPanel({ accountId, accountName }: AiChatProps) {
             rows={1}
             className="flex-1 resize-none rounded-lg px-3 py-2 text-sm outline-none"
             style={{
-              background: 'var(--bg-card)',
+              background: 'var(--bg-card-hover, #1e1e2e)',
               color: 'var(--text-primary)',
               border: '1px solid var(--border-subtle)',
               maxHeight: 100,
@@ -236,7 +236,7 @@ export function AiChatPanel({ accountId, accountName }: AiChatProps) {
             disabled={!input.trim() || loading}
             className="flex-shrink-0 p-2 rounded-lg transition"
             style={{
-              background: input.trim() && !loading ? '#6366f1' : 'var(--bg-card)',
+              background: input.trim() && !loading ? '#6366f1' : 'var(--bg-card-hover, #1e1e2e)',
               color: input.trim() && !loading ? '#fff' : 'var(--text-muted)',
               border: '1px solid var(--border-subtle)',
               opacity: !input.trim() || loading ? 0.5 : 1,
