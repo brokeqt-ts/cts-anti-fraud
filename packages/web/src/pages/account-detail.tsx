@@ -16,6 +16,7 @@ import { type NotifCard, CATEGORY_STYLES, parseNotificationCards } from './accou
 import { RISK_LABELS, UI_NOISE_RE, deduplicateCampaigns, adHasContent } from './account-detail/helpers.js';
 import { MetricPill } from './account-detail/shared-components.js';
 import { CollapsibleSection } from '../components/collapsible-section.js';
+import { AiChatPanel } from '../components/ai-chat.js';
 
 export function AccountDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -381,6 +382,9 @@ export function AccountDetailPage() {
           </div>
         </div>
       </StaggerItem>
+
+      {/* AI Chat Panel */}
+      <AiChatPanel accountId={id ?? ''} accountName={acc['display_name'] as string | undefined} />
     </StaggerContainer>
   );
 }

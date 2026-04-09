@@ -16,6 +16,7 @@ import {
   analyzeRotationHandler,
   analyzeAppealHandler,
   analyzeFarmHandler,
+  aiChatHandler,
 } from '../handlers/ai.handler.js';
 
 export async function aiRoutes(fastify: FastifyInstance): Promise<void> {
@@ -93,6 +94,13 @@ export async function aiRoutes(fastify: FastifyInstance): Promise<void> {
     '/ai/farm-analysis',
     { preHandler: [fastify.authenticate] },
     analyzeFarmHandler,
+  );
+
+  // AI Chat — conversational interface per account
+  fastify.post(
+    '/ai/chat/:accountId',
+    { preHandler: [fastify.authenticate] },
+    aiChatHandler,
   );
 
   // Test-only mock (non-production)

@@ -3,6 +3,7 @@ import { getPool } from '../config/database.js';
 import { env } from '../config/env.js';
 import { safeErrorDetails } from '../utils/error-response.js';
 import { AIAnalyzer } from '../services/ai/ai-analyzer.js';
+import { chatWithAccount, type ChatMessage } from '../services/ai/ai-chat.service.js';
 import * as aiRepo from '../repositories/ai-analysis.repository.js';
 import * as accountsRepo from '../repositories/accounts.repository.js';
 import { compareModels } from '../services/ai/model-comparator.js';
@@ -1002,4 +1003,50 @@ export async function mockCompareModelsHandler(
     total_cost_usd: Math.round(totalCost * 1_000_000) / 1_000_000,
     generated_at: new Date().toISOString(),
   });
+}
+
+/**
+ * POST /ai/chat/:accountId — AI chat about a specific account
+ */
+export async function aiChatHandler(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const pool = getPool(env.DATABASE_URL);
+  const { accountId } = request.params as { accountId: string };
+  const { messages } = request.body as { messages: ChatMessage[] };
+
+  if (!Array.isArray(messages) || messages.length === 0) {
+    await reply.status(400).send({ error: 'messages array is required', code: 'INVALID_INPUT' });
+    return;
+  }
+
+  // Verify buyer owns this account
+  const userId = getUserIdFilter(request);
+  if (userId) {
+    const owned = await accountsRepo.getAccountIdByGoogleId(pool, accountId, userId);
+    if (!owned) {
+      await reply.status(404).send({ error: 'Account not found', code: 'NOT_FOUND' });
+      return;
+    }
+  }
+
+  const configured = getConfiguredAdapters();
+  if (configured.length === 0) {
+    await reply.status(400).send({ error: 'Нет настроенных API ключей моделей', code: 'NO_MODELS_CONFIGURED' });
+    return;
+  }
+
+  try {
+    const result = await chatWithAccount(pool, {
+      accountGoogleId: accountId,
+      messages,
+    });
+
+    await reply.status(200).send(result);
+  } catch (err: unknown) {
+    request.log.error({ err, handler: 'aiChatHandler', accountId }, 'AI chat failed');
+    const message = safeErrorDetails(err);
+    await reply.status(500).send({ error: message, code: 'AI_CHAT_ERROR' });
+  }
 }

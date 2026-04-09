@@ -1,7 +1,7 @@
 # CTS Anti-Fraud — Реализованные задачи
 
 > Дата составления: 2026-03-24
-> Обновлено: 2026-04-01
+> Обновлено: 2026-04-09
 > Статус: Phase 1 + Phase 2 + Phase 2.5 + UX P1/P2 завершены
 
 ---
@@ -10,26 +10,29 @@
 
 | Компонент | Готовность | Комментарий |
 |-----------|-----------|-------------|
-| DB Schema (54 миграции) | 100% | Полная схема, materialized views, индексы |
+| DB Schema (68 миграций) | 100% | Полная схема, materialized views, индексы |
 | Chrome Extension | 100% | Перехват, очередь, retry, fingerprint, popup |
 | Collect Pipeline | 100% | Raw storage → парсинг → upsert → auto-scoring |
 | 24 RPC парсера | 95% | Все основные endpoint'ы Google Ads |
 | Assessment + Rules Engine | 100% | 5 факторов, 14 правил, UI готов |
 | Auto-Ban Detection | 100% | Автодетекция, post-mortem, уведомления |
-| AI Analysis (Claude/GPT/Gemini) | 95% | Адаптеры, промпты, сравнение моделей |
+| AI Analysis (Claude/GPT/Gemini) | 100% | Адаптеры, промпты, сравнение моделей, AI Chat |
 | ML Ban Predictor | 100% | Logistic regression, 26 фичей, explainability |
 | Leaderboard | 100% | Composite scoring, period filtering |
 | Notification System | 100% | Inbox + admin panel + Telegram |
 | Domain Enrichment | 100% | 14 external APIs, WHOIS/RDAP, hard/soft scoring |
 | Auth (JWT + API Key) | 100% | Роли, refresh tokens, extension download |
 | CI/CD + Docker | 100% | GitHub Actions, 4-job pipeline |
-| Dashboard (16 страниц) | 100% | Все страницы реализованы |
+| Dashboard (18 страниц) | 100% | Все страницы + AI Chat panel |
 | UX-6 Account Tags | 100% | Теги, конструктор, фильтр, assign/unassign |
 | Telegram Bot | 100% | Алерты банов, creative decay, команды |
 | AI Feedback Loop | 100% | Like/dislike, corrections, leaderboard влияние |
 | Creative Decay Alerts | 100% | Снэпшоты, cron сканирование, Telegram |
 | Смена пароля пользователем | 100% | PATCH /auth/me/password + UI с подтверждением |
 | Real CTS Integration | 100% | HttpCTSAdapter + MockCTSAdapter + factory |
+| AI Chat по аккаунту | 100% | Диалоговый интерфейс, полный контекст |
+| Swagger/OpenAPI | 100% | /docs, auto-tagging, Swagger UI |
+| Полная документация проекта | 100% | PROJECT_DOCUMENTATION.md |
 
 ---
 
@@ -180,6 +183,29 @@
 - Раскрываемые строки: клик показывает JSON details
 - Навигация: пункт "Аудит" в sidebar (только для admin)
 - Индексы: user_id, action, created_at DESC, (entity_type, entity_id)
+
+### AI Chat по аккаунту (2026-04-09) ✅
+- `ai-chat.service.ts` — сервис: построение контекста, вызов AI
+- `aiChatHandler` в ai.handler.ts — обработчик запроса
+- `POST /api/v1/ai/chat/:accountId` — API endpoint
+- Полный контекст: аккаунт, кампании, баны, домены, метрики, ML прогноз, assessment
+- Multi-turn conversation: history передаётся от клиента
+- Frontend: `AiChatPanel` компонент — floating panel на account-detail
+- Предложенные вопросы, expand/collapse, model info
+- Поддержка Claude/GPT/Gemini (первый доступный)
+
+### Swagger/OpenAPI (2026-04-09) ✅
+- `@fastify/swagger` + `@fastify/swagger-ui`
+- Доступно: `GET /docs`
+- Auto-tagging по URL prefix (19 тегов)
+- OpenAPI 3.0.3 спецификация
+- Описание auth: Bearer JWT + API Key
+- Все существующие route schemas подхвачены автоматически
+
+### Полная документация проекта (2026-04-09) ✅
+- `docs/PROJECT_DOCUMENTATION.md` — 14 разделов
+- Обновлён `docs/API.md` — актуальная версия с JWT auth
+- Покрытие: архитектура, API (~100 endpoints), dashboard (18 страниц), модули, БД, env, deployment
 
 ---
 

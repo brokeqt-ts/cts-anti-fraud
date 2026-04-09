@@ -11,6 +11,7 @@ import { env } from './config/env.js';
 import { getPool } from './config/database.js';
 import knexConfig from './config/knexfile.js';
 import { authPlugin } from './plugins/auth.js';
+import { registerSwagger } from './plugins/swagger.js';
 import { authRoutes } from './routes/auth.js';
 import { collectRoutes } from './routes/collect.js';
 import { healthRoutes } from './routes/health.js';
@@ -128,6 +129,9 @@ export async function buildApp(options?: BuildAppOptions) {
       return (request.headers['x-profile-id'] as string) ?? request.ip;
     },
   });
+
+  // Swagger / OpenAPI documentation
+  await registerSwagger(fastify);
 
   // Auth plugin
   await fastify.register(authPlugin);

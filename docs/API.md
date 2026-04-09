@@ -1,18 +1,45 @@
 # API Reference
 
+> **Полная документация:** см. [PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md) раздел 4.
+>
+> **Интерактивная документация (Swagger UI):** `/docs` на сервере
+
 Base URL: `/api/v1`
 
-All endpoints (except `/health`) require the `X-API-Key` header.
+## Аутентификация
 
-## Authentication
+Два метода (любой на выбор):
 
+| Метод | Заголовок | Использование |
+|-------|----------|---------------|
+| JWT Bearer | `Authorization: Bearer <token>` | Dashboard (фронтенд) |
+| API Key | `X-API-Key: <key>` | Chrome Extension |
+
+### Получение JWT
+
+```http
+POST /api/v1/auth/login
+Content-Type: application/json
+
+{ "email": "user@example.com", "password": "..." }
 ```
-X-API-Key: <shared-secret>
-```
 
-Missing or invalid key returns `401`:
+Response:
 ```json
-{ "error": "Unauthorized", "code": "UNAUTHORIZED" }
+{
+  "access_token": "eyJ...",
+  "refresh_token": "...",
+  "user": { "id": "...", "name": "...", "role": "admin" }
+}
+```
+
+### Обновление токена
+
+```http
+POST /api/v1/auth/refresh
+Content-Type: application/json
+
+{ "refresh_token": "..." }
 ```
 
 ## Error Format
@@ -25,439 +52,110 @@ Missing or invalid key returns `401`:
 }
 ```
 
----
+## Роли
 
-## Health
-
-### `GET /health`
-
-Server status and database connectivity. **No auth required.**
-
-**Response:**
-```json
-{
-  "status": "ok",
-  "uptime": 3600,
-  "database": { "connected": true, "latency_ms": 2 },
-  "last_data_received": "2026-02-28T12:00:00Z"
-}
-```
+- **admin** — полный доступ ко всем аккаунтам и настройкам
+- **buyer** — доступ только к своим аккаунтам (фильтрация на бэкенде)
 
 ---
 
-## Collect (Extension → Server)
+## Категории API
 
-### `POST /collect`
+| Категория | Endpoints | Описание |
+|-----------|----------|----------|
+| Health | 1 | `GET /health` — статус сервера |
+| Auth | 5 | Login, refresh, logout, me, change password |
+| Accounts | 4 | CRUD аккаунтов |
+| Bans | 5 | Журнал банов, post-mortem |
+| Domains | 4 | Анализ доменов, enrichment |
+| Analytics | 15 | Heatmap, spend velocity, ban chain, creative decay |
+| Assessment | 1 | Оценка рисков |
+| AI | 16 | Анализ, чат, сравнение моделей, feedback |
+| ML | 5 | Прогнозы, retrain, features |
+| Notifications | 8 | Inbox, SSE стрим, настройки |
+| Tags | 7 | Теги, assign/unassign |
+| Search | 1 | Глобальный поиск |
+| Collect | 1 | Приём данных от extension |
+| Stats | 5 | Overview, activity, buyer performance |
+| Admin | 16 | Пользователи, настройки, правила, аудит |
+| CTS | 6 | Интеграция с CTS трекером |
+| Telegram | 4 | Бот интеграция |
+| Best Practices | 4 | Методички CRUD |
+| Extension | 2 | Скачивание CRX |
 
-Chrome extension posts intercepted Google Ads data.
+**Итого: ~100+ endpoints**
 
-**Body:**
-```json
+Подробное описание каждого endpoint — в [PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md) или в Swagger UI (`/docs`).
+
+---
+
+## Примеры запросов
+
+### Сбор данных (Extension → Server)
+
+```http
+POST /api/v1/collect
+X-API-Key: <api-key>
+Content-Type: application/json
+
 {
   "profile_id": "profile-abc",
   "antidetect_browser": "octium",
-  "proxy_info": {
-    "ip": "1.2.3.4",
-    "geo": "US",
-    "org": "ISP Name",
-    "asn": "AS12345"
-  },
   "extension_version": "0.1.1",
   "batch": [
-    {
-      "type": "account",
-      "timestamp": "2026-02-28T12:00:00Z",
-      "data": {}
-    }
+    { "type": "account", "timestamp": "2026-02-28T12:00:00Z", "data": {} }
   ]
 }
 ```
 
-**Batch item types:** `account`, `campaign`, `performance`, `billing`, `ad_review`, `status_change`, `billing_request`, `raw`, `raw_text`
+### AI Chat по аккаунту
 
-**Response (200):**
-```json
-{ "status": "ok", "processed": 5 }
-```
+```http
+POST /api/v1/ai/chat/123-456-7890
+Authorization: Bearer <jwt>
+Content-Type: application/json
 
----
-
-## Accounts
-
-### `GET /accounts`
-
-List all Google Ads accounts.
-
-**Query:** `search`, `status`, `currency`, `limit` (default 50), `offset` (default 0)
-
-### `GET /accounts/:google_id`
-
-Full account detail with campaigns, billing, signals, keywords, quality scores.
-
-### `PATCH /accounts/:google_id`
-
-Update account metadata.
-
-### `POST /accounts/:google_id/consumables`
-
-Add a consumable to account.
-
-### `DELETE /accounts/:google_id/consumables/:id`
-
-Remove a consumable.
-
-### `GET /accounts/:google_id/competitive-intelligence`
-
-Competitor analysis for account's ad landscape.
-
-### `GET /accounts/:google_id/quality-score`
-
-Quality score distribution for account keywords.
-
-### `GET /accounts/:google_id/keywords/low-quality`
-
-List keywords with low quality scores.
-
-### `GET /accounts/:google_id/quality-score/history`
-
-Historical quality score trends.
-
----
-
-## Bans
-
-### `POST /bans`
-
-Create a ban record.
-
-**Body:**
-```json
 {
-  "account_google_id": "123-456-7890",
-  "ban_date": "2026-02-28",
-  "ban_target": "account",
-  "ban_reason_google": "Circumventing systems",
-  "ban_reason_internal": "Domain flagged",
-  "offer_vertical": "gambling",
-  "domain": "example.com",
-  "campaign_type": "pmax"
+  "messages": [
+    { "role": "user", "content": "Какие основные риски у этого аккаунта?" }
+  ]
 }
 ```
 
-**ban_target:** `account`, `domain`, `campaign`, `ad`
-**offer_vertical:** `gambling`, `nutra`, `crypto`, `dating`, `sweepstakes`, `ecom`, `finance`, `other`
-
-### `GET /bans`
-
-List all ban records.
-
-### `GET /bans/:id`
-
-Get ban record detail.
-
-### `PATCH /bans/:id`
-
-Update ban record metadata.
-
----
-
-## Domains
-
-### `GET /domains`
-
-List all domains from ads with enrichment data.
-
-### `GET /domains/:domain`
-
-Domain detail with linked accounts and bans.
-
-**Response:**
+Response:
 ```json
 {
-  "domain": { "domain_name": "example.com", "ssl": true, "age_days": 365, "..." },
-  "accounts": [],
-  "bans": []
+  "reply": "Основные риски аккаунта 123-456-7890:\n1. ...",
+  "model": "claude-sonnet-4-20250514",
+  "tokens": 1234,
+  "latencyMs": 3200
 }
 ```
 
----
+### Оценка рисков
 
-## Stats
-
-### `GET /stats/overview`
-
-Platform-wide statistics.
-
-**Response:**
-```json
-{
-  "total_accounts": 50,
-  "total_bans": 12,
-  "active_accounts": 38,
-  "suspended_accounts": 8,
-  "at_risk_accounts": 4,
-  "avg_lifetime_hours": 720,
-  "bans_by_vertical": { "gambling": 5, "nutra": 3 },
-  "bans_by_target": { "account": 10, "domain": 2 },
-  "recent_bans": [],
-  "signals_summary": {}
-}
+```http
+POST /api/v1/assessment/123-456-7890
+Authorization: Bearer <jwt>
 ```
 
----
+### Ban Timing Heatmap
 
-## Analytics
-
-### `GET /analytics/ban-timing`
-
-Ban timing heatmap (7 days × 24 hours, Monday-first).
-
-### `GET /analytics/overview`
-
-Analytics overview with lifetime, ban rate, churn metrics.
-
-### `GET /analytics/spend-velocity?account_id=X`
-
-Spending velocity for a single account.
-
-### `GET /analytics/spend-velocity-all`
-
-Aggregated spending velocity across all accounts.
-
-### `GET /analytics/ban-chain?account_id=X`
-
-Chain of related bans for an account.
-
-### `GET /analytics/ban-chain-all`
-
-All ban chains.
-
-### `GET /analytics/consumable-scoring`
-
-Consumable effectiveness scoring.
-
-### `GET /analytics/creative-decay?account_id=X`
-
-Ad creative decay over time.
-
-### `POST /analytics/post-mortem/:ban_id`
-
-Generate post-mortem analysis for a ban.
-
-### `POST /analytics/post-mortem-all`
-
-Post-mortem for all bans.
-
-### `GET /analytics/competitive-intelligence`
-
-Ad landscape competitive analysis.
-
-### `GET /analytics/freshness`
-
-Data freshness/staleness indicators.
-
-### `GET /analytics/account-risk-summary`
-
-Risk summary per account.
-
----
-
-## Assessment
-
-### `POST /assess`
-
-Risk scoring for domain/account/BIN combination.
-
-**Body:**
-```json
-{
-  "domain": "example.com",
-  "account_google_id": "123-456-7890",
-  "bin": "411111",
-  "vertical": "gambling",
-  "geo": "US"
-}
+```http
+GET /api/v1/analytics/ban-timing
+Authorization: Bearer <jwt>
 ```
 
-**Response:**
+Response:
 ```json
 {
-  "risk_score": 72,
-  "risk_level": "high",
-  "factors": [
-    { "category": "domain", "score": 85, "weight": 0.3, "detail": "Domain age < 30 days" }
-  ],
-  "recommendations": ["Use older domain", "Diversify payment methods"],
-  "comparable_accounts": {
-    "total": 15, "banned": 8, "ban_rate": 0.53, "avg_lifetime_days": 12
-  },
-  "budget_recommendation": 150
+  "heatmap": [[0,0,1,...], ...],
+  "day_labels": ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"],
+  "total_bans": 42,
+  "peak_day": "Вт",
+  "peak_hour": 14,
+  "avg_bans_per_day": 6.0,
+  "day_totals": [5,8,7,6,5,6,5],
+  "hour_totals": [0,0,0,1,2,3,...]
 }
 ```
-
----
-
-## CTS Sites
-
-### `GET /cts/sites`
-
-List CTS site links.
-
-### `POST /cts/sites`
-
-Create CTS site. **Body:** `{ "domain": "example.com", "external_cts_id": "..." }`
-
-### `PATCH /cts/sites/:id`
-
-Update CTS site.
-
-### `DELETE /cts/sites/:id`
-
-Remove CTS site.
-
-### `POST /cts/sync`
-
-Sync with external CTS service.
-
-### `GET /cts/sites/:id/traffic`
-
-Traffic metrics for a CTS site.
-
-### `POST /cts/sites/:id/link`
-
-Link CTS site to a Google Ads account.
-
----
-
-## AI Analysis
-
-*Requires `ANTHROPIC_API_KEY` (and optionally `OPENAI_API_KEY`, `GEMINI_API_KEY` for multi-model).*
-
-### `POST /ai/analyze/:accountId`
-
-Run AI analysis on account patterns.
-
-### `POST /ai/analyze-ban/:banLogId`
-
-AI analysis of a specific ban event.
-
-### `POST /ai/compare`
-
-Compare multiple accounts. **Body:** `{ "account_ids": ["id1", "id2"] }`
-
-### `GET /ai/history/:accountId`
-
-Historical AI analyses for account.
-
-### `POST /ai/compare-models/:accountId`
-
-Compare predictions across AI models (Claude, GPT, Gemini).
-
-### `GET /ai/leaderboard`
-
-AI model accuracy rankings.
-
-### `GET /ai/leaderboard/history`
-
-Historical leaderboard data.
-
-### `GET /ai/models`
-
-List configured AI models and their availability.
-
----
-
-## ML Predictions
-
-### `POST /ml/train`
-
-Train/retrain ban prediction model from historical data.
-
-### `GET /ml/predict/:accountId`
-
-Get ban probability prediction for account.
-
-**Response:**
-```json
-{
-  "ban_probability": 0.73,
-  "risk_level": "high",
-  "confidence": 0.85,
-  "top_factors": [
-    { "feature": "account_age_days", "label": "Account age", "contribution": 0.42, "value": 5, "direction": "increases_risk" }
-  ],
-  "predicted_days_to_ban": 7
-}
-```
-
-### `POST /ml/predict-all`
-
-Batch prediction for all active accounts.
-
-### `GET /ml/summary`
-
-Prediction distribution summary.
-
-### `GET /ml/history/:accountId`
-
-Historical predictions for account.
-
-### `GET /ml/training-stats`
-
-Training dataset statistics (sample counts, feature distributions).
-
-### `GET /ml/training-export`
-
-Export training data as CSV.
-
-### `POST /ml/bootstrap`
-
-Bootstrap/initialize ML training pipeline.
-
----
-
-## Admin
-
-### `GET /admin/raw-analysis`
-
-Analyze raw payloads from extension.
-
-### `GET /admin/rpc-payloads`
-
-List raw RPC payloads.
-
-### `POST /admin/backfill-parsers`
-
-Re-parse all payloads with current parser versions.
-
-### `POST /admin/reset-parsed-data`
-
-Clear parsed data (keeps raw payloads).
-
-### `POST /admin/merge-account`
-
-Merge duplicate account records.
-
-### `GET /admin/parsed-data`
-
-View parsed data summary.
-
-### `POST /admin/detect-bans`
-
-Run ban detection on suspended accounts.
-
-### `GET /admin/gap-diagnostics`
-
-Data gap analysis report.
-
-### `POST /admin/enrich-domains`
-
-Re-run domain enrichment.
-
-### `GET /admin/raw-payloads`
-
-List raw payloads with pagination.
-
-### `GET /admin/raw-payloads/:id`
-
-Get raw payload detail.

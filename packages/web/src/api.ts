@@ -1317,6 +1317,27 @@ export async function fetchConfiguredModels(): Promise<{ models: AiModel[]; tota
   return apiFetch<{ models: AiModel[]; total: number; configured: number }>('/ai/models');
 }
 
+// --- AI Chat ---
+
+export interface AiChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface AiChatResponse {
+  reply: string;
+  model: string;
+  tokens: number;
+  latencyMs: number;
+}
+
+export async function aiChat(accountId: string, messages: AiChatMessage[]): Promise<AiChatResponse> {
+  return apiFetch<AiChatResponse>(`/ai/chat/${accountId}`, {
+    method: 'POST',
+    body: JSON.stringify({ messages }),
+  });
+}
+
 // --- AI Feedback ---
 
 export interface AiFeedbackStats {
