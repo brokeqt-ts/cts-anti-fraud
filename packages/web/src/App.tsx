@@ -19,7 +19,6 @@ import { UsersPage } from './pages/users.js';
 import { AdminNotificationsPage } from './pages/admin-notifications.js';
 import { BuyerDetailPage } from './pages/buyer-detail.js';
 import { RulesEditorPage } from './pages/rules-editor.js';
-import { ApiDocsPage } from './pages/api-docs.js';
 import { useAuth } from './contexts/auth-context.js';
 import { Loader2 } from 'lucide-react';
 
@@ -94,7 +93,6 @@ export function App() {
         <Route path="/ai-analysis" element={<AIAnalysisPage />} />
         <Route path="/best-practices" element={<BestPracticesPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
-        <Route path="/api-docs" element={<ApiDocsPage />} />
         <Route
           path="/users"
           element={
